@@ -1,0 +1,21 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 512 512" role="img" aria-labelledby="title desc">
+  <title id="title">Bloom Club</title>
+  <desc id="desc">Bloom Club home screen shortcut icon</desc>
+  <defs>
+    <linearGradient id="bg" x1="0" x2="1" y1="0" y2="1">
+      <stop offset="0" stop-color="#fff7fa"/>
+      <stop offset="1" stop-color="#f8eef0"/>
+    </linearGradient>
+    <linearGradient id="card" x1="0" x2="1" y1="0" y2="1">
+      <stop offset="0" stop-color="#d78faa"/>
+      <stop offset="1" stop-color="#b96f91"/>
+    </linearGradient>
+  </defs>
+  <rect width="512" height="512" rx="112" fill="url(#bg)"/>
+  <circle cx="128" cy="112" r="92" fill="#ffd2e2" opacity="0.72"/>
+  <circle cx="412" cy="410" r="118" fill="#ffe3ed" opacity="0.86"/>
+  <rect x="130" y="94" width="252" height="324" rx="58" fill="url(#card)"/>
+  <rect x="162" y="134" width="188" height="244" rx="34" fill="#fffafd"/>
+  <path fill="#c9829d" d="M256 326c-60-43-98-78-98-126 0-32 24-56 56-56 18 0 34 8 42 22 8-14 24-22 42-22 32 0 56 24 56 56 0 48-38 83-98 126Z"/>
+  <circle cx="256" cy="395" r="13" fill="#fffafd" opacity="0.95"/>
+</svg>

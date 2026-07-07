@@ -1,0 +1,16 @@
+[Unit]
+Description=Bloom Club VK Bot
+After=network.target
+
+[Service]
+Type=simple
+WorkingDirectory=/opt/bloomclub/web
+EnvironmentFile=/opt/bloomclub/web/.env
+ExecStart=/opt/bloomclub/web/.venv/bin/python -m app.bots.vk_bot
+Restart=always
+RestartSec=5
+User=bloomclub
+Group=bloomclub
+
+[Install]
+WantedBy=multi-user.target

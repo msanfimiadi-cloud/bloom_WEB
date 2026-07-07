@@ -1,0 +1,30 @@
+# Python
+__pycache__/
+*.py[cod]
+.pytest_cache/
+.mypy_cache/
+.ruff_cache/
+.venv/
+venv/
+
+# Environment / secrets
+.env
+.env.*
+!.env.example
+
+# Runtime data
+uploads/
+*.sqlite3
+*.db
+
+# Frontend
+frontend/node_modules/
+frontend/dist/
+frontend/tsconfig.tsbuildinfo
+
+# OS / editors
+.DS_Store
+.idea/
+.vscode/
+browser-mobile-app/node_modules/
+browser-mobile-app/dist/

@@ -1,0 +1,4 @@
+Separate Alembic environment for the Bloom Club Content DB.
+Run with:
+  alembic -c alembic_content.ini upgrade head
+It uses CONTENT_DATABASE_URL and does not touch the WEB backend DATABASE_URL.
