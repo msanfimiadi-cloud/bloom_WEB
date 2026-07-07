@@ -1,4 +1,4 @@
-const SW_BUILD_ID = '2026-07-07-ios-pwa-startup-v2';
+const SW_BUILD_ID = '2026-07-07-ios-pwa-startup-v3';
 const STATIC_CACHE_NAME = `bloom-club-static-${SW_BUILD_ID}`;
 const CACHEABLE_STATIC_PATHS = ['/assets/', '/docs/icons/', '/icons/'];
 
@@ -55,6 +55,21 @@ async function cacheFirstStatic(request) {
   return response;
 }
 
+async function networkFirstJavaScript(request) {
+  try {
+    const response = await fetch(request, { cache: 'no-store' });
+    if (isValidCacheResponse(response)) {
+      const cache = await caches.open(STATIC_CACHE_NAME);
+      await cache.put(request, response.clone());
+    }
+    return response;
+  } catch (error) {
+    const cached = await caches.match(request);
+    if (cached) return cached;
+    throw error;
+  }
+}
+
 self.addEventListener('fetch', (event) => {
   const request = event.request;
   const url = new URL(request.url);
@@ -72,6 +87,10 @@ self.addEventListener('fetch', (event) => {
   }
 
   if (isCacheableStaticRequest(request, url)) {
+    if (url.pathname.endsWith('.js')) {
+      event.respondWith(networkFirstJavaScript(request));
+      return;
+    }
     event.respondWith(cacheFirstStatic(request));
   }
 });

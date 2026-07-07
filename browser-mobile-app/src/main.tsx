@@ -28,6 +28,8 @@ declare global {
     __BLOOM_ENTRY_SCRIPT_EXECUTED__?: boolean;
     __BLOOM_LAST_STARTUP_ERROR__?: Record<string, unknown>;
     __BLOOM_APP_INTERACTIVE__?: boolean;
+    __BLOOM_EARLY_STARTUP_TRACE__?: Array<Record<string, unknown>>;
+    __BLOOM_RESOURCE_ERROR_TRACE__?: Array<Record<string, unknown>>;
   }
 }
 
@@ -162,6 +164,7 @@ function getStandaloneDiagnostics(): Record<string, unknown> {
     rootChildCount: document.getElementById("root")?.childElementCount ?? 0,
     visibilityState: document.visibilityState,
     readyState: document.readyState,
+    performance: getPerformanceDiagnostics(),
   };
 }
 
@@ -383,7 +386,47 @@ let startupFailureRendered = false;
 let watchdogTimers: number[] = [];
 let startupTraceModulePromise: Promise<StartupTraceModule> | undefined;
 
+function earlyStartupTrace(step: string, details: Record<string, unknown> = {}): void {
+  try {
+    window.__BLOOM_EARLY_STARTUP_TRACE__ ??= [];
+    window.__BLOOM_EARLY_STARTUP_TRACE__.push({
+      step,
+      at: new Date().toISOString(),
+      readyState: document.readyState,
+      visibilityState: document.visibilityState,
+      ...details,
+    });
+  } catch {
+    // Early diagnostics must never block startup.
+  }
+}
+
+function getPerformanceDiagnostics(): Record<string, unknown> {
+  const navigation = performance.getEntriesByType?.("navigation")?.[0]?.toJSON?.() ?? null;
+  const resources = performance
+    .getEntriesByType?.("resource")
+    ?.filter((entry) => /\.(?:js|css|woff2?|png|svg|webmanifest)$|\/sw\.js$/.test(entry.name))
+    .slice(-80)
+    .map((entry) => ({
+      name: entry.name,
+      initiatorType: (entry as PerformanceResourceTiming).initiatorType,
+      startTime: Math.round(entry.startTime),
+      duration: Math.round(entry.duration),
+      transferSize: (entry as PerformanceResourceTiming).transferSize,
+      encodedBodySize: (entry as PerformanceResourceTiming).encodedBodySize,
+      decodedBodySize: (entry as PerformanceResourceTiming).decodedBodySize,
+    })) ?? [];
+  return {
+    navigation,
+    resources,
+    earlyStartupTrace: window.__BLOOM_EARLY_STARTUP_TRACE__?.slice(-100) ?? [],
+    resourceErrors: window.__BLOOM_RESOURCE_ERROR_TRACE__?.slice(-50) ?? [],
+  };
+}
+
+earlyStartupTrace("main_first_executable_line", { marker: "before_installProductionDiagnostics" });
 installProductionDiagnostics();
+earlyStartupTrace("main_after_installProductionDiagnostics");
 window.__BLOOM_ENTRY_SCRIPT_EXECUTED__ = true;
 window.__BLOOM_APP_STATIC_IMPORT_ENABLED__ = true;
 renderStartupLoadingFallback();
@@ -418,10 +461,12 @@ async function importApplicationModules(): Promise<{
   lifecycleTraceSafe("boundary_import_start", { module: "RuntimeErrorBoundary" });
   traceStartSafe("import_boundary_start");
   try {
-    const [{ RuntimeErrorBoundary }, { default: App }] = await Promise.all([
-      import("./components/RuntimeErrorBoundary"),
-      import("./App"),
-    ]);
+    earlyStartupTrace("runtime_boundary_import_start");
+    const { RuntimeErrorBoundary } = await import("./components/RuntimeErrorBoundary");
+    earlyStartupTrace("runtime_boundary_import_ok");
+    earlyStartupTrace("app_import_start");
+    const { default: App } = await import("./App");
+    earlyStartupTrace("app_import_ok");
     lifecycleTraceSafe("boundary_import_ok", { module: "RuntimeErrorBoundary" });
     traceOkSafe("import_boundary_ok");
     return { RuntimeErrorBoundary, App };
@@ -447,14 +492,17 @@ export function removeEntryFallbackOverlay(): void {
 async function startApp(): Promise<void> {
   lifecycleTraceSafe("entry_finish");
   console.info("app_before_create_root");
+  earlyStartupTrace("before_createRoot_imports_pending");
   traceOkSafe("root_container_ready");
   const { RuntimeErrorBoundary, App } = await importApplicationModules();
+  earlyStartupTrace("before_createRoot");
   lifecycleTraceSafe("react_createRoot_start");
   traceStartSafe("create_root_start");
   let root;
   try {
     root = ReactDOM.createRoot(getRootElement());
     lifecycleTraceSafe("react_createRoot_ok");
+    earlyStartupTrace("after_createRoot");
     traceOkSafe("create_root_ok");
   } catch (error) {
     lifecycleTraceSafe("react_createRoot_fail", error);
@@ -471,6 +519,7 @@ async function startApp(): Promise<void> {
   reactRenderStarted = true;
   window.__BLOOM_APP_RENDER_ATTEMPTED__ = true;
   lifecycleTraceSafe("react_render_start");
+  earlyStartupTrace("before_render");
   traceStartSafe("render_call_start");
   try {
     root.render(
@@ -480,6 +529,7 @@ async function startApp(): Promise<void> {
         : app,
     );
     lifecycleTraceSafe("react_render_ok");
+    earlyStartupTrace("after_render");
     traceOkSafe("render_call_ok");
     // App.tsx removes the body overlay after the real App component mounts.
   } catch (error) {

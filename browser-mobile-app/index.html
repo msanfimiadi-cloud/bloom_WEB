@@ -28,6 +28,33 @@
       window.__BLOOM_HTML_FALLBACK_PRESENT__ = true;
       window.__BLOOM_HTML_FALLBACK_REMOVED__ = false;
       window.__BLOOM_ENTRY_SCRIPT_EXECUTED__ = false;
+      window.__BLOOM_EARLY_STARTUP_TRACE__ = window.__BLOOM_EARLY_STARTUP_TRACE__ || [];
+      window.__BLOOM_RESOURCE_ERROR_TRACE__ = window.__BLOOM_RESOURCE_ERROR_TRACE__ || [];
+      window.__BLOOM_EARLY_STARTUP_TRACE__.push({ step: "html_inline_before_module", at: new Date().toISOString(), href: location.href });
+      window.addEventListener("error", function bloomEarlyError(event) {
+        var target = event && event.target;
+        var isResource = target && target !== window && (target.src || target.href);
+        var payload = {
+          at: new Date().toISOString(),
+          kind: isResource ? "resource_error" : "window_error",
+          message: event && event.message ? String(event.message) : "",
+          filename: event && event.filename ? String(event.filename) : "",
+          line: event && event.lineno || 0,
+          column: event && event.colno || 0,
+          tagName: isResource && target.tagName ? String(target.tagName).toLowerCase() : "",
+          url: isResource ? String(target.src || target.href || "") : "",
+        };
+        window.__BLOOM_RESOURCE_ERROR_TRACE__.push(payload);
+        window.__BLOOM_EARLY_STARTUP_TRACE__.push(payload);
+        var diagnostic = document.getElementById("bloom-html-fallback-diagnostic");
+        if (diagnostic && isResource) {
+          diagnostic.textContent = "Ошибка загрузки ресурса приложения: " + payload.url;
+          diagnostic.setAttribute("role", "alert");
+        }
+      }, true);
+      window.addEventListener("unhandledrejection", function bloomEarlyRejection(event) {
+        window.__BLOOM_EARLY_STARTUP_TRACE__.push({ at: new Date().toISOString(), kind: "unhandledrejection", reason: String(event && event.reason && (event.reason.message || event.reason) || "") });
+      });
       window.setTimeout(function bloomHtmlEntryWatchdog() {
         if (window.__BLOOM_ENTRY_SCRIPT_EXECUTED__ === true || window.__BLOOM_HTML_FALLBACK_REMOVED__ === true) {
           return;
