@@ -4,6 +4,7 @@ import "./styles.css";
 import { installProductionDiagnostics } from "./diagnostics/productionDebug";
 import { saveCrashDump } from "./diagnostics/crashDump";
 import { reloadWhenServerBuildDiffers, reportClientError } from "./diagnostics/clientErrorReporter";
+import { appBuildInfo } from "./buildInfo";
 
 type EarlyErrorSource =
   | "window_error"
@@ -121,11 +122,12 @@ function appendEntryFallbackOverlay(wrapper: HTMLElement): "body" | "documentEle
 }
 
 function clearStartupRecoveryStorage(): void {
-  const keyPattern = /(bloom|auth|bootstrap|build|token|crash|startup|telegram_login)/i;
+  const safeRecoveryKeyPattern = /(crash|startup|bootstrap|build_mismatch|forced_reload)/i;
+  const protectedAuthKeyPattern = /(auth|token|telegram_login|session|jwt)/i;
   try {
     [window.sessionStorage, window.localStorage].forEach((storage) => {
       Object.keys(storage).forEach((key) => {
-        if (keyPattern.test(key)) {
+        if (safeRecoveryKeyPattern.test(key) && !protectedAuthKeyPattern.test(key)) {
           storage.removeItem(key);
         }
       });
@@ -140,6 +142,35 @@ function reloadWithCacheBust(reason: string): void {
   url.searchParams.set("bloom_recovery", reason);
   url.searchParams.set("bloom_recovery_ts", String(Date.now()));
   window.location.replace(url.toString());
+}
+
+
+function getStandaloneDiagnostics(): Record<string, unknown> {
+  const nav = navigator as Navigator & { standalone?: boolean; serviceWorker?: ServiceWorkerContainer };
+  const controller = nav.serviceWorker?.controller;
+  return {
+    buildId: appBuildInfo.buildHash,
+    standaloneNavigator: nav.standalone === true,
+    standaloneDisplayMode: window.matchMedia?.("(display-mode: standalone)").matches === true,
+    fullscreenDisplayMode: window.matchMedia?.("(display-mode: fullscreen)").matches === true,
+    userAgent: navigator.userAgent,
+    serviceWorkerControlled: Boolean(controller),
+    serviceWorkerControllerState: controller?.state,
+    url: window.location.href,
+    lastStartupError: window.__BLOOM_LAST_STARTUP_ERROR__,
+    appInteractive: window.__BLOOM_APP_INTERACTIVE__ === true,
+    fallbackPresent: Boolean(document.getElementById("bloom-entry-fallback-overlay") || document.getElementById("bloom-html-fallback-overlay")),
+    rootChildCount: document.getElementById("root")?.childElementCount ?? 0,
+    visibilityState: document.visibilityState,
+    readyState: document.readyState,
+  };
+}
+
+function reportStartupFailure(eventType: string, reason: string, error: unknown = new Error(reason)): void {
+  reportClientError(eventType, error, {
+    reason,
+    startup: getStandaloneDiagnostics(),
+  });
 }
 
 function renderStartupRecoveryScreen(reason = "startup_watchdog_timeout"): void {
@@ -161,8 +192,9 @@ function renderStartupRecoveryScreen(reason = "startup_watchdog_timeout"): void 
   });
   panel.replaceChildren(title, description, reloadButton);
   rootElement.replaceChildren(panel);
-  lifecycleTraceSafe("startup_recovery_screen_shown", { reason });
+  lifecycleTraceSafe("startup_recovery_screen_shown", { reason, diagnostics: getStandaloneDiagnostics() });
   traceMarkSafe("startup_recovery_screen_shown");
+  reportStartupFailure("startup_recovery_screen_shown", reason);
 }
 
 function callTelegramReadyImmediately(): void {
@@ -358,6 +390,7 @@ function startEntryWatchdog(): void {
     window.setTimeout(() => {
       updateStartupFallback("Приложение не завершило запуск", true);
       if (!window.__BLOOM_APP_INTERACTIVE__) {
+        reportStartupFailure("bootstrap_timeout", "entry_watchdog_timeout");
         renderStartupRecoveryScreen();
       }
     }, 8_000),
@@ -389,7 +422,7 @@ traceOkSafe("entry_loading_fallback_rendered");
 window.onerror = (_message, _source, _lineno, _colno, error): void => {
   lifecycleTraceSafe("window_error_overlay_trigger", { message: _message });
   saveCrashDump("window.onerror", { source: "entry", message: _message });
-  reportClientError("window.onerror", error ?? _message, { source: _source, line: _lineno, column: _colno });
+  reportClientError("window.onerror", error ?? _message, { source: _source, line: _lineno, column: _colno, startup: getStandaloneDiagnostics() });
   renderEarlyErrorDiagnostic(error ?? _message, "window_error");
 };
 
@@ -398,7 +431,7 @@ window.onunhandledrejection = (event: PromiseRejectionEvent): void => {
     reason: event.reason,
   });
   saveCrashDump("unhandledrejection", { source: "entry" });
-  reportClientError("unhandledrejection", event.reason);
+  reportClientError("unhandledrejection", event.reason, { startup: getStandaloneDiagnostics() });
   renderEarlyErrorDiagnostic(event.reason, "unhandled_rejection");
 };
 traceOkSafe("pre_react_handlers_installed");
@@ -483,15 +516,50 @@ async function startApp(): Promise<void> {
   console.info("app_after_render_call");
 }
 
-void startApp().then(() => {
-  if ('serviceWorker' in navigator && import.meta.env.PROD) {
-    void navigator.serviceWorker.register('/sw.js').catch(() => undefined);
+async function registerServiceWorkerSafely(): Promise<void> {
+  if (!("serviceWorker" in navigator) || !import.meta.env.PROD) return;
+  try {
+    const registration = await navigator.serviceWorker.register("/sw.js", { updateViaCache: "none" });
+    await registration.update().catch(() => undefined);
+    registration.addEventListener("updatefound", () => {
+      lifecycleTraceSafe("service_worker_update_found", { startup: getStandaloneDiagnostics() });
+    });
+    navigator.serviceWorker.addEventListener("controllerchange", () => {
+      lifecycleTraceSafe("service_worker_controller_change", { startup: getStandaloneDiagnostics() });
+    });
+  } catch (error) {
+    reportClientError("service_worker_registration_failed", error, { startup: getStandaloneDiagnostics() });
   }
+}
+
+function installStandaloneLifecycleRecovery(): void {
+  const recoverIfStuck = (reason: string): void => {
+    window.setTimeout(() => {
+      const root = document.getElementById("root");
+      const fallbackStillVisible = Boolean(document.getElementById("bloom-entry-fallback-overlay") || document.getElementById("bloom-html-fallback-overlay"));
+      const rootEmpty = !root || root.childElementCount === 0;
+      if (!window.__BLOOM_APP_INTERACTIVE__ && (fallbackStillVisible || rootEmpty)) {
+        reportStartupFailure("standalone_lifecycle_recovery", reason);
+        renderStartupRecoveryScreen(reason);
+      }
+    }, 2_500);
+  };
+  window.addEventListener("pageshow", (event) => recoverIfStuck(event.persisted ? "pageshow_bfcache" : "pageshow"));
+  window.addEventListener("focus", () => recoverIfStuck("window_focus"));
+  document.addEventListener("visibilitychange", () => {
+    if (document.visibilityState === "visible") recoverIfStuck("visibility_visible");
+  });
+}
+
+installStandaloneLifecycleRecovery();
+
+void startApp().then(() => {
+  void registerServiceWorkerSafely();
   void reloadWhenServerBuildDiffers();
 }).catch((error: unknown) => {
   traceFailSafe("entry_start_fail", error);
   saveCrashDump("fatal_startup_error", { stage: "entry_start" });
-  reportClientError("fatal_startup_error", error, { stage: "entry_start" });
+  reportClientError("fatal_startup_error", error, { stage: "entry_start", startup: getStandaloneDiagnostics() });
   renderEarlyErrorDiagnostic(error, "app_module_import");
 });
 
