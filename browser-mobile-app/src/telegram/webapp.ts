@@ -59,6 +59,89 @@ declare global {
   }
 }
 
+const TELEGRAM_WEB_APP_SDK_SRC = 'https://telegram.org/js/telegram-web-app.js';
+const TELEGRAM_SDK_RETRY_DELAY_MS = 5_000;
+
+let telegramSdkPromise: Promise<TelegramWebApp | null> | null = null;
+let telegramSdkRetryTimer: number | null = null;
+
+function hasTelegramLaunchEvidence(): boolean {
+  const paramsText = `${window.location.search || ''}&${window.location.hash || ''}`;
+  return Boolean(
+    window.Telegram?.WebApp ||
+      window.TelegramWebviewProxy ||
+      window.TelegramGameProxy ||
+      /telegram|tgwebview/i.test(navigator.userAgent || '') ||
+      /tgWebApp/i.test(paramsText) ||
+      hasStartParamKeyInUrlSearchText(window.location.search) ||
+      hasStartParamKeyInUrlSearchText(window.location.hash || ''),
+  );
+}
+
+function scheduleTelegramSdkRetry(): void {
+  if (telegramSdkRetryTimer !== null || !hasTelegramLaunchEvidence()) {
+    return;
+  }
+
+  telegramSdkRetryTimer = window.setTimeout(() => {
+    telegramSdkRetryTimer = null;
+    void loadTelegramSdk({ backgroundRetry: true });
+  }, TELEGRAM_SDK_RETRY_DELAY_MS);
+}
+
+export function loadTelegramSdk(options: { backgroundRetry?: boolean } = {}): Promise<TelegramWebApp | null> {
+  const existingWebApp = getTelegramWebApp();
+  if (existingWebApp) {
+    return Promise.resolve(existingWebApp);
+  }
+
+  if (!hasTelegramLaunchEvidence()) {
+    return Promise.resolve(null);
+  }
+
+  if (telegramSdkPromise) {
+    return telegramSdkPromise;
+  }
+
+  telegramSdkPromise = new Promise<TelegramWebApp | null>((resolve) => {
+    const script = document.createElement('script');
+    script.src = TELEGRAM_WEB_APP_SDK_SRC;
+    script.async = true;
+    script.onload = () => {
+      const webApp = getTelegramWebApp();
+      if (webApp) {
+        resolve(webApp);
+        return;
+      }
+      telegramSdkPromise = null;
+      scheduleTelegramSdkRetry();
+      resolve(null);
+    };
+    script.onerror = () => {
+      telegramSdkPromise = null;
+      scheduleTelegramSdkRetry();
+      resolve(null);
+    };
+    document.head.appendChild(script);
+  });
+
+  if (options.backgroundRetry) {
+    telegramSdkPromise.catch(() => undefined);
+  }
+
+  return telegramSdkPromise;
+}
+
+export function preloadTelegramSdkInBackground(): void {
+  if (!hasTelegramLaunchEvidence()) {
+    return;
+  }
+  void loadTelegramSdk({ backgroundRetry: true }).then((webApp) => {
+    webApp?.ready?.();
+    webApp?.expand?.();
+  });
+}
+
 export function getTelegramWebApp(): TelegramWebApp | null {
   return window.Telegram?.WebApp ?? null;
 }
@@ -81,6 +164,10 @@ export async function getTelegramLaunchPayloadWithRetry(
   attempts = INIT_DATA_RETRY_ATTEMPTS,
   delayMs = INIT_DATA_RETRY_DELAY_MS,
 ): Promise<string> {
+  if (!getTelegramWebApp() && hasTelegramLaunchEvidence()) {
+    await loadTelegramSdk();
+  }
+
   for (let attempt = 1; attempt <= attempts; attempt += 1) {
     const payload = getTelegramLaunchPayload();
 
@@ -277,6 +364,7 @@ export function prepareTelegramViewport(): void {
   cleanupTelegramViewportListeners = null;
 
   if (!webApp) {
+    preloadTelegramSdkInBackground();
     return;
   }
 
