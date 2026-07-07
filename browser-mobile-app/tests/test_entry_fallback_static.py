@@ -177,3 +177,19 @@ def test_app_still_removes_fallback_only_after_mount_ready() -> None:
     assert mount_index < remove_index
     before_mount = APP[:mount_index]
     assert "removeEntryFallbackOverlay();" not in before_mount
+
+
+def test_telegram_sdk_is_not_parser_blocking_in_index_html() -> None:
+    index_html = (ROOT / "index.html").read_text(encoding="utf-8")
+    assert 'src="https://telegram.org/js/telegram-web-app.js"' not in index_html
+    assert '<script type="module" src="/src/main.tsx"></script>' in index_html
+
+
+def test_telegram_sdk_loads_lazily_after_app_needs_it() -> None:
+    webapp = (ROOT / "src/telegram/webapp.ts").read_text(encoding="utf-8")
+    assert "const TELEGRAM_WEB_APP_SDK_SRC = 'https://telegram.org/js/telegram-web-app.js';" in webapp
+    assert "document.createElement('script')" in webapp
+    assert "script.async = true" in webapp
+    assert "scheduleTelegramSdkRetry();" in webapp
+    assert "await loadTelegramSdk();" in webapp
+    assert "preloadTelegramSdkInBackground();" in webapp

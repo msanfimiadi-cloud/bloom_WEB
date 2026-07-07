@@ -28,7 +28,6 @@ declare global {
     __BLOOM_ENTRY_SCRIPT_EXECUTED__?: boolean;
     __BLOOM_LAST_STARTUP_ERROR__?: Record<string, unknown>;
     __BLOOM_APP_INTERACTIVE__?: boolean;
-    __BLOOM_TG_READY_CALLED__?: boolean;
   }
 }
 
@@ -195,29 +194,6 @@ function renderStartupRecoveryScreen(reason = "startup_watchdog_timeout"): void 
   lifecycleTraceSafe("startup_recovery_screen_shown", { reason, diagnostics: getStandaloneDiagnostics() });
   traceMarkSafe("startup_recovery_screen_shown");
   reportStartupFailure("startup_recovery_screen_shown", reason);
-}
-
-function callTelegramReadyImmediately(): void {
-  try {
-    const webApp = window.Telegram?.WebApp;
-    if (!webApp) {
-      traceMarkSafe("ready_called");
-      return;
-    }
-    webApp.ready?.();
-    window.__BLOOM_TG_READY_CALLED__ = true;
-    traceMarkSafe("ready_called");
-    lifecycleTraceSafe("telegram_ready_early_ok");
-    try {
-      webApp.expand?.();
-      lifecycleTraceSafe("telegram_expand_early_ok");
-    } catch (expandError) {
-      lifecycleTraceSafe("telegram_expand_early_fail", expandError);
-    }
-  } catch (error) {
-    traceFailSafe("ready_called", error);
-    lifecycleTraceSafe("telegram_ready_early_fail", error);
-  }
 }
 
 function renderStartupLoadingFallback(): void {
@@ -415,7 +391,6 @@ startEntryWatchdog();
 lifecycleTraceSafe("entry_start");
 traceMarkSafe("boot_started");
 traceMarkSafe("entry_script_executed");
-callTelegramReadyImmediately();
 traceMarkSafe("app_entry_loaded");
 traceOkSafe("entry_loading_fallback_rendered");
 
