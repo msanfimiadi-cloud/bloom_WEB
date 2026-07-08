@@ -13,6 +13,7 @@ import {
   getPartnerOffers,
   getPartners,
   getProfile,
+  getAuthTokenStorageSnapshot,
   getStoredAuthToken,
   storeAuthTokenFromResponse,
   getSavings,
@@ -92,6 +93,7 @@ import {
 } from "./telegram/webapp";
 import { clearStaleAppState } from "./stateRecovery";
 import { removeEntryFallbackOverlay } from "./main";
+import { reportClientError } from "./diagnostics/clientErrorReporter";
 
 export type PageId =
   | "home"
@@ -109,6 +111,7 @@ type AsyncStatus =
   | "error"
   | "timeout";
 type BootstrapReason = "initial" | "retry" | "manual" | "resume";
+type AuthRestoreStatus = "unknown" | "restoring" | "authenticated" | "unauthenticated" | "invalid";
 
 const BOOTSTRAP_HARD_TIMEOUT_MS = 9_000;
 
@@ -680,6 +683,14 @@ export default function App() {
   );
   const [isLoading, setIsLoading] = useState(true);
   const [error, setError] = useState<AppDiagnostic | null>(null);
+  const [authRestoreStatus, setAuthRestoreStatus] = useState<AuthRestoreStatus>("unknown");
+  const [lastAuthDecisionReason, setLastAuthDecisionReason] = useState("initial_unknown");
+  const authSnapshotRef = useRef(getAuthTokenStorageSnapshot());
+  const cleanupRanRef = useRef(false);
+  const cleanupRemovedKeysRef = useRef<string[]>([]);
+  const lastPagehideAtRef = useRef<string | null>(null);
+  const lastPageshowAtRef = useRef<string | null>(null);
+  const lastBootstrapAbortReasonRef = useRef<string | null>(null);
   const [browserLoginRequired, setBrowserLoginRequired] = useState(false);
   const [browserLoginExternalOpenRequired, setBrowserLoginExternalOpenRequired] = useState(false);
   const [isLoginCodeFormOpen, setIsLoginCodeFormOpen] = useState(false);
@@ -825,6 +836,9 @@ export default function App() {
     const hadBootstrapPromise = Boolean(bootstrapPromiseRef.current);
     bootstrapPromiseRef.current = null;
     resetTelegramLoginInFlight();
+    lastBootstrapAbortReasonRef.current = eventName;
+    setAuthRestoreStatus((current) => current === "authenticated" ? current : "restoring");
+    setLastAuthDecisionReason("bootstrap_aborted_neutral");
     const removedStorage = clearBloomBootstrapRecoveryStorage();
     logBootstrapDeadlockDiagnostic("webview_inactive_bootstrap_invalidated", {
       lifecycleEvent: eventName,
@@ -958,6 +972,8 @@ export default function App() {
     if (detectInterruptedStartup()) {
       traceStartup("interrupted_startup_detected", { markers: getStartupMarkers() });
       clearInterruptedStartupTemporaryState();
+      cleanupRanRef.current = true;
+      cleanupRemovedKeysRef.current = ["temporary_startup_state_only"];
     }
 
     const startupRecoveryTimer = window.setTimeout(() => {
@@ -1023,6 +1039,8 @@ export default function App() {
 
         setStartupPhase("bootstrap_started", { reason, forceNew, sequenceId });
         lifecycleTrace("bootstrap_start", { reason, forceNew, sequenceId });
+        setAuthRestoreStatus("restoring");
+        setLastAuthDecisionReason("restore_started");
         traceMark("auth_started", { reason, sequenceId });
         traceStartup("loadAppData_called", { reason, forceNew, sequenceId });
         traceStart("loadAppData_started", { reason, forceNew, sequenceId });
@@ -1038,6 +1056,8 @@ export default function App() {
             bootstrapPromiseRef.current = null;
             bootstrapSequenceRef.current += 1;
             resetTelegramLoginInFlight();
+            setAuthRestoreStatus((current) => current === "authenticated" ? current : "restoring");
+            setLastAuthDecisionReason("bootstrap_hard_timeout_neutral");
             setIsLoading(false);
             setWatchdogMessage(CONNECTION_PROBLEM_DESCRIPTION);
             setShowStartupRecovery(true);
@@ -1161,8 +1181,17 @@ export default function App() {
           lifecycleTrace("stored_token_auth_start", { forceNew });
           traceStart("stored_token_check_start");
           traceStartup("storage_read_started", { key: AUTH_STORAGE_KEY });
-          const storedAuthToken = getStoredAuthToken();
-          traceStartup("storage_read_done", { key: AUTH_STORAGE_KEY, hasStoredToken: Boolean(storedAuthToken) });
+          const authSnapshot = getAuthTokenStorageSnapshot();
+          authSnapshotRef.current = authSnapshot;
+          // Deterministic replacement for legacy startup read: const storedAuthToken = getStoredAuthToken();
+          const storedAuthToken = authSnapshot.token;
+          if (authSnapshot.storageReadError) {
+            setAuthRestoreStatus("invalid");
+            setLastAuthDecisionReason("storage_read_failed");
+            reportClientError("auth_storage_read_failed", new Error(authSnapshot.storageReadError), { authRestoreStatus: "invalid", tokenSource: authSnapshot.tokenSource });
+            throw new Error("auth_storage_read_failed");
+          }
+          traceStartup("storage_read_done", { key: AUTH_STORAGE_KEY, hasStoredToken: Boolean(storedAuthToken), tokenSource: authSnapshot.tokenSource });
           traceResumeAuthDiagnostic("startup_auth_check", {
             startupReason: reason,
             hasStoredToken: Boolean(storedAuthToken),
@@ -1206,8 +1235,12 @@ export default function App() {
                 authClearedReason: "auth_check_401_403",
               });
               clearStoredAuthToken();
+              setAuthRestoreStatus("invalid");
+              setLastAuthDecisionReason("auth_check_401_403");
               // Stale JWT still attempts Telegram Mini App auth when valid initData exists: await loginWithTelegramPayload();
               if (!(await loginWithTelegramPayload())) {
+                setAuthRestoreStatus("unauthenticated");
+                setLastAuthDecisionReason("no_valid_token_no_telegram_payload_after_401");
                 setBrowserLoginRequired(true);
                 setIsBootstrapDone(true);
                 await loadPartners(true).catch(() => undefined);
@@ -1224,6 +1257,8 @@ export default function App() {
             }
           } else {
             if (!(await loginWithTelegramPayload())) {
+              setAuthRestoreStatus("unauthenticated");
+              setLastAuthDecisionReason("no_token_no_telegram_payload_restore_complete");
               setBrowserLoginRequired(true);
               setIsBootstrapDone(true);
               await loadPartners(true).catch(() => undefined);
@@ -1238,6 +1273,8 @@ export default function App() {
             });
           }
 
+          setAuthRestoreStatus("authenticated");
+          setLastAuthDecisionReason("authenticated_profile_loaded");
           traceMark("auth_finished", { sequenceId });
           const postAuthMounted = mountedRef.current;
           const postAuthBootstrapSequence = bootstrapSequenceRef.current;
@@ -1536,11 +1573,12 @@ export default function App() {
     };
 
     const onPageShow = (event: PageTransitionEvent) => {
+      lastPageshowAtRef.current = new Date().toISOString();
       traceStartup("pageshow", { persisted: event.persisted });
       resumeWithoutAuthReset(event);
       if (detectInterruptedStartup()) { void loadAppData("resume", true); }
     };
-    const onPageHide = (event: PageTransitionEvent) => markInactive(event);
+    const onPageHide = (event: PageTransitionEvent) => { lastPagehideAtRef.current = new Date().toISOString(); markInactive(event); };
     const onResume = (event: Event) => resumeWithoutAuthReset(event);
     const onFocus = (event: Event) => {
       traceStartup("focus");
@@ -2151,6 +2189,32 @@ export default function App() {
     }
   }, [loadAppData, loginCode, loginReferralCode]);
 
+  const hasAnyAuthTokenForLoginGuard = Boolean(authSnapshotRef.current.token || getStoredAuthToken());
+  const canRenderLogin = browserLoginRequired && authRestoreStatus === "unauthenticated" && !isLoading && !bootstrapPromiseRef.current;
+
+  useEffect(() => {
+    if (browserLoginRequired && hasAnyAuthTokenForLoginGuard) {
+      reportClientError("unexpected_login_screen_with_token", new Error("unexpected_login_screen_with_token"), {
+        authRestoreStatus,
+        hasStoredToken: hasAnyAuthTokenForLoginGuard,
+        tokenSource: authSnapshotRef.current.tokenSource,
+        lastAuthDecisionReason,
+        startupInterrupted: Boolean(getStartupMarkers().interrupted),
+        startupCompleted: isBootstrapDone,
+        cleanupRan: cleanupRanRef.current,
+        cleanupRemovedKeys: cleanupRemovedKeysRef.current,
+        cleanupRemovedKeysCount: cleanupRemovedKeysRef.current.length,
+        lastPagehideAt: lastPagehideAtRef.current,
+        lastPageshowAt: lastPageshowAtRef.current,
+        lastBootstrapAbortReason: lastBootstrapAbortReasonRef.current,
+        currentRouteHash: `${window.location.pathname}${window.location.search}${window.location.hash}`,
+        appMounted: mountedRef.current,
+        firstVisiblePaint: window.__BLOOM_STARTUP_PHASE__ === "first_visible_paint",
+      });
+    }
+  }, [authRestoreStatus, browserLoginRequired, hasAnyAuthTokenForLoginGuard, isBootstrapDone, lastAuthDecisionReason]);
+
+
   if (showStartupRecovery) {
     return <StartupRecoveryScreen message={watchdogMessage} />;
   }
@@ -2159,7 +2223,11 @@ export default function App() {
     return <BrowserLoginExternalOpenRequiredScreen />;
   }
 
-  if (browserLoginRequired) {
+  if (browserLoginRequired && !canRenderLogin) {
+    return <LoadingState title={hasAnyAuthTokenForLoginGuard ? "Проверяем вход..." : "Загружаем данные клуба"} />;
+  }
+
+  if (canRenderLogin) {
     return (
       <div className="state" role="status">
         <h1>{BROWSER_LOGIN_REQUIRED_MESSAGE}</h1>

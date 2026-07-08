@@ -111,6 +111,7 @@ const AUTH_SESSION_TTL_MS = 30 * 60 * 1000;
 const AUTH_SESSION_MAX_TTL_MS = 30 * 24 * 60 * 60 * 1000;
 let inMemoryAuthToken: string | null = null;
 let inMemoryAuthTokenExpiresAt = 0;
+let lastAuthStorageReadError: string | null = null;
 const REQUEST_TIMEOUT_MS = 15_000;
 const CATALOG_TIMEOUT_MS = 12_000;
 export const WEB_CATALOG_PARTNERS_PATH = "/clients/catalog/partners";
@@ -358,11 +359,21 @@ function readSessionAuthToken(now = Date.now()): string | null {
   }
 }
 
-export function getStoredAuthToken(): string | null {
+export type AuthTokenSource = "memory" | "local" | "session" | "none" | "error";
+
+export type AuthTokenStorageSnapshot = {
+  token: string | null;
+  hasStoredToken: boolean;
+  tokenSource: AuthTokenSource;
+  storageReadError: string | null;
+};
+
+export function getAuthTokenStorageSnapshot(): AuthTokenStorageSnapshot {
   const now = Date.now();
+  lastAuthStorageReadError = null;
 
   if (inMemoryAuthToken && inMemoryAuthTokenExpiresAt > now) {
-    return inMemoryAuthToken;
+    return { token: inMemoryAuthToken, hasStoredToken: true, tokenSource: "memory", storageReadError: null };
   }
 
   inMemoryAuthToken = null;
@@ -375,14 +386,24 @@ export function getStoredAuthToken(): string | null {
       if (persistentToken) {
         const expiresAt = getAuthSessionExpiry(persistentToken, now);
         rememberAuthToken(persistentToken, expiresAt);
-        return persistentToken;
+        return { token: persistentToken, hasStoredToken: true, tokenSource: "local", storageReadError: null };
       }
-    } catch {
-      // Storage security/quota failures must not crash startup.
+    } catch (error) {
+      lastAuthStorageReadError = error instanceof Error ? error.name : "storage_read_failed";
+      return { token: null, hasStoredToken: false, tokenSource: "error", storageReadError: lastAuthStorageReadError };
     }
   }
 
-  return readSessionAuthToken(now);
+  const sessionToken = readSessionAuthToken(now);
+  return { token: sessionToken, hasStoredToken: Boolean(sessionToken), tokenSource: sessionToken ? "session" : "none", storageReadError: lastAuthStorageReadError };
+}
+
+export function getStoredAuthToken(): string | null {
+  return getAuthTokenStorageSnapshot().token;
+}
+
+export function getLastAuthStorageReadError(): string | null {
+  return lastAuthStorageReadError;
 }
 
 export function clearStoredAuthToken(): void {
