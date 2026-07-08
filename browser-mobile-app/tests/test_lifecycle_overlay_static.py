@@ -35,8 +35,8 @@ def test_app_mount_unmount_and_effect_markers_exist() -> None:
         "app_unmount",
         "app_effect_page_start",
         "app_effect_page_cleanup",
-        "app_effect_watchdogs_start",
-        "app_effect_watchdogs_cleanup",
+        "app_effect_startup_recovery_start",
+        "app_effect_startup_recovery_cleanup",
         "page_transition",
     ]:
         assert marker in APP

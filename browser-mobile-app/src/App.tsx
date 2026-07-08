@@ -944,104 +944,23 @@ export default function App() {
   }, [logBootstrapDeadlockDiagnostic]);
 
   useEffect(() => {
-    lifecycleTrace("app_effect_watchdogs_start", { page: pageRef.current });
-    const reactMountTimer = window.setTimeout(() => {
-      if (!mountedRef.current) {
-        lifecycleTrace("react_mount_timeout", { timeoutMs: 5000 });
-        if (isStartupDebugUiEnabledValue) {
-          setDiagnosticOverlayReason("React не смонтировался за 5 секунд.");
-        }
-      }
-    }, 5000);
+    lifecycleTrace("app_effect_startup_recovery_start", { page: pageRef.current });
 
-    const bootstrapLongTimer = window.setTimeout(() => {
-      if (!isBootstrapDone) {
-        lifecycleTrace("bootstrap_timeout", {
-          timeoutMs: 8000,
-          page: pageRef.current,
-        });
-        if (isStartupDebugUiEnabledValue) {
-          setDiagnosticOverlayReason("Bootstrap не завершился за 8 секунд.");
-        }
-      }
-    }, 8000);
-
-    const rootEmptyTimer = window.setTimeout(() => {
-      const root = document.getElementById("root");
-      if (
-        hasRenderedPageContent &&
-        root &&
-        root.textContent?.trim().length === 0
-      ) {
-        lifecycleTrace("root_visually_empty_timeout", {
-          timeoutMs: 8000,
-          page: pageRef.current,
-        });
-        if (isStartupDebugUiEnabledValue) {
-          setDiagnosticOverlayReason(
-            "Страница отрисована, но root визуально пустой через 8 секунд.",
-          );
-        }
-      }
-    }, 8000);
-
-    const openOnWindowError = () => {
-      if (isStartupDebugUiEnabledValue) {
-        setDiagnosticOverlayReason("Сработал window.error.");
-      }
-    };
-    const openOnUnhandledRejection = () => {
-      if (isStartupDebugUiEnabledValue) {
-        setDiagnosticOverlayReason("Сработал unhandledrejection.");
-      }
-    };
-    window.addEventListener("error", openOnWindowError);
-    window.addEventListener("unhandledrejection", openOnUnhandledRejection);
-
-    const bootstrapTimer = window.setTimeout(() => {
-      if (!isBootstrapDone && !error) {
-        traceMark("startup_watchdog_5s", { page: pageRef.current });
-        saveCrashDump("startup_watchdog_5s", { startupTimedOut: true, page: pageRef.current });
-        console.warn(
-          "Bloom startup watchdog: bootstrap is not done after 5 seconds",
-          getStartupTrace().slice(-30),
-        );
-        setWatchdogMessage("Bootstrap не завершён через 5 секунд.");
-      }
-    }, 5000);
-
-    const renderTimer = window.setTimeout(() => {
+    const startupRecoveryTimer = window.setTimeout(() => {
       if (!hasRenderedPageContent) {
         traceMark("startup_watchdog_8s", { page: pageRef.current });
         saveCrashDump("react_app_ready_timeout", { reactAppReady: false, page: pageRef.current });
-        if (isStartupDebugUiEnabledValue) {
-          setShowStartupDiagnostics(true);
-          setDiagnosticOverlayReason(
-            "Контент страницы не отрисован через 8 секунд.",
-          );
-          setWatchdogMessage("Контент страницы не отрисован через 8 секунд.");
-        } else {
-          setWatchdogMessage("Запуск не завершился за 8 секунд.");
-        }
+        setWatchdogMessage("Запуск не завершился за 8 секунд.");
         setShowStartupRecovery(true);
         traceMark("startup_recovery_screen_requested", { page: pageRef.current });
       }
     }, 8000);
 
     return () => {
-      lifecycleTrace("app_effect_watchdogs_cleanup", { page: pageRef.current });
-      window.clearTimeout(reactMountTimer);
-      window.clearTimeout(bootstrapLongTimer);
-      window.clearTimeout(rootEmptyTimer);
-      window.clearTimeout(bootstrapTimer);
-      window.clearTimeout(renderTimer);
-      window.removeEventListener("error", openOnWindowError);
-      window.removeEventListener(
-        "unhandledrejection",
-        openOnUnhandledRejection,
-      );
+      lifecycleTrace("app_effect_startup_recovery_cleanup", { page: pageRef.current });
+      window.clearTimeout(startupRecoveryTimer);
     };
-  }, [error, hasRenderedPageContent, isBootstrapDone, isStartupDebugUiEnabledValue]);
+  }, [hasRenderedPageContent]);
 
   const resetPartnerFlowState = useCallback((nextPage: PageId = "catalog") => {
     setSelectedPartner(null);
@@ -1364,13 +1283,6 @@ export default function App() {
               reason: "startup_core_catalog_load",
             });
             traceStartup("loadAppData_core_catalog_requested", { sequenceId });
-            window.setTimeout(() => void loadPartners(true), 0);
-          } else {
-            traceStartup("loadAppData_core_catalog_requested", {
-              sequenceId,
-              page: pageRef.current,
-              reason: "home_prefetch",
-            });
             window.setTimeout(() => void loadPartners(true), 0);
           }
 

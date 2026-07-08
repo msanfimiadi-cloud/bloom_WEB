@@ -30,6 +30,7 @@ declare global {
     __BLOOM_APP_INTERACTIVE__?: boolean;
     __BLOOM_EARLY_STARTUP_TRACE__?: Array<Record<string, unknown>>;
     __BLOOM_RESOURCE_ERROR_TRACE__?: Array<Record<string, unknown>>;
+    __BLOOM_CHUNK_RECOVERY_STARTED__?: boolean;
   }
 }
 
@@ -122,9 +123,9 @@ function appendEntryFallbackOverlay(wrapper: HTMLElement): "body" | "documentEle
   return undefined;
 }
 
-function clearStartupRecoveryStorage(): void {
-  const safeRecoveryKeyPattern = /(crash|startup|bootstrap|build_mismatch|forced_reload)/i;
-  const protectedAuthKeyPattern = /(auth|token|telegram_login|session|jwt)/i;
+export function clearStartupRecoveryStorage(): void {
+  const safeRecoveryKeyPattern = /(crash|startup|bootstrap|build_mismatch|forced_reload|chunk|vite|asset|recovery)/i;
+  const protectedAuthKeyPattern = /(auth|token|telegram_login|session|jwt|initdata)/i;
   try {
     [window.sessionStorage, window.localStorage].forEach((storage) => {
       Object.keys(storage).forEach((key) => {
@@ -135,6 +136,28 @@ function clearStartupRecoveryStorage(): void {
     });
   } catch {
     // Recovery must not fail if storage is unavailable.
+  }
+}
+
+async function clearTemporaryBrowserCaches(): Promise<void> {
+  clearStartupRecoveryStorage();
+  try {
+    if ("caches" in window) {
+      const keys = await caches.keys();
+      await Promise.all(keys.filter((key) => key.startsWith("bloom-club-") || key.startsWith("workbox-")).map((key) => caches.delete(key)));
+    }
+  } catch {
+    // Cache cleanup is best-effort and must not affect auth/session storage.
+  }
+}
+
+async function unregisterUnsafeServiceWorkers(): Promise<void> {
+  if (!("serviceWorker" in navigator)) return;
+  try {
+    const registrations = await navigator.serviceWorker.getRegistrations();
+    await Promise.all(registrations.map((registration) => registration.unregister().catch(() => false)));
+  } catch (error) {
+    reportClientError("service_worker_unregister_failed", error, { startup: getStandaloneDiagnostics() });
   }
 }
 
@@ -185,14 +208,16 @@ function renderStartupRecoveryScreen(reason = "startup_watchdog_timeout"): void 
   panel.setAttribute("style", "max-width: 520px; display: flex; flex-direction: column; gap: 14px; align-items: center;");
 
   const title = document.createElement("h1");
-  title.textContent = "Проблемы с соединением";
+  title.textContent = "Проблемы с запуском";
   const description = document.createElement("p");
-  description.textContent = "Проверьте интернет или VPN и попробуйте снова.";
-  const reloadButton = createButton("Повторить", () => {
-    clearStartupRecoveryStorage();
-    reloadWithCacheBust(reason);
+  description.textContent = "Мы не смогли открыть приложение после быстрого перезапуска.";
+  const reloadButton = createButton("Перезагрузить приложение", () => {
+    void clearTemporaryBrowserCaches().finally(() => reloadWithCacheBust(reason));
   });
-  panel.replaceChildren(title, description, reloadButton);
+  const clearButton = createButton("Очистить временный кэш", () => {
+    void clearTemporaryBrowserCaches().finally(() => reloadWithCacheBust("temporary_cache_cleared"));
+  });
+  panel.replaceChildren(title, description, reloadButton, clearButton);
   rootElement.replaceChildren(panel);
   lifecycleTraceSafe("startup_recovery_screen_shown", { reason, diagnostics: getStandaloneDiagnostics() });
   traceMarkSafe("startup_recovery_screen_shown");
@@ -330,11 +355,11 @@ function renderModuleLoadErrorPanel(
   panel.className = "startup-entry-error-panel";
 
   const title = document.createElement("h1");
-  title.textContent = "Не удалось загрузить модуль приложения";
+  title.textContent = "Проблемы с запуском";
 
   const description = document.createElement("p");
   description.textContent =
-    "Приложение остановилось до запуска интерфейса. Диагностика ниже не содержит токены или Telegram initData.";
+    "Мы не смогли открыть приложение после быстрого перезапуска.";
 
   const details = document.createElement("pre");
   details.textContent = JSON.stringify(
@@ -343,21 +368,48 @@ function renderModuleLoadErrorPanel(
     2,
   );
 
-  const reloadButton = createButton("Перезагрузить", () =>
-    window.location.reload(),
-  );
-  const reopenButton = createButton("Открыть заново", () =>
-    window.location.reload(),
-  );
+  const reloadButton = createButton("Перезагрузить приложение", () => {
+    void clearTemporaryBrowserCaches().finally(() => reloadWithCacheBust("module_load_error"));
+  });
+  const clearButton = createButton("Очистить временный кэш", () => {
+    void clearTemporaryBrowserCaches().finally(() => reloadWithCacheBust("temporary_cache_cleared"));
+  });
 
-  panel.replaceChildren(title, description, details, reloadButton, reopenButton);
+  panel.replaceChildren(title, description, details, reloadButton, clearButton);
   rootElement.replaceChildren(panel);
+}
+
+function isLikelyChunkLoadFailure(error: unknown): boolean {
+  const message = sanitizeDiagnosticValue(error);
+  return /ChunkLoadError|Loading chunk|Failed to fetch dynamically imported module|Importing a module script failed|module script|\/assets\/.*\.js|error loading dynamically imported module/i.test(message);
+}
+
+function recoverFromChunkLoadFailure(error: unknown, source: EarlyErrorSource): void {
+  renderModuleLoadErrorPanel(error, source);
+  if (window.__BLOOM_CHUNK_RECOVERY_STARTED__) return;
+  window.__BLOOM_CHUNK_RECOVERY_STARTED__ = true;
+  let reloadCount = 0;
+  try {
+    reloadCount = Number(window.sessionStorage.getItem("bloom_chunk_recovery_reload_count") ?? "0") || 0;
+    window.sessionStorage.setItem("bloom_chunk_recovery_reload_count", String(reloadCount + 1));
+  } catch {
+    reloadCount = 1;
+  }
+  void clearTemporaryBrowserCaches().finally(() => {
+    if (reloadCount < 1) {
+      window.setTimeout(() => reloadWithCacheBust("chunk_load_failure"), 300);
+    }
+  });
 }
 
 function renderEarlyErrorDiagnostic(
   error: unknown,
   source: EarlyErrorSource,
 ): void {
+  if (isLikelyChunkLoadFailure(error)) {
+    recoverFromChunkLoadFailure(error, source);
+    return;
+  }
   renderModuleLoadErrorPanel(error, source);
 }
 
@@ -436,6 +488,15 @@ traceMarkSafe("boot_started");
 traceMarkSafe("entry_script_executed");
 traceMarkSafe("app_entry_loaded");
 traceOkSafe("entry_loading_fallback_rendered");
+
+window.addEventListener("error", (event) => {
+  const rawTarget = event.target;
+  const target = rawTarget && rawTarget !== window ? rawTarget as HTMLElement & { src?: string; href?: string } : null;
+  const url = target ? target.src || target.href || "" : "";
+  if (/\/assets\/.*\.js(?:$|[?#])/.test(url)) {
+    recoverFromChunkLoadFailure(new Error(`Missing startup asset: ${url}`), "app_module_import");
+  }
+}, true);
 
 window.onerror = (_message, _source, _lineno, _colno, error): void => {
   lifecycleTraceSafe("window_error_overlay_trigger", { message: _message });
@@ -542,41 +603,13 @@ async function startApp(): Promise<void> {
 }
 
 async function registerServiceWorkerSafely(): Promise<void> {
-  if (!("serviceWorker" in navigator) || !import.meta.env.PROD) return;
-  try {
-    const registration = await navigator.serviceWorker.register("/sw.js", { updateViaCache: "none" });
-    await registration.update().catch(() => undefined);
-    registration.addEventListener("updatefound", () => {
-      lifecycleTraceSafe("service_worker_update_found", { startup: getStandaloneDiagnostics() });
-    });
-    navigator.serviceWorker.addEventListener("controllerchange", () => {
-      lifecycleTraceSafe("service_worker_controller_change", { startup: getStandaloneDiagnostics() });
-    });
-  } catch (error) {
-    reportClientError("service_worker_registration_failed", error, { startup: getStandaloneDiagnostics() });
-  }
+  // Production startup is safer without an app-shell/chunk service worker. The
+  // manifest still provides the iOS home-screen PWA shortcut. Remove old SWs in
+  // the background without touching auth/session/localStorage tokens.
+  await unregisterUnsafeServiceWorkers();
+  await clearTemporaryBrowserCaches();
 }
 
-function installStandaloneLifecycleRecovery(): void {
-  const recoverIfStuck = (reason: string): void => {
-    window.setTimeout(() => {
-      const root = document.getElementById("root");
-      const fallbackStillVisible = Boolean(document.getElementById("bloom-entry-fallback-overlay") || document.getElementById("bloom-html-fallback-overlay"));
-      const rootEmpty = !root || root.childElementCount === 0;
-      if (!window.__BLOOM_APP_INTERACTIVE__ && (fallbackStillVisible || rootEmpty)) {
-        reportStartupFailure("standalone_lifecycle_recovery", reason);
-        renderStartupRecoveryScreen(reason);
-      }
-    }, 2_500);
-  };
-  window.addEventListener("pageshow", (event) => recoverIfStuck(event.persisted ? "pageshow_bfcache" : "pageshow"));
-  window.addEventListener("focus", () => recoverIfStuck("window_focus"));
-  document.addEventListener("visibilitychange", () => {
-    if (document.visibilityState === "visible") recoverIfStuck("visibility_visible");
-  });
-}
-
-installStandaloneLifecycleRecovery();
 
 void startApp().then(() => {
   void registerServiceWorkerSafely();

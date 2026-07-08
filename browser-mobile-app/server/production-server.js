@@ -491,7 +491,7 @@ async function handleClientErrors(request, response) {
   } catch (error) {
     const info = safeErrorInfo(error);
     console.warn(`CLIENT_ERROR_LOG_INVALID name=${JSON.stringify(info.name)} message=${JSON.stringify(info.message)}`);
-    sendJson(response, 400, { detail: 'invalid_client_error' });
+    sendHead(response, 204);
   }
 }
 
@@ -1580,6 +1580,35 @@ async function serveUpload(request, response, pathname) {
   }
 }
 
+async function serveStartupCriticalFile(request, response, pathname) {
+  if (request.method !== 'GET' && request.method !== 'HEAD') {
+    sendMethodNotAllowed(response);
+    return;
+  }
+  const filePath = path.resolve(DIST_DIR, pathname.replace(/^\//, ''));
+  if (!filePath.startsWith(`${DIST_DIR}${path.sep}`)) {
+    sendText(response, 404, 'Not found');
+    return;
+  }
+  try {
+    await access(filePath);
+    response.writeHead(200, {
+      'content-type': contentTypeFor(filePath) === 'application/octet-stream' && pathname.endsWith('.webmanifest') ? 'application/manifest+json; charset=utf-8' : contentTypeFor(filePath),
+      'cache-control': HTML_NO_STORE_CACHE_CONTROL,
+      pragma: 'no-cache',
+      expires: '0',
+    });
+    if (request.method === 'HEAD') {
+      response.end();
+      return;
+    }
+    createReadStream(filePath).pipe(response);
+  } catch {
+    sendText(response, 404, 'Not found');
+  }
+}
+
+
 async function serveFrontend(request, response, options = {}) {
   if (request.method !== 'GET' && request.method !== 'HEAD') {
     sendMethodNotAllowed(response);
@@ -1588,20 +1617,11 @@ async function serveFrontend(request, response, options = {}) {
 
   try {
     const indexHtml = await readFile(INDEX_HTML, 'utf8');
-    let body = injectRuntimeConfig(indexHtml);
-    try {
-      const items = await fetchPublicCatalogPartners();
-      body = injectCatalogBootstrap(body, { items });
-    } catch (error) {
-      const info = safeErrorInfo(error);
-      console.warn(
-        `catalog bootstrap unavailable name=${JSON.stringify(info.name)} message=${JSON.stringify(info.message)}`,
-      );
-    }
+    const body = injectRuntimeConfig(indexHtml);
     const bodyBytes = Buffer.from(body);
     logFrontendRoute('frontend_index_served', request, {
       contentLength: bodyBytes.length,
-      injectedCatalogBootstrap: body !== indexHtml,
+      injectedCatalogBootstrap: false,
       cacheControlType: 'html-no-store',
       cacheControl: HTML_NO_STORE_CACHE_CONTROL,
     });
@@ -1631,6 +1651,10 @@ async function handleRequest(request, response) {
   attachSecurityHeaders(response);
   logRequest(request, response, pathname);
 
+  if (pathname === '/sw.js' || pathname === '/manifest.webmanifest' || pathname === '/runtime-config.json') {
+    await serveStartupCriticalFile(request, response, pathname);
+    return;
+  }
   if (pathname === '/api/tg/health' || pathname === '/health') {
     await handleHealth(request, response);
     return;
