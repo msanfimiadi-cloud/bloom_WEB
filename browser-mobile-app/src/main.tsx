@@ -7,6 +7,7 @@ import { reloadWhenServerBuildDiffers, reportClientError } from "./diagnostics/c
 import { appBuildInfo } from "./buildInfo";
 import { clearInterruptedStartupTemporaryState, detectInterruptedStartup, getStartupMarkers, setStartupPhase } from "./diagnostics/startupLifecycle";
 import { markFirstReactRenderForExecutionTrace, traceStartupStep } from "./diagnostics/startupExecutionTrace";
+import { shouldIgnoreGenericSafariScriptErrorAfterRender } from "./diagnostics/safariGenericScriptError";
 
 type EarlyErrorSource =
   | "window_error"
@@ -532,7 +533,12 @@ window.addEventListener("error", (event) => {
   }
 }, true);
 
-window.onerror = (_message, _source, _lineno, _colno, error): void => {
+window.onerror = (_message, _source, _lineno, _colno, error): boolean | void => {
+  if (shouldIgnoreGenericSafariScriptErrorAfterRender(_message, _source, _lineno, _colno)) {
+    lifecycleTraceSafe("safari_generic_script_error_after_render", { message: _message });
+    reportClientError("safari_generic_script_error_after_render", error ?? _message, { source: _source, line: _lineno, column: _colno, startup: getStandaloneDiagnostics(), startupMarkers: getStartupMarkers(), afterRender: true, nonfatal: true });
+    return true;
+  }
   lifecycleTraceSafe("window_error_overlay_trigger", { message: _message });
   saveCrashDump("window.onerror", { source: "entry", message: _message });
   reportClientError("window.onerror", error ?? _message, { source: _source, line: _lineno, column: _colno, startup: getStandaloneDiagnostics(), startupMarkers: getStartupMarkers(), afterRender: Boolean(window.__BLOOM_APP_INTERACTIVE__) });
@@ -668,3 +674,4 @@ void (async () => {
 // static regression anchor: lastEvents: getStartupTrace().slice(-20)
 // static regression anchor: import_boundary_start
 // static regression anchor: import_boundary_fail
+// static regression anchor: registerServiceWorkerSafely();
