@@ -77,6 +77,7 @@ import {
 } from "./diagnostics/startupTrace";
 import { catalogTrace, enableBloomDebug, isBloomDebugEnabled } from "./diagnostics/productionDebug";
 import { clearCrashDump, markStartupCompletedSuccessfully, readCompatibleCrashDump, saveCrashDump, type BloomCrashDump } from "./diagnostics/crashDump";
+import { clearInterruptedStartupTemporaryState, detectInterruptedStartup, getStartupMarkers, markBootstrapFinished, markFirstVisiblePaint, markStartupInterrupted, setStartupPhase } from "./diagnostics/startupLifecycle";
 import { resolveNumericPartnerId, sortOffersForPartner, sortPartnersForCatalog } from "./utils/partnerDisplay";
 import {
   getReferralCodeFromStartParam,
@@ -919,6 +920,8 @@ export default function App() {
     logBootstrapDeadlockDiagnostic("react_mount");
     markReactMounted(true);
     lifecycleTrace("app_mount", { page });
+    setStartupPhase("app_mounted", { page });
+    traceStartup("app_mounted", { page });
     traceStartup("app_component_mounted", { page });
     traceMark("ui_mounted", { page });
     traceMark("app_component_mount");
@@ -928,7 +931,14 @@ export default function App() {
       hasError: Boolean(error),
     });
     mountedRef.current = true;
+    traceStartup("remove_fallback_started", { page });
     removeEntryFallbackOverlay();
+    traceStartup("remove_fallback_done", { page });
+    requestAnimationFrame(() => {
+      traceStartup("first_visible_shell_committed", { page: pageRef.current });
+      setStartupPhase("first_visible_paint", { page: pageRef.current });
+      markFirstVisiblePaint();
+    });
 
     return () => {
       lifecycleTrace("app_unmount", { page: pageRef.current });
@@ -945,6 +955,10 @@ export default function App() {
 
   useEffect(() => {
     lifecycleTrace("app_effect_startup_recovery_start", { page: pageRef.current });
+    if (detectInterruptedStartup()) {
+      traceStartup("interrupted_startup_detected", { markers: getStartupMarkers() });
+      clearInterruptedStartupTemporaryState();
+    }
 
     const startupRecoveryTimer = window.setTimeout(() => {
       if (!hasRenderedPageContent) {
@@ -1007,10 +1021,12 @@ export default function App() {
         let stage: AppStage = "telegram_runtime_check";
         const startedAt = performance.now();
 
+        setStartupPhase("bootstrap_started", { reason, forceNew, sequenceId });
         lifecycleTrace("bootstrap_start", { reason, forceNew, sequenceId });
         traceMark("auth_started", { reason, sequenceId });
         traceStartup("loadAppData_called", { reason, forceNew, sequenceId });
         traceStart("loadAppData_started", { reason, forceNew, sequenceId });
+        traceStartup("bootstrap_promise_created", { reason, forceNew, sequenceId });
         logBootstrapDiagnostic("app_bootstrap_start", {
           reason,
           forceNew,
@@ -1041,7 +1057,9 @@ export default function App() {
             lifecycleTrace("telegram_expand_start");
             traceStart("telegram_prepare_start");
             try {
+              traceStartup("prepareTelegramViewport_started", { sequenceId });
               prepareTelegramViewport();
+              traceStartup("prepareTelegramViewport_done", { sequenceId });
               lifecycleTrace("telegram_ready_ok");
               lifecycleTrace("telegram_expand_ok");
               traceOk("telegram_prepare_ok");
@@ -1142,7 +1160,9 @@ export default function App() {
           let subscription: Subscription;
           lifecycleTrace("stored_token_auth_start", { forceNew });
           traceStart("stored_token_check_start");
+          traceStartup("storage_read_started", { key: AUTH_STORAGE_KEY });
           const storedAuthToken = getStoredAuthToken();
+          traceStartup("storage_read_done", { key: AUTH_STORAGE_KEY, hasStoredToken: Boolean(storedAuthToken) });
           traceResumeAuthDiagnostic("startup_auth_check", {
             startupReason: reason,
             hasStoredToken: Boolean(storedAuthToken),
@@ -1253,6 +1273,7 @@ export default function App() {
           traceOk("partner_flow_reset_ok");
 
           traceStart("app_data_set_start");
+          traceStartup("first_setState_after_mount", { sequenceId });
           setData(
             normalizeAppData({
               profile,
@@ -1395,6 +1416,7 @@ export default function App() {
           traceStartup("loadAppData_finished", { sequenceId, page: pageRef.current });
           traceOk("bootstrap_done", { sequenceId, page: pageRef.current });
           traceOk("startup_completed_successfully", { sequenceId, page: pageRef.current });
+          markBootstrapFinished();
           markStartupCompletedSuccessfully();
           setPreviousCrashDump(null);
           logBootstrapDiagnostic("app_bootstrap_success", {
@@ -1506,6 +1528,9 @@ export default function App() {
         console.info("catalog_load_aborted_on_hide", { eventType: event.type, page: pageRef.current });
         traceStartup("catalog_load_aborted_on_hide", { eventType: event.type, page: pageRef.current });
       }
+      if (!window.__BLOOM_STARTUP_PHASE__ || !["first_visible_paint", "bootstrap_finished"].includes(String(window.__BLOOM_STARTUP_PHASE__))) {
+        markStartupInterrupted(event.type);
+      }
       abortInFlightCatalogLoad(event.type);
       invalidateBootstrapForInactiveWebView(event.type);
     };
@@ -1513,6 +1538,7 @@ export default function App() {
     const onPageShow = (event: PageTransitionEvent) => {
       traceStartup("pageshow", { persisted: event.persisted });
       resumeWithoutAuthReset(event);
+      if (detectInterruptedStartup()) { void loadAppData("resume", true); }
     };
     const onPageHide = (event: PageTransitionEvent) => markInactive(event);
     const onResume = (event: Event) => resumeWithoutAuthReset(event);

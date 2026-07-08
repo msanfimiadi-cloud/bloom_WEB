@@ -96,20 +96,21 @@ export async function reloadWhenServerBuildDiffers(): Promise<void> {
       signal: controller.signal,
     });
     if (!response.ok) return;
-    const config = await response.json() as { buildId?: string };
-    if (config.buildId && config.buildId !== appBuildInfo.buildHash) {
+    const config = await response.json() as { buildId?: string; version?: string };
+    const serverBuildId = config.buildId && config.buildId !== config.version ? config.buildId : undefined;
+    if (serverBuildId && serverBuildId !== appBuildInfo.buildHash) {
       const forcedReloadCount = getForcedReloadCount();
       if (forcedReloadCount >= 2) {
         reportClientError("frontend_build_mismatch_reload_limit", new Error("frontend_build_mismatch_reload_limit"), {
           clientBuildId: appBuildInfo.buildHash,
-          serverBuildId: config.buildId,
+          serverBuildId,
           forcedReloadCount,
         });
         return;
       }
       reportClientError("frontend_build_mismatch_detected", new Error("frontend_build_mismatch"), {
         clientBuildId: appBuildInfo.buildHash,
-        serverBuildId: config.buildId,
+        serverBuildId,
         action: "no_reload",
       });
       incrementForcedReloadCount();

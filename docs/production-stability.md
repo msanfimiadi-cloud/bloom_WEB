@@ -22,6 +22,18 @@ journalctl -u womenclub -n 300 --no-pager
 journalctl -u womenclub -f --no-pager
 ```
 
+
+### Block sensitive dotfile and manifest probes before SPA fallback
+
+Add this rule before any `try_files ... /index.html` SPA fallback so probes for env files, git metadata, and unnecessary package manifests return `404` instead of the application shell:
+
+```nginx
+location ~ (^|/)\.(env|git)(\.|/|$) { return 404; }
+location ~ ^/(config|backend|admin)/\.env(\.|$) { return 404; }
+location = /package.json { return 404; }
+```
+
+Do not proxy these paths to the app and do not let them fall through to `index.html`.
 Check whether systemd reports repeated restarts, a non-zero exit code, `OOMKilled`, timeout, or dependency failures.
 
 ### Nginx

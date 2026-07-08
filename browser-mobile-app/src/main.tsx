@@ -5,6 +5,7 @@ import { installProductionDiagnostics } from "./diagnostics/productionDebug";
 import { saveCrashDump } from "./diagnostics/crashDump";
 import { reloadWhenServerBuildDiffers, reportClientError } from "./diagnostics/clientErrorReporter";
 import { appBuildInfo } from "./buildInfo";
+import { clearInterruptedStartupTemporaryState, detectInterruptedStartup, getStartupMarkers, setStartupPhase } from "./diagnostics/startupLifecycle";
 
 type EarlyErrorSource =
   | "window_error"
@@ -31,6 +32,7 @@ declare global {
     __BLOOM_EARLY_STARTUP_TRACE__?: Array<Record<string, unknown>>;
     __BLOOM_RESOURCE_ERROR_TRACE__?: Array<Record<string, unknown>>;
     __BLOOM_CHUNK_RECOVERY_STARTED__?: boolean;
+    __BLOOM_STARTUP_PHASE__?: string;
   }
 }
 
@@ -477,6 +479,8 @@ function getPerformanceDiagnostics(): Record<string, unknown> {
 }
 
 earlyStartupTrace("main_first_executable_line", { marker: "before_installProductionDiagnostics" });
+setStartupPhase("main_started");
+if (detectInterruptedStartup()) { clearInterruptedStartupTemporaryState(); }
 installProductionDiagnostics();
 earlyStartupTrace("main_after_installProductionDiagnostics");
 window.__BLOOM_ENTRY_SCRIPT_EXECUTED__ = true;
@@ -501,7 +505,7 @@ window.addEventListener("error", (event) => {
 window.onerror = (_message, _source, _lineno, _colno, error): void => {
   lifecycleTraceSafe("window_error_overlay_trigger", { message: _message });
   saveCrashDump("window.onerror", { source: "entry", message: _message });
-  reportClientError("window.onerror", error ?? _message, { source: _source, line: _lineno, column: _colno, startup: getStandaloneDiagnostics() });
+  reportClientError("window.onerror", error ?? _message, { source: _source, line: _lineno, column: _colno, startup: getStandaloneDiagnostics(), startupMarkers: getStartupMarkers(), afterRender: Boolean(window.__BLOOM_APP_INTERACTIVE__) });
   renderEarlyErrorDiagnostic(error ?? _message, "window_error");
 };
 
@@ -583,6 +587,7 @@ async function startApp(): Promise<void> {
   earlyStartupTrace("before_render");
   traceStartSafe("render_call_start");
   try {
+    setStartupPhase("react_render_called");
     root.render(
       // static regression anchor: import.meta.env.DEV ? <React.StrictMode>
       import.meta.env.DEV

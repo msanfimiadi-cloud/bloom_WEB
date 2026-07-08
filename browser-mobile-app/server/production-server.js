@@ -187,6 +187,11 @@ function attachSecurityHeaders(response) {
   };
 }
 
+
+function isForbiddenSpaFallbackPath(pathname) {
+  return /(^|\/)\.env(?:$|[.\/])/.test(pathname) || /(^|\/)\.git(?:$|[.\/])/.test(pathname) || pathname === '/package.json' || pathname === '/config/.env' || pathname === '/backend/.env' || pathname === '/admin/.env';
+}
+
 function isVersionedFrontendRoute(pathname) {
   return (
     pathname === '/' ||
@@ -505,8 +510,12 @@ function handleRuntimeConfig(request, response) {
     return;
   }
   sendJson(response, 200, {
+    ok: true,
+    service: 'womenclub',
+    version: readPackageVersion(),
     buildId: SERVER_BUILD_ID,
-    appVersion: SERVER_BUILD_ID,
+    serverTime: new Date().toISOString(),
+    clientBuildId: new URL(request.url || '/', 'http://127.0.0.1').searchParams.get('clientBuildId') || SERVER_BUILD_ID,
     telegramBotUsername: TELEGRAM_BOT_USERNAME,
   });
 }
@@ -1651,6 +1660,10 @@ async function handleRequest(request, response) {
   attachSecurityHeaders(response);
   logRequest(request, response, pathname);
 
+  if (isForbiddenSpaFallbackPath(pathname)) {
+    sendText(response, 404, 'not found', { 'cache-control': 'no-store' });
+    return;
+  }
   if (pathname === '/sw.js' || pathname === '/manifest.webmanifest' || pathname === '/runtime-config.json') {
     await serveStartupCriticalFile(request, response, pathname);
     return;
