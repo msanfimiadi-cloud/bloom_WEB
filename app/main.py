@@ -7,7 +7,7 @@ from uuid import uuid4
 
 from fastapi import FastAPI, HTTPException, Request, status
 from fastapi.middleware.cors import CORSMiddleware
-from fastapi.responses import FileResponse, JSONResponse
+from fastapi.responses import FileResponse, JSONResponse, Response
 from fastapi.staticfiles import StaticFiles
 from sqlalchemy import text
 from sqlalchemy.exc import DBAPIError, OperationalError, SQLAlchemyError, TimeoutError as SQLAlchemyTimeoutError
@@ -123,6 +123,29 @@ async def vk_mini_app_static(full_path: str) -> FileResponse:
         return FileResponse(file_path)
 
     return _vk_mini_app_index()
+
+
+@app.post("/api/client-errors", status_code=204, response_class=Response, tags=["diagnostics"])
+async def client_errors(request: Request) -> Response:
+    """Public, fail-safe browser diagnostics sink; never requires auth."""
+    try:
+        payload = await request.json()
+    except Exception:
+        payload = {"_invalid_json": True}
+    try:
+        logger.warning("client_error path=%s request_id=%s payload=%r", request.url.path, getattr(request.state, "request_id", ""), payload)
+    except Exception:
+        logger.warning("client_error logging_failed path=%s", request.url.path)
+    return Response(status_code=204)
+
+
+@app.get("/api/runtime-config", tags=["diagnostics"])
+async def runtime_config() -> JSONResponse:
+    response = JSONResponse({"service": SERVICE_NAME, "version": APP_VERSION, "buildId": APP_VERSION})
+    response.headers["Cache-Control"] = "no-store, no-cache, max-age=0, must-revalidate"
+    response.headers["Pragma"] = "no-cache"
+    response.headers["Expires"] = "0"
+    return response
 
 
 @app.get("/health", tags=["health"])

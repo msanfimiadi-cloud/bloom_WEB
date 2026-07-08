@@ -369,12 +369,16 @@ export function getStoredAuthToken(): string | null {
   inMemoryAuthTokenExpiresAt = 0;
 
   if (typeof window !== "undefined") {
-    const persistentToken = window.localStorage.getItem(AUTH_STORAGE_KEY);
+    try {
+      const persistentToken = window.localStorage.getItem(AUTH_STORAGE_KEY);
 
-    if (persistentToken) {
-      const expiresAt = getAuthSessionExpiry(persistentToken, now);
-      rememberAuthToken(persistentToken, expiresAt);
-      return persistentToken;
+      if (persistentToken) {
+        const expiresAt = getAuthSessionExpiry(persistentToken, now);
+        rememberAuthToken(persistentToken, expiresAt);
+        return persistentToken;
+      }
+    } catch {
+      // Storage security/quota failures must not crash startup.
     }
   }
 
@@ -389,8 +393,8 @@ export function clearStoredAuthToken(): void {
     return;
   }
 
-  window.sessionStorage.removeItem(AUTH_SESSION_STORAGE_KEY);
-  window.localStorage.removeItem(AUTH_STORAGE_KEY);
+  try { window.sessionStorage.removeItem(AUTH_SESSION_STORAGE_KEY); } catch { /* ignore */ }
+  try { window.localStorage.removeItem(AUTH_STORAGE_KEY); } catch { /* ignore */ }
 }
 
 function getStoredToken(): string | null {
@@ -406,11 +410,15 @@ function setStoredToken(token: string): void {
     return;
   }
 
-  window.localStorage.setItem(AUTH_STORAGE_KEY, token);
-  window.sessionStorage.setItem(
-    AUTH_SESSION_STORAGE_KEY,
-    JSON.stringify({ token, expiresAt, storedAt: Date.now() }),
-  );
+  try { window.localStorage.setItem(AUTH_STORAGE_KEY, token); } catch { /* ignore */ }
+  try {
+    window.sessionStorage.setItem(
+      AUTH_SESSION_STORAGE_KEY,
+      JSON.stringify({ token, expiresAt, storedAt: Date.now() }),
+    );
+  } catch {
+    // Session mirror is best-effort; persistent/in-memory token remains valid.
+  }
 }
 
 export function storeAuthTokenFromResponse(response: AuthResponse): boolean {
