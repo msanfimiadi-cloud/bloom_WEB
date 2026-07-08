@@ -25,7 +25,7 @@ from app.services.browser_login_codes import BrowserLoginCodeService
 from app.models.payment import Subscription, SubscriptionStatus
 from app.models.user import AdminUser, User, UserRole
 from app.services.site_credentials import ensure_vk_site_credentials
-from app.services.referrals import apply_referral_on_new_client, ensure_referral_code
+from app.services.referrals import REFERRAL_EXISTING_PROFILE_ERROR, ReferralError, apply_referral_on_new_client, ensure_referral_code, normalize_referral_code, validate_referral_for_new_client
 from app.schemas.auth import (
     LoginRequest,
     LoginResponse,
@@ -238,10 +238,14 @@ def _get_or_create_telegram_client_profile(
             raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED, detail="Client user is inactive or invalid")
         changed = _sync_telegram_profile_fields(profile, telegram_user)
         ensure_referral_code(db, profile)
+        if normalize_referral_code(referral_code):
+            raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail=REFERRAL_EXISTING_PROFILE_ERROR)
         if changed or not profile.referral_code:
             db.commit()
             db.refresh(profile)
         return profile, False
+
+    validate_referral_for_new_client(db, referral_code, provider="telegram", provider_user_id=telegram_user.telegram_user_id)
 
     user = User(role=UserRole.CLIENT.value, is_active=True)
     db.add(user)
@@ -326,7 +330,11 @@ def telegram_miniapp_login(
         referral_code = payload.get("referral_code") or payload.get("start_param") or payload.get("startapp")
     if referral_code is None:
         referral_code = params.get("start_param") or params.get("startapp")
-    profile, _ = _get_or_create_telegram_client_profile(db, telegram_user, referral_code=referral_code)
+    try:
+        profile, _ = _get_or_create_telegram_client_profile(db, telegram_user, referral_code=referral_code)
+    except ReferralError as exc:
+        db.rollback()
+        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail=exc.detail) from exc
     return _build_client_auth_response(db, profile)
 
 
@@ -350,15 +358,19 @@ def browser_login_code_login(
         db.commit()
         raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="code_already_used")
 
-    resolved = BrowserIdentityResolver(db).resolve(
-        provider=code_record.provider,
-        provider_user_id=code_record.provider_user_id,
-        display_name=code_record.display_name,
-        username=code_record.username,
-        photo_url=code_record.photo_url,
-        referral_code=payload.referral_code or code_record.referral_code,
-        source=code_record.source,
-    )
+    try:
+        resolved = BrowserIdentityResolver(db).resolve(
+            provider=code_record.provider,
+            provider_user_id=code_record.provider_user_id,
+            display_name=code_record.display_name,
+            username=code_record.username,
+            photo_url=code_record.photo_url,
+            referral_code=payload.referral_code or code_record.referral_code,
+            source=code_record.source,
+        )
+    except ReferralError as exc:
+        db.rollback()
+        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail=exc.detail) from exc
     response = _build_client_auth_response(db, resolved.client_profile)
     service.mark_used(code_record)
     db.commit()
@@ -383,16 +395,20 @@ def browser_token_login(
     if token_record.used_at is not None:
         raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="token_already_used")
 
-    resolved = BrowserIdentityResolver(db).resolve(
-        provider=token_record.provider,
-        provider_user_id=token_record.provider_user_id,
-        display_name=token_record.display_name,
-        username=token_record.username,
-        photo_url=token_record.photo_url,
-        referral_code=token_record.referral_code,
-        source=token_record.source,
-        create_if_missing=False,
-    )
+    try:
+        resolved = BrowserIdentityResolver(db).resolve(
+            provider=token_record.provider,
+            provider_user_id=token_record.provider_user_id,
+            display_name=token_record.display_name,
+            username=token_record.username,
+            photo_url=token_record.photo_url,
+            referral_code=token_record.referral_code,
+            source=token_record.source,
+            create_if_missing=False,
+        )
+    except ReferralError as exc:
+        db.rollback()
+        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail=exc.detail) from exc
     if resolved.status == "not_found" or resolved.client_profile is None:
         raise HTTPException(status_code=status.HTTP_409_CONFLICT, detail="profile_not_found")
 

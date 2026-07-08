@@ -2182,8 +2182,9 @@ export default function App() {
       setLoginCode("");
       setLoginReferralCode("");
       await loadAppData("manual", false);
-    } catch {
-      setLoginCodeError("Код недействителен или устарел. Получите новый код в боте.");
+    } catch (error) {
+      const backendDetail = isApiError(error) && typeof error.detail === "string" ? error.detail : "";
+      setLoginCodeError(backendDetail || "Код недействителен или устарел. Получите новый код в боте.");
     } finally {
       setIsLoginCodeSubmitting(false);
     }

@@ -11,6 +11,17 @@ from sqlalchemy.orm import Session
 from app.core.config import settings
 from app.models.client import ClientProfile, ClientReferral, GiveawayEntry
 
+REFERRAL_EXISTING_PROFILE_ERROR = "Личный кабинет уже был создан ранее. Реферальный код можно использовать только при первом входе."
+REFERRAL_INVALID_ERROR = "Реферальный код не найден или недействителен."
+REFERRAL_SELF_ERROR = "Нельзя использовать собственный реферальный код."
+
+
+class ReferralError(ValueError):
+    def __init__(self, detail: str) -> None:
+        super().__init__(detail)
+        self.detail = detail
+
+
 REWARD_ENTRIES_PER_REFERRAL = 5
 REFERRAL_SOURCE = "referral"
 _REFERRAL_CODE_ALPHABET = string.ascii_uppercase + string.digits
@@ -42,12 +53,41 @@ def referral_counts(db: Session, client_id: int) -> tuple[int, int]:
     return int(referrals_count or 0), int(entries_count or 0)
 
 
-def apply_referral_on_new_client(db: Session, new_client: ClientProfile, referral_code_value: str | None) -> ClientReferral | None:
+def normalize_referral_code(referral_code_value: str | None) -> str | None:
     code = (referral_code_value or "").strip()
+    return code or None
+
+
+def get_referrer_by_code(db: Session, referral_code_value: str | None) -> ClientProfile | None:
+    code = normalize_referral_code(referral_code_value)
     if not code:
         return None
-    referrer = db.execute(select(ClientProfile).where(ClientProfile.referral_code == code)).scalar_one_or_none()
-    if referrer is None or referrer.id == new_client.id:
+    return db.execute(select(ClientProfile).where(ClientProfile.referral_code == code)).scalar_one_or_none()
+
+
+def validate_referral_for_new_client(db: Session, referral_code_value: str | None, *, provider: str | None = None, provider_user_id: str | None = None, new_client: ClientProfile | None = None) -> ClientProfile | None:
+    code = normalize_referral_code(referral_code_value)
+    if not code:
+        return None
+    referrer = get_referrer_by_code(db, code)
+    if referrer is None:
+        raise ReferralError(REFERRAL_INVALID_ERROR)
+    if new_client is not None and referrer.id == new_client.id:
+        raise ReferralError(REFERRAL_SELF_ERROR)
+    if provider and provider_user_id:
+        normalized_provider = provider.strip().lower()
+        normalized_provider_user_id = provider_user_id.strip()
+        if (normalized_provider == "telegram" and referrer.telegram_user_id == normalized_provider_user_id) or (normalized_provider == "vk" and referrer.vk_user_id == normalized_provider_user_id):
+            raise ReferralError(REFERRAL_SELF_ERROR)
+    return referrer
+
+
+def apply_referral_on_new_client(db: Session, new_client: ClientProfile, referral_code_value: str | None) -> ClientReferral | None:
+    code = normalize_referral_code(referral_code_value)
+    if not code:
+        return None
+    referrer = validate_referral_for_new_client(db, code, new_client=new_client)
+    if referrer is None:
         return None
     existing = db.execute(select(ClientReferral).where(ClientReferral.referred_client_id == new_client.id)).scalar_one_or_none()
     if existing is not None:

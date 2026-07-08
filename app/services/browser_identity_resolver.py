@@ -9,7 +9,7 @@ from sqlalchemy.orm import Session, joinedload
 
 from app.models.client import ClientIdentityLink, ClientProfile
 from app.models.user import User, UserRole
-from app.services.referrals import apply_referral_on_new_client, ensure_referral_code
+from app.services.referrals import REFERRAL_EXISTING_PROFILE_ERROR, ReferralError, apply_referral_on_new_client, ensure_referral_code, normalize_referral_code, validate_referral_for_new_client
 
 BrowserIdentityResolveStatus = Literal["linked", "legacy_linked", "created", "not_found"]
 
@@ -61,19 +61,26 @@ class BrowserIdentityResolver:
         normalized_source = self._clean(source) or f"{normalized_provider}_login_code"
         now = datetime.now(timezone.utc)
 
+        normalized_referral_code = normalize_referral_code(referral_code)
+
         identity_link = self._get_identity_link(normalized_provider, normalized_provider_user_id)
         if identity_link is not None:
             profile = identity_link.client_profile
             self._sync_profile_metadata(profile, normalized_provider, normalized_provider_user_id, normalized_display_name, normalized_username, self._clean(photo_url), normalized_source)
             ensure_referral_code(self.db, profile)
+            if normalized_referral_code:
+                raise ReferralError(REFERRAL_EXISTING_PROFILE_ERROR)
             return BrowserIdentityResolveResult("linked", normalized_provider, normalized_provider_user_id, profile, identity_link)
 
         profile = self._get_legacy_profile(normalized_provider, normalized_provider_user_id)
         status: BrowserIdentityResolveStatus = "legacy_linked"
         created_profile = False
+        if profile is not None and normalized_referral_code:
+            raise ReferralError(REFERRAL_EXISTING_PROFILE_ERROR)
         if profile is None and not create_if_missing:
             return BrowserIdentityResolveResult("not_found", normalized_provider, normalized_provider_user_id)
         if profile is None:
+            validate_referral_for_new_client(self.db, normalized_referral_code, provider=normalized_provider, provider_user_id=normalized_provider_user_id)
             user = User(role=UserRole.CLIENT.value, is_active=True)
             self.db.add(user)
             self.db.flush()
@@ -86,7 +93,7 @@ class BrowserIdentityResolver:
         self._sync_profile_metadata(profile, normalized_provider, normalized_provider_user_id, normalized_display_name, normalized_username, self._clean(photo_url), normalized_source)
         ensure_referral_code(self.db, profile)
         if created_profile:
-            apply_referral_on_new_client(self.db, profile, referral_code)
+            apply_referral_on_new_client(self.db, profile, normalized_referral_code)
 
         identity_link = ClientIdentityLink(
             client_profile_id=profile.id,

@@ -15,9 +15,10 @@ from app.main import app as fastapi_app
 import app.models  # noqa: F401
 from app.bots.telegram_bot import TelegramBotLoginCodeService, TelegramBotUserIdentity
 from app.bots.vk_bot import VkBotService, VkUserIdentity
-from app.models.client import BrowserLoginCode, ClientProfile
+from app.models.client import BrowserLoginCode, ClientProfile, ClientReferral
 from app.models.user import User, UserRole
 from app.services.browser_login_codes import BrowserLoginCodeService
+from app.services.referrals import ReferralError, validate_referral_for_new_client
 
 
 @pytest.fixture()
@@ -278,3 +279,121 @@ def test_repeated_telegram_login_code_reuses_same_client(client, db_session):
     assert second.json()["client"]["id"] == first_client_id
     assert db_session.query(ClientProfile).filter_by(telegram_user_id="tg-repeat-visible").count() == 1
     assert db_session.query(ClientProfile).filter_by(telegram_user_id="tg-repeat-visible").one().telegram_username == "second"
+
+
+
+def test_existing_telegram_login_code_user_with_referral_returns_first_login_error(client, db_session):
+    existing = _create_profile(db_session, telegram_user_id="tg-existing-ref")
+    referrer = _create_profile(db_session, telegram_user_id="tg-referrer")
+    referrer.referral_code = "REF12345"
+    code, _ = BrowserLoginCodeService(db_session).create_code(provider="telegram", provider_user_id="tg-existing-ref")
+    db_session.commit()
+
+    response = client.post("/api/v1/auth/login-code", json={"code": code, "referral_code": "REF12345"})
+
+    assert response.status_code == 400
+    assert response.json()["detail"] == "Личный кабинет уже был создан ранее. Реферальный код можно использовать только при первом входе."
+    assert db_session.query(ClientProfile).filter_by(telegram_user_id="tg-existing-ref").count() == 1
+    assert db_session.get(ClientProfile, existing.id).referred_by_referral_id is None
+
+
+def test_new_telegram_login_code_user_with_valid_referral_preserves_telegram_data(client, db_session):
+    referrer = _create_profile(db_session, telegram_user_id="tg-referrer-valid")
+    referrer.referral_code = "VALID123"
+    code, _ = BrowserLoginCodeService(db_session).create_code(
+        provider="telegram",
+        provider_user_id="tg-new-ref",
+        display_name="Telegram New",
+        username="new_tg",
+        photo_url="https://example.com/avatar.jpg",
+    )
+    db_session.commit()
+
+    response = client.post("/api/v1/auth/login-code", json={"code": code, "referral_code": "VALID123"})
+
+    assert response.status_code == 200
+    profile = db_session.query(ClientProfile).filter_by(telegram_user_id="tg-new-ref").one()
+    assert profile.telegram_username == "new_tg"
+    assert profile.telegram_first_name == "Telegram"
+    assert profile.telegram_last_name == "New"
+    assert profile.telegram_photo_url == "https://example.com/avatar.jpg"
+    referral = db_session.query(ClientReferral).filter_by(referred_client_id=profile.id).one()
+    assert referral.referrer_client_id == referrer.id
+    assert profile.referred_by_referral_id == referral.id
+
+
+def test_new_telegram_login_code_user_with_invalid_referral_does_not_create_profile(client, db_session):
+    code, _ = BrowserLoginCodeService(db_session).create_code(provider="telegram", provider_user_id="tg-invalid-ref")
+    db_session.commit()
+
+    response = client.post("/api/v1/auth/login-code", json={"code": code, "referral_code": "NOPE1234"})
+
+    assert response.status_code == 400
+    assert response.json()["detail"] == "Реферальный код не найден или недействителен."
+    assert db_session.query(ClientProfile).filter_by(telegram_user_id="tg-invalid-ref").count() == 0
+
+
+def test_new_telegram_login_code_user_with_own_referral_does_not_create_profile(client, db_session):
+    owner = _create_profile(db_session, telegram_user_id="tg-own-ref")
+    owner.referral_code = "OWN12345"
+    # Simulate a missing identity link path; legacy provider lookup still identifies self before creation.
+    owner.telegram_user_id = None
+    db_session.flush()
+    owner.telegram_user_id = "tg-own-ref"
+    code, _ = BrowserLoginCodeService(db_session).create_code(provider="telegram", provider_user_id="tg-own-ref")
+    db_session.commit()
+
+    response = client.post("/api/v1/auth/login-code", json={"code": code, "referral_code": "OWN12345"})
+
+    assert response.status_code == 400
+    assert response.json()["detail"] == "Личный кабинет уже был создан ранее. Реферальный код можно использовать только при первом входе."
+    assert db_session.query(ClientProfile).filter_by(telegram_user_id="tg-own-ref").count() == 1
+
+
+def test_relogin_after_referral_was_applied_does_not_overwrite_referral(client, db_session):
+    first_referrer = _create_profile(db_session, telegram_user_id="tg-first-referrer")
+    first_referrer.referral_code = "FIRST123"
+    second_referrer = _create_profile(db_session, telegram_user_id="tg-second-referrer")
+    second_referrer.referral_code = "SECOND12"
+    code, _ = BrowserLoginCodeService(db_session).create_code(provider="telegram", provider_user_id="tg-relogin-ref")
+    db_session.commit()
+    first = client.post("/api/v1/auth/login-code", json={"code": code, "referral_code": "FIRST123"})
+    assert first.status_code == 200
+    profile_id = first.json()["client"]["id"]
+    original_referral_id = db_session.get(ClientProfile, profile_id).referred_by_referral_id
+
+    second_code, _ = BrowserLoginCodeService(db_session).create_code(provider="telegram", provider_user_id="tg-relogin-ref")
+    db_session.commit()
+    second = client.post("/api/v1/auth/login-code", json={"code": second_code, "referral_code": "SECOND12"})
+
+    assert second.status_code == 400
+    assert db_session.get(ClientProfile, profile_id).referred_by_referral_id == original_referral_id
+    assert db_session.query(ClientReferral).filter_by(referred_client_id=profile_id).count() == 1
+
+
+def test_no_duplicate_client_profile_for_same_provider_user_id(client, db_session):
+    first_code, _ = BrowserLoginCodeService(db_session).create_code(provider="telegram", provider_user_id="tg-no-dupe")
+    db_session.commit()
+    assert client.post("/api/v1/auth/login-code", json={"code": first_code}).status_code == 200
+    second_code, _ = BrowserLoginCodeService(db_session).create_code(provider="telegram", provider_user_id="tg-no-dupe")
+    db_session.commit()
+    assert client.post("/api/v1/auth/login-code", json={"code": second_code}).status_code == 200
+
+    assert db_session.query(ClientProfile).filter_by(telegram_user_id="tg-no-dupe").count() == 1
+
+
+
+def test_referral_validation_rejects_same_provider_user_id_before_creation(db_session):
+    owner = _create_profile(db_session, telegram_user_id="tg-self-validation")
+    owner.referral_code = "SELFVAL1"
+    db_session.commit()
+
+    with pytest.raises(ReferralError) as exc_info:
+        validate_referral_for_new_client(
+            db_session,
+            "SELFVAL1",
+            provider="telegram",
+            provider_user_id="tg-self-validation",
+        )
+
+    assert exc_info.value.detail == "Нельзя использовать собственный реферальный код."
