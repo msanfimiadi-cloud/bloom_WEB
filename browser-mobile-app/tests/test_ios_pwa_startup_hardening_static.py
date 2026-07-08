@@ -60,3 +60,39 @@ def test_startup_does_not_prefetch_catalog_from_home_or_html_shell() -> None:
     assert "home_prefetch" not in (ROOT / "src/App.tsx").read_text(encoding="utf-8")
     assert "const items = await fetchPublicCatalogPartners();" not in SERVER[SERVER.index("async function serveFrontend") : SERVER.index("async function handleRequest")]
     assert "injectedCatalogBootstrap: false" in SERVER
+
+LIFECYCLE = (ROOT / "src/diagnostics/startupLifecycle.ts").read_text(encoding="utf-8")
+APP = (ROOT / "src/App.tsx").read_text(encoding="utf-8")
+REPORTER = (ROOT / "src/diagnostics/clientErrorReporter.ts").read_text(encoding="utf-8")
+
+
+def test_interrupted_startup_marker_detected_and_auth_preserved() -> None:
+    assert "bloom_startup_in_progress" in LIFECYCLE
+    assert "detectInterruptedStartup" in LIFECYCLE
+    assert "clearInterruptedStartupTemporaryState" in LIFECYCLE
+    assert "protectedAuthKeyPattern" in LIFECYCLE
+    assert "auth|token|telegram_login|session|jwt|initdata" in LIFECYCLE
+
+
+def test_first_visible_shell_is_marked_before_bootstrap_finishes() -> None:
+    assert "first_visible_paint" in LIFECYCLE
+    assert "markFirstVisiblePaint" in APP
+    assert APP.index("markFirstVisiblePaint") < APP.index("void loadAppData")
+
+
+def test_pagehide_before_completion_marks_interrupted_startup() -> None:
+    assert "markStartupInterrupted(event.type)" in APP
+    assert "invalidateBootstrapForInactiveWebView(event.type)" in APP
+
+
+def test_frontend_build_mismatch_ignores_version_field() -> None:
+    assert "config.buildId && config.buildId !== config.version" in REPORTER
+    assert "frontend_build_mismatch_detected" in REPORTER
+
+
+def test_dotfile_env_paths_do_not_fall_through_to_index() -> None:
+    assert "isForbiddenSpaFallbackPath" in SERVER
+    assert r"\.env" in SERVER
+    assert r"\.git" in SERVER
+    assert "'/package.json'" in SERVER
+    assert "sendText(response, 404, 'not found'" in SERVER

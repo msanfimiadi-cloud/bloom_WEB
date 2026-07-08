@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import logging
 import time
+from datetime import datetime, timezone
 from pathlib import Path
 from uuid import uuid4
 
@@ -27,6 +28,15 @@ db_logger = logging.getLogger("app.database")
 VK_MINIAPP_AUTH_LOG_PATHS = {"/api/v1/auth/vk-miniapp-login", "/auth/vk-miniapp-login"}
 SERVICE_NAME = "womenclub"
 APP_VERSION = "0.1.0"
+ROOT_DIR = Path(__file__).resolve().parents[1]
+BROWSER_BUILD_ID_PATH = ROOT_DIR / "browser-mobile-app" / "dist" / "build-id.txt"
+
+def read_browser_mobile_build_id() -> str:
+    try:
+        build_id = BROWSER_BUILD_ID_PATH.read_text(encoding="utf-8").strip()
+        return build_id or APP_VERSION
+    except OSError:
+        return APP_VERSION
 
 
 app = FastAPI(
@@ -140,8 +150,14 @@ async def client_errors(request: Request) -> Response:
 
 
 @app.get("/api/runtime-config", tags=["diagnostics"])
-async def runtime_config() -> JSONResponse:
-    response = JSONResponse({"service": SERVICE_NAME, "version": APP_VERSION, "buildId": APP_VERSION})
+async def runtime_config(request: Request) -> JSONResponse:
+    build_id = read_browser_mobile_build_id()
+    client_build_id = request.query_params.get("clientBuildId") or build_id
+    # If build-id.txt is unavailable, mirror the supplied client build id so the
+    # browser never enters a false build-mismatch loop against the app version.
+    if build_id == APP_VERSION and client_build_id and client_build_id != APP_VERSION:
+        build_id = client_build_id
+    response = JSONResponse({"ok": True, "service": SERVICE_NAME, "version": APP_VERSION, "buildId": build_id, "serverTime": datetime.now(timezone.utc).isoformat(), "clientBuildId": client_build_id})
     response.headers["Cache-Control"] = "no-store, no-cache, max-age=0, must-revalidate"
     response.headers["Pragma"] = "no-cache"
     response.headers["Expires"] = "0"
