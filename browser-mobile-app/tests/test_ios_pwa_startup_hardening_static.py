@@ -96,3 +96,51 @@ def test_dotfile_env_paths_do_not_fall_through_to_index() -> None:
     assert r"\.git" in SERVER
     assert "'/package.json'" in SERVER
     assert "sendText(response, 404, 'not found'" in SERVER
+
+
+def test_generic_safari_script_error_after_first_visible_paint_is_nonfatal() -> None:
+    boundary = (ROOT / "src/components/RuntimeErrorBoundary.tsx").read_text(encoding="utf-8")
+    safari = (ROOT / "src/diagnostics/safariGenericScriptError.ts").read_text(encoding="utf-8")
+    assert "shouldIgnoreGenericSafariScriptErrorAfterRender" in MAIN
+    assert "safari_generic_script_error_after_render" in MAIN
+    assert "return true" in MAIN[MAIN.index("window.onerror") : MAIN.index("window.onunhandledrejection")]
+    assert "renderEarlyErrorDiagnostic(error ?? _message, \"window_error\")" in MAIN
+    assert MAIN.index("shouldIgnoreGenericSafariScriptErrorAfterRender") < MAIN.index("renderEarlyErrorDiagnostic(error ?? _message, \"window_error\")")
+    assert "isGenericSafariScriptErrorEvent(event) && hasReachedFirstVisiblePaint()" in boundary
+    assert "event.preventDefault()" in boundary
+    assert "this.setState" in boundary[boundary.index("private handleWindowError") :]
+    assert "message === \"Script error.\"" in safari
+    assert "window.__BLOOM_STARTUP_PHASE__ === \"first_visible_paint\"" in safari
+    assert "window.__BLOOM_APP_INTERACTIVE__ === true" in safari
+
+
+def test_generic_safari_script_error_before_render_still_triggers_recovery_diagnostics() -> None:
+    assert "message === \"Script error.\"" in (ROOT / "src/diagnostics/safariGenericScriptError.ts").read_text(encoding="utf-8")
+    onerror_block = MAIN[MAIN.index("window.onerror") : MAIN.index("window.onunhandledrejection")]
+    assert "shouldIgnoreGenericSafariScriptErrorAfterRender" in onerror_block
+    assert "renderEarlyErrorDiagnostic(error ?? _message, \"window_error\")" in onerror_block
+    assert "renderModuleLoadErrorPanel(error, source)" in MAIN[MAIN.index("function renderEarlyErrorDiagnostic") : MAIN.index("function startEntryWatchdog")]
+
+
+def test_real_react_errors_and_chunk_failures_remain_fatal_recovery_paths() -> None:
+    boundary = (ROOT / "src/components/RuntimeErrorBoundary.tsx").read_text(encoding="utf-8")
+    assert "static getDerivedStateFromError" in boundary
+    assert "componentDidCatch" in boundary
+    assert "createRuntimeErrorDiagnostic(error, errorInfo.componentStack)" in boundary
+    assert "ReactErrorBoundary" in boundary
+    assert "isLikelyChunkLoadFailure" in MAIN
+    assert "recoverFromChunkLoadFailure(error, source)" in MAIN
+    assert "Missing startup asset" in MAIN
+
+
+def test_pwa_root_icon_fallbacks_reuse_existing_docs_icons_and_not_spa_fallbacks() -> None:
+    assert not (ROOT / "public/apple-touch-icon.png").exists()
+    assert not (ROOT / "public/apple-touch-icon-precomposed.png").exists()
+    assert not (ROOT / "public/favicon.ico").exists()
+    assert (ROOT / "public/docs/icons/apple-touch-icon.png").read_bytes().startswith(b"\x89PNG")
+    assert (ROOT / "public/docs/icons/favicon-32.png").read_bytes().startswith(b"\x89PNG")
+    assert "STARTUP_CRITICAL_FILE_ALIASES" in SERVER
+    assert "['/apple-touch-icon.png', 'docs/icons/apple-touch-icon.png']" in SERVER
+    assert "['/apple-touch-icon-precomposed.png', 'docs/icons/apple-touch-icon.png']" in SERVER
+    assert "['/favicon.ico', 'docs/icons/favicon-32.png']" in SERVER
+    assert "pathname === '/favicon.ico' ? 'image/png'" in SERVER

@@ -1589,12 +1589,22 @@ async function serveUpload(request, response, pathname) {
   }
 }
 
+const STARTUP_CRITICAL_FILE_ALIASES = new Map([
+  ['/apple-touch-icon.png', 'docs/icons/apple-touch-icon.png'],
+  ['/apple-touch-icon-precomposed.png', 'docs/icons/apple-touch-icon.png'],
+  ['/favicon.ico', 'docs/icons/favicon-32.png'],
+]);
+
+function startupCriticalFilePath(pathname) {
+  return STARTUP_CRITICAL_FILE_ALIASES.get(pathname) || pathname.replace(/^\//, '');
+}
+
 async function serveStartupCriticalFile(request, response, pathname) {
   if (request.method !== 'GET' && request.method !== 'HEAD') {
     sendMethodNotAllowed(response);
     return;
   }
-  const filePath = path.resolve(DIST_DIR, pathname.replace(/^\//, ''));
+  const filePath = path.resolve(DIST_DIR, startupCriticalFilePath(pathname));
   if (!filePath.startsWith(`${DIST_DIR}${path.sep}`)) {
     sendText(response, 404, 'Not found');
     return;
@@ -1602,7 +1612,7 @@ async function serveStartupCriticalFile(request, response, pathname) {
   try {
     await access(filePath);
     response.writeHead(200, {
-      'content-type': contentTypeFor(filePath) === 'application/octet-stream' && pathname.endsWith('.webmanifest') ? 'application/manifest+json; charset=utf-8' : contentTypeFor(filePath),
+      'content-type': pathname === '/favicon.ico' ? 'image/png' : contentTypeFor(filePath) === 'application/octet-stream' && pathname.endsWith('.webmanifest') ? 'application/manifest+json; charset=utf-8' : contentTypeFor(filePath),
       'cache-control': HTML_NO_STORE_CACHE_CONTROL,
       pragma: 'no-cache',
       expires: '0',
@@ -1664,7 +1674,7 @@ async function handleRequest(request, response) {
     sendText(response, 404, 'not found', { 'cache-control': 'no-store' });
     return;
   }
-  if (pathname === '/sw.js' || pathname === '/manifest.webmanifest' || pathname === '/runtime-config.json') {
+  if (pathname === '/sw.js' || pathname === '/manifest.webmanifest' || pathname === '/runtime-config.json' || pathname === '/apple-touch-icon.png' || pathname === '/apple-touch-icon-precomposed.png' || pathname === '/favicon.ico') {
     await serveStartupCriticalFile(request, response, pathname);
     return;
   }

@@ -14,6 +14,7 @@ import { lifecycleTrace } from "../diagnostics/lifecycleTrace";
 import { traceStartup } from "../diagnostics/startupTrace";
 import { saveCrashDump } from "../diagnostics/crashDump";
 import { reportClientError } from "../diagnostics/clientErrorReporter";
+import { hasReachedFirstVisiblePaint, isGenericSafariScriptErrorEvent } from "../diagnostics/safariGenericScriptError";
 
 interface RuntimeErrorBoundaryState {
   diagnostic: AppDiagnostic | null;
@@ -35,6 +36,11 @@ export class RuntimeErrorBoundary extends Component<
   };
 
   private handleWindowError = (event: ErrorEvent): void => {
+    if (isGenericSafariScriptErrorEvent(event) && hasReachedFirstVisiblePaint()) {
+      reportClientError("safari_generic_script_error_after_render", event.error ?? event.message, { source: "RuntimeErrorBoundary", filename: event.filename, line: event.lineno, column: event.colno, nonfatal: true });
+      event.preventDefault();
+      return;
+    }
     saveCrashDump("window.onerror", { source: "RuntimeErrorBoundary" });
     reportClientError("window.onerror", event.error ?? event.message, { source: "RuntimeErrorBoundary", filename: event.filename, line: event.lineno, column: event.colno });
     this.setState({
