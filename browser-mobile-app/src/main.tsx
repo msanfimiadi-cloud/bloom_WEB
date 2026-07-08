@@ -6,6 +6,7 @@ import { saveCrashDump } from "./diagnostics/crashDump";
 import { reloadWhenServerBuildDiffers, reportClientError } from "./diagnostics/clientErrorReporter";
 import { appBuildInfo } from "./buildInfo";
 import { clearInterruptedStartupTemporaryState, detectInterruptedStartup, getStartupMarkers, setStartupPhase } from "./diagnostics/startupLifecycle";
+import { markFirstReactRenderForExecutionTrace, traceStartupStep } from "./diagnostics/startupExecutionTrace";
 
 type EarlyErrorSource =
   | "window_error"
@@ -62,33 +63,58 @@ function getLifecycleTraceModule(): Promise<LifecycleTraceModule> {
 }
 
 function lifecycleTraceSafe(eventName: string, details?: unknown): void {
-  void getLifecycleTraceModule()
-    .then(({ lifecycleTrace }) => lifecycleTrace(eventName, details))
-    .catch(() => undefined);
+  void (async () => {
+    try {
+      const { lifecycleTrace } = await getLifecycleTraceModule();
+      lifecycleTrace(eventName, details);
+    } catch {
+      // Diagnostics must never block startup.
+    }
+  })();
 }
 
 function traceMarkSafe(marker: string): void {
-  void getStartupTraceModule()
-    .then(({ traceMark }) => traceMark(marker))
-    .catch(() => undefined);
+  void (async () => {
+    try {
+      const { traceMark } = await getStartupTraceModule();
+      traceMark(marker);
+    } catch {
+      // Diagnostics must never block startup.
+    }
+  })();
 }
 
 function traceStartSafe(marker: string): void {
-  void getStartupTraceModule()
-    .then(({ traceStart }) => traceStart(marker))
-    .catch(() => undefined);
+  void (async () => {
+    try {
+      const { traceStart } = await getStartupTraceModule();
+      traceStart(marker);
+    } catch {
+      // Diagnostics must never block startup.
+    }
+  })();
 }
 
 function traceOkSafe(marker: string): void {
-  void getStartupTraceModule()
-    .then(({ traceOk }) => traceOk(marker))
-    .catch(() => undefined);
+  void (async () => {
+    try {
+      const { traceOk } = await getStartupTraceModule();
+      traceOk(marker);
+    } catch {
+      // Diagnostics must never block startup.
+    }
+  })();
 }
 
 function traceFailSafe(marker: string, error: unknown): void {
-  void getStartupTraceModule()
-    .then(({ traceFail }) => traceFail(marker, error))
-    .catch(() => undefined);
+  void (async () => {
+    try {
+      const { traceFail } = await getStartupTraceModule();
+      traceFail(marker, error);
+    } catch {
+      // Diagnostics must never block startup.
+    }
+  })();
 }
 
 function sanitizeDiagnosticValue(value: unknown): string {
@@ -146,7 +172,9 @@ async function clearTemporaryBrowserCaches(): Promise<void> {
   try {
     if ("caches" in window) {
       const keys = await caches.keys();
-      await Promise.all(keys.filter((key) => key.startsWith("bloom-club-") || key.startsWith("workbox-")).map((key) => caches.delete(key)));
+      for (const key of keys.filter((key) => key.startsWith("bloom-club-") || key.startsWith("workbox-"))) {
+        await traceStartupStep("post_render_cache_delete", () => caches.delete(key), { key });
+      }
     }
   } catch {
     // Cache cleanup is best-effort and must not affect auth/session storage.
@@ -157,7 +185,9 @@ async function unregisterUnsafeServiceWorkers(): Promise<void> {
   if (!("serviceWorker" in navigator)) return;
   try {
     const registrations = await navigator.serviceWorker.getRegistrations();
-    await Promise.all(registrations.map((registration) => registration.unregister().catch(() => false)));
+    for (const registration of registrations) {
+      await traceStartupStep("post_render_service_worker_unregister", () => registration.unregister().catch(() => false), { scope: registration.scope });
+    }
   } catch (error) {
     reportClientError("service_worker_unregister_failed", error, { startup: getStandaloneDiagnostics() });
   }
@@ -559,7 +589,7 @@ async function startApp(): Promise<void> {
   console.info("app_before_create_root");
   earlyStartupTrace("before_createRoot_imports_pending");
   traceOkSafe("root_container_ready");
-  const { RuntimeErrorBoundary, App } = await importApplicationModules();
+  const { RuntimeErrorBoundary, App } = await traceStartupStep("dynamic_import_application_modules", importApplicationModules);
   earlyStartupTrace("before_createRoot");
   lifecycleTraceSafe("react_createRoot_start");
   traceStartSafe("create_root_start");
@@ -588,12 +618,15 @@ async function startApp(): Promise<void> {
   traceStartSafe("render_call_start");
   try {
     setStartupPhase("react_render_called");
-    root.render(
+    markFirstReactRenderForExecutionTrace({ source: "main.startApp", mode: import.meta.env.MODE });
+    await traceStartupStep("react_root_render_call", () => {
+      root.render(
       // static regression anchor: import.meta.env.DEV ? <React.StrictMode>
       import.meta.env.DEV
         ? React.createElement(React.StrictMode, undefined, app)
         : app,
     );
+    });
     lifecycleTraceSafe("react_render_ok");
     earlyStartupTrace("after_render");
     traceOkSafe("render_call_ok");
@@ -616,10 +649,11 @@ async function registerServiceWorkerSafely(): Promise<void> {
 }
 
 
-void startApp().then(() => {
-  void registerServiceWorkerSafely();
-  void reloadWhenServerBuildDiffers();
-}).catch((error: unknown) => {
+void (async () => {
+  await traceStartupStep("entry_startApp", startApp);
+  await traceStartupStep("post_render_unregister_service_workers", registerServiceWorkerSafely);
+  await traceStartupStep("post_render_reload_build_check", reloadWhenServerBuildDiffers);
+})().catch((error: unknown) => {
   traceFailSafe("entry_start_fail", error);
   saveCrashDump("fatal_startup_error", { stage: "entry_start" });
   reportClientError("fatal_startup_error", error, { stage: "entry_start", startup: getStandaloneDiagnostics() });

@@ -94,6 +94,7 @@ import {
 import { clearStaleAppState } from "./stateRecovery";
 import { removeEntryFallbackOverlay } from "./main";
 import { reportClientError } from "./diagnostics/clientErrorReporter";
+import { startupExecutionBegin, startupExecutionEnd, startupExecutionFail, startupExecutionMark, traceStartupStep } from "./diagnostics/startupExecutionTrace";
 
 export type PageId =
   | "home"
@@ -781,6 +782,7 @@ export default function App() {
   );
 
   useEffect(() => {
+    const effectSpan = startupExecutionBegin("useEffect:page_transition", { page });
     lifecycleTrace("app_effect_page_start", {
       from: pageRef.current,
       to: page,
@@ -788,18 +790,27 @@ export default function App() {
     pageRef.current = page;
     setLifecyclePageId(page);
     lifecycleTrace("page_transition", { page });
+    startupExecutionEnd(effectSpan, { page });
     return () => {
+      const cleanupSpan = startupExecutionBegin("cleanup:page_transition", { page });
       lifecycleTrace("app_effect_page_cleanup", { page });
+      startupExecutionEnd(cleanupSpan, { page });
     };
   }, [page]);
 
   useEffect(() => {
+    const effectSpan = startupExecutionBegin("useEffect:modal_focus_observer");
     focusOpenModal();
 
     const observer = new MutationObserver(() => focusOpenModal());
     observer.observe(document.body, { childList: true, subtree: true });
 
-    return () => observer.disconnect();
+    startupExecutionEnd(effectSpan);
+    return () => {
+      const cleanupSpan = startupExecutionBegin("cleanup:modal_focus_observer");
+      observer.disconnect();
+      startupExecutionEnd(cleanupSpan);
+    };
   }, []);
 
   const clearBloomBootstrapRecoveryStorage = useCallback(() => {
@@ -900,6 +911,7 @@ export default function App() {
   }, []);
 
   useEffect(() => {
+    const effectSpan = startupExecutionBegin("useEffect:closing_confirmation", { isLoading, isPartnersLoading });
     const webApp = getTelegramWebApp();
     const shouldConfirmClosing = isLoading || isPartnersLoading;
     try {
@@ -915,21 +927,31 @@ export default function App() {
     } catch (caughtError) {
       traceStartup("closing_confirmation_error", { error: caughtError });
     }
+    startupExecutionEnd(effectSpan, { isLoading, isPartnersLoading });
     return () => {
+      const cleanupSpan = startupExecutionBegin("cleanup:closing_confirmation");
       try { webApp?.disableClosingConfirmation?.(); } catch { /* ignore */ }
+      startupExecutionEnd(cleanupSpan);
     };
   }, [isLoading, isPartnersLoading]);
 
   useEffect(() => {
+    const effectSpan = startupExecutionBegin("useEffect:open_diagnostics_listener");
     window.__BLOOM_OPEN_DIAGNOSTICS__ = (reason = "external_open") => {
       enableBloomDebug();
       setDiagnosticOverlayReason(reason);
       setShowStartupDiagnostics(true);
     };
-    return () => { window.__BLOOM_OPEN_DIAGNOSTICS__ = undefined; };
+    startupExecutionEnd(effectSpan);
+    return () => {
+      const cleanupSpan = startupExecutionBegin("cleanup:open_diagnostics_listener");
+      window.__BLOOM_OPEN_DIAGNOSTICS__ = undefined;
+      startupExecutionEnd(cleanupSpan);
+    };
   }, []);
 
   useEffect(() => {
+    const effectSpan = startupExecutionBegin("useEffect:app_component_mount", { page });
     console.info("app_component_mount_start");
     logBootstrapDeadlockDiagnostic("react_mount");
     markReactMounted(true);
@@ -948,11 +970,15 @@ export default function App() {
     traceStartup("remove_fallback_started", { page });
     removeEntryFallbackOverlay();
     traceStartup("remove_fallback_done", { page });
+    startupExecutionMark("requestAnimationFrame scheduled:first_visible_shell_committed", { page });
     requestAnimationFrame(() => {
+      const rafSpan = startupExecutionBegin("requestAnimationFrame:first_visible_shell_committed", { page: pageRef.current });
       traceStartup("first_visible_shell_committed", { page: pageRef.current });
       setStartupPhase("first_visible_paint", { page: pageRef.current });
       markFirstVisiblePaint();
+      startupExecutionEnd(rafSpan, { page: pageRef.current });
     });
+    startupExecutionEnd(effectSpan, { page });
 
     return () => {
       lifecycleTrace("app_unmount", { page: pageRef.current });
@@ -968,6 +994,7 @@ export default function App() {
   }, [logBootstrapDeadlockDiagnostic]);
 
   useEffect(() => {
+    const effectSpan = startupExecutionBegin("useEffect:startup_recovery_watchdog", { hasRenderedPageContent });
     lifecycleTrace("app_effect_startup_recovery_start", { page: pageRef.current });
     if (detectInterruptedStartup()) {
       traceStartup("interrupted_startup_detected", { markers: getStartupMarkers() });
@@ -976,7 +1003,9 @@ export default function App() {
       cleanupRemovedKeysRef.current = ["temporary_startup_state_only"];
     }
 
+    startupExecutionMark("setTimeout scheduled:startup_recovery_watchdog_8s", { delayMs: 8000, outsideFirstFiveSeconds: true });
     const startupRecoveryTimer = window.setTimeout(() => {
+      const timerSpan = startupExecutionBegin("setTimeout:startup_recovery_watchdog_8s", { hasRenderedPageContent });
       if (!hasRenderedPageContent) {
         traceMark("startup_watchdog_8s", { page: pageRef.current });
         saveCrashDump("react_app_ready_timeout", { reactAppReady: false, page: pageRef.current });
@@ -984,11 +1013,15 @@ export default function App() {
         setShowStartupRecovery(true);
         traceMark("startup_recovery_screen_requested", { page: pageRef.current });
       }
+      startupExecutionEnd(timerSpan, { hasRenderedPageContent });
     }, 8000);
 
+    startupExecutionEnd(effectSpan, { hasRenderedPageContent });
     return () => {
+      const cleanupSpan = startupExecutionBegin("cleanup:startup_recovery_watchdog");
       lifecycleTrace("app_effect_startup_recovery_cleanup", { page: pageRef.current });
       window.clearTimeout(startupRecoveryTimer);
+      startupExecutionEnd(cleanupSpan);
     };
   }, [hasRenderedPageContent]);
 
@@ -1078,7 +1111,7 @@ export default function App() {
             traceStart("telegram_prepare_start");
             try {
               traceStartup("prepareTelegramViewport_started", { sequenceId });
-              prepareTelegramViewport();
+              await traceStartupStep("prepareTelegramViewport", () => prepareTelegramViewport(), { sequenceId });
               traceStartup("prepareTelegramViewport_done", { sequenceId });
               lifecycleTrace("telegram_ready_ok");
               lifecycleTrace("telegram_expand_ok");
@@ -1090,7 +1123,7 @@ export default function App() {
               throw prepareError;
             }
             traceStart("telegram_runtime_check_start");
-            isTelegram = isTelegramRuntime();
+            isTelegram = await traceStartupStep("prepareTelegram:isTelegramRuntime", () => isTelegramRuntime(), { sequenceId });
             traceOk("telegram_runtime_check_ok", { isTelegram });
             if (isActive()) {
               setIsTelegramApp(isTelegram);
@@ -1103,10 +1136,8 @@ export default function App() {
             traceStartup("loadAppData_subscription_started");
             traceStart("stored_token_profile_start");
             traceStart("stored_token_subscription_start");
-            const [nextProfile, nextSubscription] = await Promise.all([
-              getProfile(),
-              getSubscription(),
-            ]);
+            const nextProfile = await traceStartupStep("restoreSession:getProfile", getProfile, { sequenceId });
+            const nextSubscription = await traceStartupStep("restoreSession:getSubscription", getSubscription, { sequenceId });
             traceStartup("loadAppData_profile_success");
             traceOk("stored_token_profile_ok", {
               hasProfile: Boolean(nextProfile),
@@ -1161,13 +1192,13 @@ export default function App() {
                 hasReferralCode: Boolean(referralCode),
                 referralCodeLength: referralCode?.length ?? 0,
               });
-              await loginWithTelegram(telegramLaunchPayload, {
+              await traceStartupStep("restoreSession:loginWithTelegram", () => loginWithTelegram(telegramLaunchPayload, {
                 reason,
                 bootstrapAttemptId: sequenceId,
                 forceNew: true,
                 referralCode,
                 startParam: telegramStartParam || referralCode,
-              });
+              }), { sequenceId });
               stage = "telegram_login_request";
               lifecycleTrace("login_ok", { sequenceId });
               traceStartup("loadAppData_login_success", { sequenceId });
@@ -1341,7 +1372,8 @@ export default function App() {
               reason: "startup_core_catalog_load",
             });
             traceStartup("loadAppData_core_catalog_requested", { sequenceId });
-            window.setTimeout(() => void loadPartners(true), 0);
+            startupExecutionMark("setTimeout removed:startup_core_catalog_load_serial", { sequenceId });
+            await traceStartupStep("catalog bootstrap:loadPartners", () => loadPartners(true), { sequenceId, source: "startup_core_catalog_load" });
           }
 
           traceStartup("loadAppData_optional_requests_started", { sequenceId });
@@ -1350,19 +1382,18 @@ export default function App() {
           traceStart("savings_start");
           traceStart("cities_start");
           traceStart("linking_status_start");
-          const [
-            verificationsResult,
-            savingsResult,
-            citiesResult,
-            linkingStatusResult,
-            giveawayStateResult,
-          ] = await Promise.allSettled([
-            getVerifications(),
-            getSavings(),
-            getCities(),
-            getLinkingStatus(),
-            getGiveawayState(),
-          ]);
+          const settleStartupStep = async <T,>(label: string, fn: () => Promise<T>) => {
+            try {
+              return { status: "fulfilled" as const, value: await traceStartupStep(label, fn, { sequenceId }) };
+            } catch (reason) {
+              return { status: "rejected" as const, reason };
+            }
+          };
+          const verificationsResult = await settleStartupStep("secondary:getVerifications", getVerifications);
+          const savingsResult = await settleStartupStep("secondary:getSavings", getSavings);
+          const citiesResult = await settleStartupStep("secondary:getCities", getCities);
+          const linkingStatusResult = await settleStartupStep("secondary:getLinkingStatus", getLinkingStatus);
+          const giveawayStateResult = await settleStartupStep("secondary:getGiveawayState", getGiveawayState);
 
           traceStartup("loadAppData_before_post_optional_isActive_guard", {
             sequenceId,
@@ -1515,11 +1546,16 @@ export default function App() {
   );
 
   useEffect(() => {
-    void loadAppData();
+    const effectSpan = startupExecutionBegin("useEffect:bootstrap_loadAppData");
+    void traceStartupStep("bootstrap()", () => loadAppData(), { reason: "initial" }).finally(() => {
+      startupExecutionEnd(effectSpan);
+    });
   }, [loadAppData, logBootstrapDeadlockDiagnostic]);
 
   useEffect(() => {
+    const effectSpan = startupExecutionBegin("useEffect:lifecycle_listeners");
     const refreshAfterWebViewResume = (event: PageTransitionEvent | Event) => {
+      const listenerSpan = startupExecutionBegin("lifecycle_listener:refreshAfterWebViewResume", { eventType: event.type });
       lifecycleTrace("webview_resume_prepare_start", {
         eventType: event.type,
         persisted:
@@ -1533,10 +1569,14 @@ export default function App() {
         lifecycleTrace("webview_resume_prepare_ok", { eventType: event.type });
       } catch (caughtError) {
         lifecycleTrace("webview_resume_prepare_fail", caughtError);
+        startupExecutionFail(listenerSpan, caughtError);
+        return;
       }
+      startupExecutionEnd(listenerSpan, { eventType: event.type });
     };
 
     const resumeWithoutAuthReset = (event: PageTransitionEvent | Event) => {
+      const listenerSpan = startupExecutionBegin("lifecycle_listener:resumeWithoutAuthReset", { eventType: event.type });
       const pageshowPersisted =
         event instanceof PageTransitionEvent ? event.persisted : undefined;
       logBootstrapDeadlockDiagnostic("webview_resume", {
@@ -1555,9 +1595,11 @@ export default function App() {
         didForceReload: false,
       });
       refreshAfterWebViewResume(event);
+      startupExecutionEnd(listenerSpan, { eventType: event.type });
     };
 
     const markInactive = (event: Event) => {
+      const listenerSpan = startupExecutionBegin("lifecycle_listener:markInactive", { eventType: event.type });
       logBootstrapDeadlockDiagnostic("webview_inactive", { lifecycleEvent: event.type });
       traceStartup("webview_inactive", { eventType: event.type });
       if (catalogLoadingRef.current || partnersPromiseRef.current) {
@@ -1570,6 +1612,7 @@ export default function App() {
       }
       abortInFlightCatalogLoad(event.type);
       invalidateBootstrapForInactiveWebView(event.type);
+      startupExecutionEnd(listenerSpan, { eventType: event.type });
     };
 
     const onPageShow = (event: PageTransitionEvent) => {
@@ -1606,8 +1649,10 @@ export default function App() {
     const onTelegramDeactivated = () => markInactive(new Event("telegram_deactivated"));
     telegramWebApp?.onEvent?.("activated" as never, onTelegramActivated);
     telegramWebApp?.onEvent?.("deactivated" as never, onTelegramDeactivated);
+    startupExecutionEnd(effectSpan);
 
     return () => {
+      const cleanupSpan = startupExecutionBegin("cleanup:lifecycle_listeners");
       window.removeEventListener("pageshow", onPageShow);
       window.removeEventListener("pagehide", onPageHide);
       window.removeEventListener("focus", onFocus);
@@ -1616,6 +1661,7 @@ export default function App() {
       document.removeEventListener("visibilitychange", onVisibilityChange);
       telegramWebApp?.offEvent?.("activated" as never, onTelegramActivated);
       telegramWebApp?.offEvent?.("deactivated" as never, onTelegramDeactivated);
+      startupExecutionEnd(cleanupSpan);
     };
   }, [abortInFlightCatalogLoad, invalidateBootstrapForInactiveWebView, loadAppData, logBootstrapDeadlockDiagnostic, resetStaleBootstrapForActiveWebView]);
 
@@ -1653,6 +1699,7 @@ export default function App() {
 
       let promise: Promise<void>;
       promise = (async () => {
+        const catalogSpan = startupExecutionBegin("catalog bootstrap:loadPartners body", { forceRetry, localRequestId });
         catalogTrace("catalog requested", { forceRetry, localRequestId });
         traceStartup("loadPartners_called", { forceRetry, localRequestId });
         catalogTrace("loadPartners entered", { forceRetry, localRequestId });
@@ -1770,6 +1817,7 @@ export default function App() {
           setIsPartnersLoading(false);
           partnersPromiseRef.current = null;
           if (!hasCatalogRecoveryFlag()) clearCatalogRecoveryFlag();
+          startupExecutionEnd(catalogSpan, { localRequestId });
         }
       })();
 
@@ -1813,7 +1861,8 @@ export default function App() {
       setPartnersError(CATALOG_RECOVERY_MESSAGE);
       return;
     }
-    window.setTimeout(() => void loadPartners(false), 0);
+    startupExecutionMark("setTimeout removed:openCatalog_loadPartners_serial");
+    void traceStartupStep("catalog open:loadPartners", () => loadPartners(false), { forceRetry: false });
   }, [
     data.partners.length,
     hasPartnersLoaded,
@@ -1946,10 +1995,8 @@ export default function App() {
   }, [loadPartnerOffers, selectedPartner]);
 
   const refreshProfileAndSubscription = useCallback(async () => {
-    const [profile, subscription] = await Promise.all([
-      getProfile(),
-      getSubscription(),
-    ]);
+    const profile = await traceStartupStep("action:refreshProfile.getProfile", getProfile);
+    const subscription = await traceStartupStep("action:refreshProfile.getSubscription", getSubscription);
     setData((current) =>
       normalizeAppData({ ...current, profile, subscription }),
     );
@@ -1992,7 +2039,8 @@ export default function App() {
         }),
       );
       const refreshed = await refreshProfileAndSubscription().catch(() => null);
-      const [referralSummary, giveawayState] = await Promise.all([getReferralSummary().catch(() => null), getGiveawayState().catch(() => null)]);
+      const referralSummary = await traceStartupStep("action:activateTrial.getReferralSummary", getReferralSummary).catch(() => null);
+      const giveawayState = await traceStartupStep("action:activateTrial.getGiveawayState", getGiveawayState).catch(() => null);
       if (referralSummary || giveawayState) {
         setData((current) => normalizeAppData({ ...current, referralSummary: referralSummary ?? current.referralSummary, giveawayState: giveawayState ?? current.giveawayState }));
       }
@@ -2061,13 +2109,11 @@ export default function App() {
   }, [requireRegisteredUser]);
 
   const refreshAfterLinking = useCallback(async () => {
-    const [profile, subscription, linkingStatus, referralSummary, giveawayState] = await Promise.all([
-      getProfile(),
-      getSubscription(),
-      getLinkingStatus().catch(() => null),
-      getReferralSummary().catch(() => null),
-      getGiveawayState().catch(() => null),
-    ]);
+    const profile = await traceStartupStep("action:refreshAfterLinking.getProfile", getProfile);
+    const subscription = await traceStartupStep("action:refreshAfterLinking.getSubscription", getSubscription);
+    const linkingStatus = await traceStartupStep("action:refreshAfterLinking.getLinkingStatus", getLinkingStatus).catch(() => null);
+    const referralSummary = await traceStartupStep("action:refreshAfterLinking.getReferralSummary", getReferralSummary).catch(() => null);
+    const giveawayState = await traceStartupStep("action:refreshAfterLinking.getGiveawayState", getGiveawayState).catch(() => null);
 
     setData((current) =>
       normalizeAppData({
