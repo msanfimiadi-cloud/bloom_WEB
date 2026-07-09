@@ -38,7 +38,7 @@ def test_empty_telegram_webapp_init_data_falls_back_to_login_code_welcome() -> N
 
 
 def test_no_jwt_empty_init_data_shows_login_code_for_desktop_iphone_and_telegram_browser() -> None:
-    startup_section = APP[APP.index('if (storedAuthToken && !forceNew)'):APP.index('traceMark("auth_finished"')]
+    startup_section = APP[APP.index('if (storedAuthToken && !forceNewIdentity)'):APP.index('traceMark("auth_finished"')]
     assert 'if (!(await loginWithTelegramPayload()))' in startup_section
     assert 'setBrowserLoginRequired(true);' in startup_section
     assert 'setIsBootstrapDone(true);' in startup_section
@@ -57,11 +57,11 @@ def test_valid_telegram_init_data_runs_mini_app_login_flow() -> None:
     assert 'params.get("hash")' in webapp
     assert 'params.get("auth_date")' in webapp
     assert 'params.get("user") || params.get("query_id")' in webapp
-    assert 'await loginWithTelegram(telegramLaunchPayload' in bootstrap_section
+    assert 'loginWithTelegram(telegramLaunchPayload' in bootstrap_section
     assert 'return true;' in bootstrap_section
 
 
 def test_stored_jwt_loads_authenticated_app_before_telegram_init_data_check() -> None:
-    startup_section = APP[APP.index('const storedAuthToken = getStoredAuthToken();'):APP.index('} else {', APP.index('if (storedAuthToken && !forceNew)'))]
+    startup_section = APP[APP.index('const storedAuthToken = getStoredAuthToken();'):APP.index('} else {', APP.index('if (storedAuthToken && !forceNewIdentity)'))]
     assert 'await requestProfileAndSubscription()' in startup_section
     assert 'await loginWithTelegramPayload()' not in startup_section.split('} catch (caughtError)')[0]

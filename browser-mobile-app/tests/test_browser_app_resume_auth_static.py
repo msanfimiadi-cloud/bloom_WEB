@@ -21,7 +21,7 @@ def test_resume_lifecycle_events_do_not_clear_jwt() -> None:
 
 def test_app_startup_with_stored_jwt_loads_authenticated_app_before_login_code() -> None:
     startup_section = APP[APP.index('const storedAuthToken = getStoredAuthToken();'):APP.index('traceMark("auth_finished"')]
-    assert 'if (storedAuthToken && !forceNew)' in startup_section
+    assert 'if (storedAuthToken && !forceNewIdentity)' in startup_section
     assert 'await requestProfileAndSubscription()' in startup_section
     assert startup_section.index('await requestProfileAndSubscription()') < startup_section.index('setBrowserLoginRequired(true);')
 
@@ -51,3 +51,49 @@ def test_no_resume_handler_calls_location_reload_or_replace() -> None:
     assert 'location.reload' not in lifecycle_section
     assert 'location.replace' not in lifecycle_section
     assert 'didForceReload: false' in lifecycle_section
+
+
+def test_pageshow_interrupted_startup_resume_preserves_stored_token_auth() -> None:
+    pageshow_section = APP[APP.index('const onPageShow = (event: PageTransitionEvent) => {'):APP.index('const onPageHide', APP.index('const onPageShow = (event: PageTransitionEvent) => {'))]
+    assert 'detectInterruptedStartup()' in pageshow_section
+    assert 'void loadAppData("resume", false);' in pageshow_section
+    assert 'void loadAppData("resume", true);' not in pageshow_section
+    startup_section = APP[APP.index('const storedAuthToken = getStoredAuthToken();'):APP.index('traceMark("auth_finished"')]
+    assert 'const forceNewIdentity = typeof options === "boolean" ? false : Boolean(options.forceNewIdentity);' in APP
+    assert 'if (storedAuthToken && !forceNewIdentity)' in startup_section
+    assert startup_section.index('if (storedAuthToken && !forceNewIdentity)') < startup_section.index('if (!(await loginWithTelegramPayload()))')
+
+
+def test_force_refresh_with_stored_token_does_not_mark_unauthenticated() -> None:
+    startup_section = APP[APP.index('const forceRefresh ='):APP.index('traceMark("auth_finished"')]
+    stored_token_branch = startup_section[startup_section.index('if (storedAuthToken && !forceNewIdentity)'):startup_section.index('} else {', startup_section.index('if (storedAuthToken && !forceNewIdentity)'))]
+    assert 'await requestProfileAndSubscription()' in stored_token_branch
+    before_invalid_auth_clear = stored_token_branch.split('clearStoredAuthToken();')[0]
+    assert 'setAuthRestoreStatus("unauthenticated")' not in before_invalid_auth_clear
+    assert 'setBrowserLoginRequired(true);' not in before_invalid_auth_clear
+
+
+def test_browser_pwa_without_telegram_payload_keeps_valid_stored_token_restoring_or_authenticated() -> None:
+    startup_section = APP[APP.index('const storedAuthToken = getStoredAuthToken();'):APP.index('traceMark("auth_finished"')]
+    stored_token_branch = startup_section[startup_section.index('if (storedAuthToken && !forceNewIdentity)'):startup_section.index('} else {', startup_section.index('if (storedAuthToken && !forceNewIdentity)'))]
+    assert 'await loginWithTelegramPayload()' not in stored_token_branch.split('} catch (caughtError)')[0]
+    assert 'setAuthRestoreStatus("authenticated")' in APP
+    no_token_branch = startup_section[startup_section.index('} else {', startup_section.index('if (storedAuthToken && !forceNewIdentity)')):]
+    assert 'setAuthRestoreStatus("unauthenticated")' in no_token_branch
+
+
+def test_unauthenticated_requires_no_stored_token_or_confirmed_auth_clear() -> None:
+    invalid_token_clear = APP.index('clearStoredAuthToken();')
+    no_token_else = APP.index('} else {', APP.index('if (storedAuthToken && !forceNewIdentity)'))
+    for marker in [i for i in range(len(APP)) if APP.startswith('setAuthRestoreStatus("unauthenticated")', i)]:
+        assert marker > invalid_token_clear or marker > no_token_else
+    assert 'authClearedReason: "auth_check_401_403"' in APP
+
+
+def test_unexpected_login_screen_with_token_not_reachable_from_resume_stored_token_branch() -> None:
+    assert 'unexpected_login_screen_with_token' in APP
+    pageshow_section = APP[APP.index('const onPageShow = (event: PageTransitionEvent) => {'):APP.index('const onPageHide', APP.index('const onPageShow = (event: PageTransitionEvent) => {'))]
+    assert 'loadAppData("resume", false)' in pageshow_section
+    assert 'loadAppData("resume", true)' not in pageshow_section
+    login_guard_section = APP[APP.index('if (browserLoginRequired && !canRenderLogin)'):APP.index('if (canRenderLogin)')]
+    assert 'Проверяем вход...' in login_guard_section

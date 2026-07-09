@@ -49,5 +49,5 @@ def test_next_launch_reads_stable_storage_snapshot_not_stale_bootstrap() -> None
     assert 'getAuthTokenStorageSnapshot' in CLIENT
     assert 'tokenSource: "local"' in CLIENT
     assert 'sessionToken ? "session"' in CLIENT
-    assert 'if (detectInterruptedStartup()) { void loadAppData("resume", true); }' in APP
+    assert 'if (interruptedStartup) { void loadAppData("resume", false); }' in APP
     assert 'bootstrapPromiseRef.current = null;' in APP
