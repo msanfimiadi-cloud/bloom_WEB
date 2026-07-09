@@ -104,10 +104,11 @@ export function BottomNav({ activePage, onNavigate }: BottomNavProps) {
             key={item.id}
             onClick={() => onNavigate(item.id)}
             aria-current={isActive ? 'page' : undefined}
+            aria-label={item.label}
           >
             <span className="bottom-nav__content">
               <span className="bottom-nav__icon" aria-hidden="true">{item.icon}</span>
-              <span className="bottom-nav__label">{item.label}</span>
+              {isActive ? <span className="bottom-nav__label">{item.label}</span> : null}
             </span>
           </button>
         );
