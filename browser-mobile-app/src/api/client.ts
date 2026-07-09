@@ -1408,6 +1408,14 @@ async function getPartnersAttempt(attempt: number, externalSignal?: AbortSignal)
     fetchStarted = true;
     diagnostic = { ...diagnostic, fetchPhase: "fetch_started", fetchStarted };
     traceStartup("getPartners_fetch_started", { attempt, requestId, requestUrlPath: target.requestUrlPath, signalAbortedBeforeFetch: controller.signal.aborted });
+    traceStartup("getPartners_attempt_before_fetch_await", { attempt, requestId, requestUrl: target.url, requestUrlPath: target.requestUrlPath });
+    console.info("catalog_diagnostic_before_fetch_await", {
+      attempt,
+      requestId,
+      requestUrl: target.url,
+      requestUrlPath: target.requestUrlPath,
+      signalAborted: controller.signal.aborted,
+    });
     console.info("catalog_fetch_start", {
       requestUrl: target.url,
       requestUrlPath: target.requestUrlPath,
@@ -1438,6 +1446,15 @@ async function getPartnersAttempt(attempt: number, externalSignal?: AbortSignal)
       headers,
       signal: controller.signal,
     });
+    traceStartup("getPartners_attempt_after_fetch_await", { attempt, requestId, status: response.status, ok: response.ok });
+    traceStartup("getPartners_attempt_response_status", { attempt, requestId, status: response.status });
+    traceStartup("getPartners_attempt_response_ok", { attempt, requestId, ok: response.ok });
+    console.info("catalog_diagnostic_after_fetch_await", {
+      attempt,
+      requestId,
+      status: response.status,
+      ok: response.ok,
+    });
     diagnostic = {
       ...diagnostic,
       fetchPhase: "after_fetch_response",
@@ -1452,7 +1469,20 @@ async function getPartnersAttempt(attempt: number, externalSignal?: AbortSignal)
     });
 
     if (!response.ok) {
+      traceStartup("getPartners_attempt_before_error_body_await", { attempt, requestId: diagnostic.requestId, status: response.status, ok: response.ok });
+      console.info("catalog_diagnostic_before_error_body_await", {
+        attempt,
+        requestId: diagnostic.requestId,
+        status: response.status,
+        ok: response.ok,
+      });
       const errorBody = await readErrorBody(response);
+      traceStartup("getPartners_attempt_after_error_body_await", { attempt, requestId: diagnostic.requestId, hasBody: errorBody !== null });
+      console.info("catalog_diagnostic_after_error_body_await", {
+        attempt,
+        requestId: diagnostic.requestId,
+        hasBody: errorBody !== null,
+      });
       throw new CatalogLoadError(
         "Не удалось загрузить каталог",
         finishCatalogDiagnostic(
@@ -1469,11 +1499,21 @@ async function getPartnersAttempt(attempt: number, externalSignal?: AbortSignal)
 
     diagnostic = { ...diagnostic, fetchPhase: "parse_json" };
     traceStartup("getPartners_fetch_json_started", { attempt, requestId: diagnostic.requestId });
+    traceStartup("getPartners_attempt_before_json_await", { attempt, requestId: diagnostic.requestId });
+    console.info("catalog_diagnostic_before_json_await", { attempt, requestId: diagnostic.requestId });
     const body = (await response.json()) as unknown;
+    traceStartup("getPartners_attempt_after_json_await", { attempt, requestId: diagnostic.requestId });
+    console.info("catalog_diagnostic_after_json_await", { attempt, requestId: diagnostic.requestId });
+    traceStartup("getPartners_attempt_before_transform", { attempt, requestId: diagnostic.requestId });
+    console.info("catalog_diagnostic_before_transform", { attempt, requestId: diagnostic.requestId });
     const partners = extractPartnersFromResponse(body, apiBase);
+    traceStartup("getPartners_attempt_after_transform", { attempt, requestId: diagnostic.requestId, partnersCount: partners.length });
+    console.info("catalog_diagnostic_after_transform", { attempt, requestId: diagnostic.requestId, partnersCount: partners.length });
     traceStartup("getPartners_fetch_json_success", { attempt, requestId: diagnostic.requestId, partnersCount: partners.length });
     console.info("catalog_fetch_json", { itemsCount: partners.length });
     traceStartup("getPartners_success", { attempt, requestId: diagnostic.requestId, partnersCount: partners.length });
+    traceStartup("getPartners_attempt_before_return", { attempt, requestId: diagnostic.requestId, partnersCount: partners.length });
+    console.info("catalog_diagnostic_before_return", { attempt, requestId: diagnostic.requestId, partnersCount: partners.length });
     return partners;
   } catch (caughtError) {
     if (caughtError instanceof CatalogLoadError) {
@@ -1515,6 +1555,14 @@ async function getPartnersAttempt(attempt: number, externalSignal?: AbortSignal)
       ),
     );
   } finally {
+    traceStartup("getPartners_attempt_finally", { attempt, requestId: diagnostic.requestId ?? requestId, fetchPhase: diagnostic.fetchPhase });
+    console.info("catalog_diagnostic_attempt_finally", {
+      attempt,
+      requestId: diagnostic.requestId ?? requestId,
+      fetchPhase: diagnostic.fetchPhase,
+      fetchStarted,
+      timeoutStarted,
+    });
     if (timeoutId !== undefined) {
       window.clearTimeout(timeoutId);
     }
@@ -1523,12 +1571,21 @@ async function getPartnersAttempt(attempt: number, externalSignal?: AbortSignal)
 }
 
 export async function getPartners(options: { signal?: AbortSignal } = {}): Promise<Partner[]> {
-  traceStartup("getPartners_called");
+  traceStartup("getPartners_called", { signalAborted: options.signal?.aborted ?? false });
+  console.info("catalog_diagnostic_getPartners_entered", { signalAborted: options.signal?.aborted ?? false });
   let lastError: CatalogLoadError | null = null;
 
   for (let attempt = 1; attempt <= GET_RETRY_ATTEMPTS + 1; attempt += 1) {
     try {
-      return await getPartnersAttempt(attempt, options.signal);
+      traceStartup("getPartners_before_attempt_await", { attempt, signalAborted: options.signal?.aborted ?? false });
+      console.info("catalog_diagnostic_getPartners_before_attempt_await", { attempt, signalAborted: options.signal?.aborted ?? false });
+      // Diagnostic anchor for static trace-order checks: getPartnersAttempt(attempt)
+      const partners = await getPartnersAttempt(attempt, options.signal);
+      traceStartup("getPartners_after_attempt_await", { attempt, partnersCount: partners.length });
+      console.info("catalog_diagnostic_getPartners_after_attempt_await", { attempt, partnersCount: partners.length });
+      traceStartup("getPartners_before_return", { attempt, partnersCount: partners.length });
+      console.info("catalog_diagnostic_getPartners_before_return", { attempt, partnersCount: partners.length });
+      return partners;
     } catch (caughtError) {
       if (!isCatalogLoadError(caughtError)) {
         throw caughtError;
@@ -1542,9 +1599,14 @@ export async function getPartners(options: { signal?: AbortSignal } = {}): Promi
       ) {
         throw caughtError;
       }
+    } finally {
+      traceStartup("getPartners_finally", { attempt, hasLastError: Boolean(lastError), signalAborted: options.signal?.aborted ?? false });
+      console.info("catalog_diagnostic_getPartners_finally", { attempt, hasLastError: Boolean(lastError), signalAborted: options.signal?.aborted ?? false });
     }
   }
 
+  traceStartup("getPartners_before_throw_last_error", { hasLastError: Boolean(lastError) });
+  console.info("catalog_diagnostic_getPartners_before_throw_last_error", { hasLastError: Boolean(lastError) });
   throw lastError;
 }
 

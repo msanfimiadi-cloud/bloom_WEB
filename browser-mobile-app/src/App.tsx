@@ -1702,6 +1702,7 @@ export default function App() {
         const catalogSpan = startupExecutionBegin("catalog bootstrap:loadPartners body", { forceRetry, localRequestId });
         catalogTrace("catalog requested", { forceRetry, localRequestId });
         traceStartup("loadPartners_called", { forceRetry, localRequestId });
+        console.info("catalog_diagnostic_loadPartners_entered", { forceRetry, localRequestId });
         catalogTrace("loadPartners entered", { forceRetry, localRequestId });
         traceStartup("loadPartners_entered", { forceRetry, localRequestId });
         traceStart("catalog_load_start", { forceRetry, localRequestId });
@@ -1721,10 +1722,13 @@ export default function App() {
         try {
           const bootstrapPartners = forceRetry ? null : consumeCatalogBootstrap();
           traceStartup("loadPartners_before_getPartners", { localRequestId });
+          console.info("catalog_diagnostic_loadPartners_before_getPartners_await", { localRequestId });
           catalogTrace("getPartners entered", { localRequestId });
           // Regression anchor: previous code used `const partners = await getPartners();`;
           // keep catalog fetch non-bootstrap-blocking while allowing lifecycle aborts.
           const partners = await getPartners({ signal: catalogAbortController.signal });
+          traceStartup("loadPartners_after_getPartners", { localRequestId, partnersCount: partners.length });
+          console.info("catalog_diagnostic_loadPartners_after_getPartners_await", { localRequestId, partnersCount: partners.length });
           if (catalogAbortController.signal.aborted) {
             traceStartup("loadPartners_aborted_before_state_update", { localRequestId });
             return;
@@ -1735,7 +1739,11 @@ export default function App() {
               localRequestId,
             });
           }
+          traceStartup("loadPartners_before_setPartners", { localRequestId, partnersCount: partners.length });
+          console.info("catalog_diagnostic_loadPartners_before_setPartners", { localRequestId, partnersCount: partners.length });
           setData((current) => normalizeAppData({ ...current, partners }));
+          traceStartup("loadPartners_after_setPartners", { localRequestId, partnersCount: partners.length });
+          console.info("catalog_diagnostic_loadPartners_after_setPartners", { localRequestId, partnersCount: partners.length });
           setHasPartnersLoaded(true);
           lifecycleTrace("catalog_load_ok", {
             partnersCount: partners.length,
@@ -1813,6 +1821,12 @@ export default function App() {
               : undefined,
           );
         } finally {
+          traceStartup("loadPartners_finally", { localRequestId, signalAborted: catalogAbortController.signal.aborted });
+          console.info("catalog_diagnostic_loadPartners_finally", {
+            localRequestId,
+            signalAborted: catalogAbortController.signal.aborted,
+            abortReason: String(catalogAbortController.signal.reason ?? ""),
+          });
           catalogLoadingRef.current = false;
           setIsPartnersLoading(false);
           partnersPromiseRef.current = null;
