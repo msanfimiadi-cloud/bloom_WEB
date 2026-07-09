@@ -17,12 +17,23 @@
       id="bloom-html-fallback-overlay"
       role="status"
       aria-live="polite"
-      style="position: fixed; inset: 0; z-index: 2147483646; display: flex; align-items: center; justify-content: center; background: #fff7fa; color: #2b1b22; font-family: -apple-system, BlinkMacSystemFont, system-ui, sans-serif; flex-direction: column; gap: 16px; padding: 24px; box-sizing: border-box; text-align: center;"
+      style="position: fixed; inset: 0; z-index: 2147483646; display: flex; align-items: center; justify-content: center; background: linear-gradient(180deg, #fffdfb 0%, #fff7f7 50%, #f8eef2 100%); opacity: 1; transition: opacity 280ms ease; color: #2b1b22; font-family: -apple-system, BlinkMacSystemFont, system-ui, sans-serif; flex-direction: column; gap: 16px; padding: 24px; box-sizing: border-box; text-align: center;"
     >
-      <h1>Bloom Club загружается</h1>
-      <p>Если экран не меняется больше 10 секунд, закройте и откройте приложение заново</p>
+      <video
+        id="bloom-startup-video"
+        src="/assets/loader/аним.mp4"
+        autoplay
+        muted
+        playsinline
+        webkit-playsinline
+        preload="auto"
+        aria-hidden="true"
+        style="display: block; width: clamp(180px, 42vw, 220px); height: clamp(180px, 42vw, 220px); object-fit: contain; background: transparent;"
+      ></video>
+      <h1 style="margin: 0; color: rgba(53, 39, 43, 0.64); font-size: 0.95rem; font-weight: 600;">Bloom Club загружается</h1>
+      <p style="margin: 0; color: rgba(53, 39, 43, 0.42); font-size: 0.82rem;">Если экран не меняется больше 10 секунд, закройте и откройте приложение заново</p>
       <button type="button" onclick="location.reload()">Перезагрузить</button>
-      <p id="bloom-html-fallback-diagnostic">Диагностика появится после запуска приложения</p>
+      <p id="bloom-html-fallback-diagnostic" style="margin: 0; color: rgba(53, 39, 43, 0.42); font-size: 0.78rem;">Диагностика появится после запуска приложения</p>
     </section>
     <script>
       window.__BLOOM_HTML_FALLBACK_PRESENT__ = true;
