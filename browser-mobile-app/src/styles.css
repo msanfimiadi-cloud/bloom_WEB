@@ -448,6 +448,46 @@ small,
   text-align: center;
 }
 
+.state--loading {
+  min-height: 100dvh;
+  width: 100%;
+  margin: 0;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  flex-direction: column;
+  gap: 14px;
+  padding: max(24px, env(safe-area-inset-top)) max(20px, env(safe-area-inset-right)) max(24px, env(safe-area-inset-bottom)) max(20px, env(safe-area-inset-left));
+  border-radius: 0;
+  background: linear-gradient(180deg, #fffdfb 0%, #fff7f7 50%, #f8eef2 100%);
+  animation: bloom-loader-enter 220ms ease both;
+  box-sizing: border-box;
+}
+
+.state--loading p {
+  max-width: min(300px, calc(100vw - 48px));
+  margin: 0;
+  color: rgba(53, 39, 43, 0.56);
+  font-size: 0.95rem;
+  font-weight: 600;
+  line-height: 1.35;
+}
+
+.state--compact {
+  min-height: auto;
+  padding: 24px;
+  background: transparent;
+}
+
+.state__loader-video {
+  display: block;
+  width: clamp(180px, 42vw, 220px);
+  height: clamp(180px, 42vw, 220px);
+  object-fit: contain;
+  background: transparent;
+  border: 0;
+}
+
 .spinner {
   width: 34px;
   height: 34px;
@@ -457,6 +497,11 @@ small,
   border-top-color: var(--rose-deep);
   border-radius: 50%;
   animation: spin 0.9s linear infinite;
+}
+
+@keyframes bloom-loader-enter {
+  from { opacity: 0; }
+  to { opacity: 1; }
 }
 
 @keyframes spin {

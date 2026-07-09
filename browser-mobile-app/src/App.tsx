@@ -2559,7 +2559,7 @@ export default function App() {
   }
 
   if (browserLoginRequired && !canRenderLogin) {
-    return <LoadingState title={hasAnyAuthTokenForLoginGuard ? "Проверяем вход..." : "Загружаем данные клуба"} />;
+    return <LoadingState title={hasAnyAuthTokenForLoginGuard ? "Подготавливаем ваши привилегии..." : "Загружаем Bloom Club..."} />;
   }
 
   if (canRenderLogin) {
@@ -2605,7 +2605,7 @@ export default function App() {
   }
 
   if (isLoading) {
-    return <LoadingState title="Загружаем данные клуба" />;
+    return <LoadingState title="Загружаем Bloom Club..." />;
   }
 
   if (error) {
