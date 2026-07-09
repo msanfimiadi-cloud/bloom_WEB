@@ -35,6 +35,8 @@ declare global {
     __BLOOM_RESOURCE_ERROR_TRACE__?: Array<Record<string, unknown>>;
     __BLOOM_CHUNK_RECOVERY_STARTED__?: boolean;
     __BLOOM_STARTUP_PHASE__?: string;
+    __BLOOM_STARTUP_SPLASH_READY__?: boolean;
+    __BLOOM_STARTUP_APP_READY__?: boolean;
   }
 }
 
@@ -260,6 +262,7 @@ function renderStartupRecoveryScreen(reason = "startup_watchdog_timeout"): void 
 function renderStartupLoadingFallback(): void {
   const existing = document.getElementById("bloom-entry-fallback-overlay");
   if (existing) {
+    bindStartupSplashVideo(existing.querySelector("video"));
     return;
   }
 
@@ -282,10 +285,12 @@ function renderStartupLoadingFallback(): void {
   video.src = "/assets/loader/аним.mp4";
   video.autoplay = true;
   video.muted = true;
-  video.loop = true;
   video.playsInline = true;
+  video.preload = "auto";
   video.setAttribute("muted", "");
   video.setAttribute("playsinline", "");
+  video.setAttribute("webkit-playsinline", "");
+  video.setAttribute("preload", "auto");
   video.setAttribute("aria-hidden", "true");
   video.setAttribute(
     "style",
@@ -319,6 +324,7 @@ function renderStartupLoadingFallback(): void {
 
   actions.replaceChildren(reloadButton, diagnosticsButton);
   wrapper.replaceChildren(video, title, description, diagnostics, actions);
+  bindStartupSplashVideo(video);
 
   const parentName = appendEntryFallbackOverlay(wrapper);
   if (parentName) {
@@ -532,6 +538,7 @@ installProductionDiagnostics();
 earlyStartupTrace("main_after_installProductionDiagnostics");
 window.__BLOOM_ENTRY_SCRIPT_EXECUTED__ = true;
 window.__BLOOM_APP_STATIC_IMPORT_ENABLED__ = true;
+initializeStartupSplashGuards();
 renderStartupLoadingFallback();
 startEntryWatchdog();
 lifecycleTraceSafe("entry_start");
@@ -596,20 +603,74 @@ async function importApplicationModules(): Promise<{
 }
 
 
-export function removeEntryFallbackOverlay(): void {
+const STARTUP_SPLASH_MIN_DURATION_MS = 3_000;
+const STARTUP_SPLASH_MAX_DURATION_MS = 5_000;
+const STARTUP_SPLASH_FADE_MS = 280;
+let startupSplashMinimumElapsed = false;
+let startupSplashPlaybackComplete = false;
+let startupSplashReady = false;
+let startupAppReady = false;
+let startupOverlayRemovalStarted = false;
+
+function markStartupSplashReady(reason: string): void {
+  if (startupSplashReady) return;
+  startupSplashReady = true;
+  window.__BLOOM_STARTUP_SPLASH_READY__ = true;
+  earlyStartupTrace("startup_splash_ready", { reason });
+  maybeRemoveEntryFallbackOverlay();
+}
+
+function evaluateStartupSplashReadiness(reason: string): void {
+  if (startupSplashMinimumElapsed && startupSplashPlaybackComplete) {
+    markStartupSplashReady(reason);
+  }
+}
+
+function bindStartupSplashVideo(video: HTMLVideoElement | null): void {
+  if (!video || video.dataset.bloomSplashBound === "true") return;
+  video.dataset.bloomSplashBound = "true";
+  video.loop = false;
+  video.addEventListener("ended", () => {
+    startupSplashPlaybackComplete = true;
+    evaluateStartupSplashReadiness("video_ended");
+  }, { once: true });
+}
+
+function initializeStartupSplashGuards(): void {
+  bindStartupSplashVideo(document.querySelector<HTMLVideoElement>("#bloom-html-fallback-overlay video"));
+  window.setTimeout(() => {
+    startupSplashMinimumElapsed = true;
+    evaluateStartupSplashReadiness("minimum_duration_elapsed");
+  }, STARTUP_SPLASH_MIN_DURATION_MS);
+  window.setTimeout(() => {
+    startupSplashPlaybackComplete = true;
+    evaluateStartupSplashReadiness("fallback_max_duration_elapsed");
+  }, STARTUP_SPLASH_MAX_DURATION_MS);
+}
+
+function maybeRemoveEntryFallbackOverlay(): void {
+  if (!startupAppReady || !startupSplashReady || startupOverlayRemovalStarted) return;
+  startupOverlayRemovalStarted = true;
   const entryFallback = document.getElementById("bloom-entry-fallback-overlay");
   const htmlFallback = document.getElementById("bloom-html-fallback-overlay");
   const fadeAndRemove = (element: HTMLElement | null): void => {
     if (!element) return;
     element.style.opacity = "0";
     element.style.pointerEvents = "none";
-    window.setTimeout(() => element.remove(), 260);
+    window.setTimeout(() => element.remove(), STARTUP_SPLASH_FADE_MS);
   };
   fadeAndRemove(entryFallback);
   fadeAndRemove(htmlFallback);
   window.__BLOOM_ENTRY_FALLBACK_OVERLAY_REMOVED__ = true;
   window.__BLOOM_HTML_FALLBACK_REMOVED__ = true;
   stopEntryWatchdog();
+}
+
+export function removeEntryFallbackOverlay(): void {
+  startupAppReady = true;
+  window.__BLOOM_STARTUP_APP_READY__ = true;
+  earlyStartupTrace("startup_app_ready_for_overlay_removal");
+  maybeRemoveEntryFallbackOverlay();
 }
 
 async function startApp(): Promise<void> {
