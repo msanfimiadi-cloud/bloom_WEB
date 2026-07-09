@@ -70,6 +70,7 @@ import {
 } from "./diagnostics/lifecycleTrace";
 import {
   getStartupTrace,
+  type StartupTraceEvent,
   traceFail,
   traceMark,
   traceOk,
@@ -432,6 +433,45 @@ function StartupRecoveryScreen({ message }: { message: string | null }): React.R
   );
 }
 
+
+function SuccessfulBootstrapRecoveryScreen({ onReload }: { onReload: () => void }): React.ReactElement {
+  return (
+    <main className="startup-recovery-screen" role="alert">
+      <h1>Восстанавливаем интерфейс</h1>
+      <p>Вход выполнен и данные загружены, но экран приложения не отобразился. Нажмите кнопку, чтобы перезапустить интерфейс без выхода из аккаунта.</p>
+      <button className="button button--primary" type="button" onClick={onReload}>
+        Обновить экран
+      </button>
+    </main>
+  );
+}
+
+function getLastLifecycleEventName(): string | null {
+  if (typeof window === "undefined") return null;
+  const events = window.__BLOOM_PAGE_LIFECYCLE__ ?? [];
+  return events.length ? events[events.length - 1]?.event ?? null : null;
+}
+
+function getVisibleElementCount(container: HTMLElement | null): number {
+  if (!container) return 0;
+  const elements = [container, ...Array.from(container.querySelectorAll<HTMLElement>("*"))];
+  return elements.filter((element) => {
+    const style = window.getComputedStyle(element);
+    const rect = element.getBoundingClientRect();
+    return (
+      style.display !== "none" &&
+      style.visibility !== "hidden" &&
+      Number(style.opacity || "1") > 0 &&
+      rect.width > 0 &&
+      rect.height > 0
+    );
+  }).length;
+}
+
+function hasSuccessfulApiBootstrap(trace: StartupTraceEvent[]): boolean {
+  return trace.some((event) => event.step === "bootstrap_done" || event.step === "startup_completed_successfully");
+}
+
 function isStartupDebugUiEnabled(): boolean {
   if (import.meta.env.DEV) {
     return true;
@@ -472,6 +512,8 @@ declare global {
       consumed?: boolean;
     };
     __BLOOM_LAST_CATALOG_ERROR__?: unknown;
+    __BLOOM_CONTENT_STATIC_TEXTS_LOADED__?: boolean;
+    __BLOOM_CONTENT_BLOCKS_LOADED__?: boolean;
   }
 }
 
@@ -772,6 +814,7 @@ export default function App() {
   const debugTapTimerRef = useRef<number | undefined>(undefined);
   const [watchdogMessage, setWatchdogMessage] = useState<string | null>(null);
   const [showStartupRecovery, setShowStartupRecovery] = useState(false);
+  const [showSuccessfulBootstrapRecovery, setShowSuccessfulBootstrapRecovery] = useState(false);
   const [isBootstrapDone, setIsBootstrapDone] = useState(false);
   const [hasRenderedPageContent, setHasRenderedPageContent] = useState(false);
   const partnersPromiseRef = useRef<Promise<void> | null>(null);
@@ -784,6 +827,7 @@ export default function App() {
   const appActiveRef = useRef(true);
   const catalogLoadingRef = useRef(false);
   const mountedRef = useRef(false);
+  const blankScreenDiagnosticReportedRef = useRef(false);
   const diagnosticSessionIdRef = useRef(
     `bootstrap-deadlock-${Date.now()}-${Math.random().toString(36).slice(2, 10)}`,
   );
@@ -896,6 +940,7 @@ export default function App() {
     resetTelegramLoginInFlight();
     setIsBootstrapDone(false);
     setShowStartupRecovery(false);
+    setShowSuccessfulBootstrapRecovery(false);
     setWatchdogMessage(null);
     setError(null);
     logBootstrapDeadlockDiagnostic("webview_active_bootstrap_reset", {
@@ -2237,6 +2282,85 @@ export default function App() {
     }
   }, [error, isLoading, page]);
 
+  useEffect(() => {
+    if (!isBootstrapDone || isLoading || error) return;
+
+    if (!isKnownPage(String(page))) {
+      reportClientError("invalid_page_after_successful_bootstrap", new Error("invalid_page_after_successful_bootstrap"), {
+        authRestoreStatus,
+        isBootstrapDone,
+        isLoading,
+        browserLoginRequired,
+        currentPage: String(page),
+        selectedPartnerId: selectedPartner?.id ?? null,
+      });
+      resetPartnerFlowState("home");
+      return;
+    }
+
+    if (page === "partner" && !selectedPartner) {
+      reportClientError("missing_partner_after_successful_bootstrap", new Error("missing_partner_after_successful_bootstrap"), {
+        authRestoreStatus,
+        isBootstrapDone,
+        currentPage: page,
+      });
+      resetPartnerFlowState("catalog");
+    }
+  }, [authRestoreStatus, browserLoginRequired, error, isBootstrapDone, isLoading, page, resetPartnerFlowState, selectedPartner]);
+
+  useEffect(() => {
+    if (
+      blankScreenDiagnosticReportedRef.current ||
+      !isBootstrapDone ||
+      isLoading ||
+      error ||
+      authRestoreStatus !== "authenticated" ||
+      browserLoginRequired
+    ) {
+      return;
+    }
+
+    const timeoutId = window.setTimeout(() => {
+      const root = document.getElementById("root");
+      const appContainer = document.querySelector<HTMLElement>(".app-shell");
+      const visibleElementCount = getVisibleElementCount(appContainer);
+      const appContainerTextLength = (appContainer?.innerText || appContainer?.textContent || "").trim().length;
+      const startupTrace = getStartupTrace();
+      const shouldReport = Boolean(root) && hasSuccessfulApiBootstrap(startupTrace) && (
+        !appContainer ||
+        (root?.childElementCount ?? 0) === 0 ||
+        visibleElementCount === 0 ||
+        appContainerTextLength === 0
+      );
+
+      if (!shouldReport || blankScreenDiagnosticReportedRef.current) return;
+
+      blankScreenDiagnosticReportedRef.current = true;
+      reportClientError("blank_screen_after_successful_bootstrap", new Error("blank_screen_after_successful_bootstrap"), {
+        authRestoreStatus,
+        isBootstrapDone,
+        isLoading,
+        browserLoginRequired,
+        currentPage: page,
+        currentTab: activeNavPage,
+        selectedPartnerId: selectedPartner?.id ?? null,
+        partnersCount: data.partners.length,
+        staticTextsLoaded: Boolean(window.__BLOOM_CONTENT_STATIC_TEXTS_LOADED__),
+        contentBlocksLoaded: Boolean(window.__BLOOM_CONTENT_BLOCKS_LOADED__),
+        rootChildCount: root?.childElementCount ?? 0,
+        appContainerTextLength,
+        visibleElementCount,
+        lastLifecycleEvent: getLastLifecycleEventName(),
+        lastPageshowAt: lastPageshowAtRef.current,
+        lastPagehideAt: lastPagehideAtRef.current,
+        lastBootstrapAbortReason: lastBootstrapAbortReasonRef.current,
+      });
+      setShowSuccessfulBootstrapRecovery(true);
+    }, 500);
+
+    return () => window.clearTimeout(timeoutId);
+  }, [authRestoreStatus, browserLoginRequired, data.partners.length, error, isBootstrapDone, isLoading, page, selectedPartner]);
+
   const activeNavPage = useMemo<PageId>(() => {
     if (page === "partner") {
       return "catalog";
@@ -2246,7 +2370,7 @@ export default function App() {
       return "profile";
     }
 
-    return page;
+    return isKnownPage(String(page)) ? page : "home";
   }, [page]);
 
   const safeData = normalizeAppData(data);
@@ -2326,6 +2450,12 @@ export default function App() {
     }
   }, [loadAppData, loginCode, loginReferralCode]);
 
+  const reloadSuccessfulBootstrapRecovery = useCallback(() => {
+    setShowSuccessfulBootstrapRecovery(false);
+    resetPartnerFlowState("home");
+    removeEntryFallbackOverlay();
+  }, [resetPartnerFlowState]);
+
   const hasAnyAuthTokenForLoginGuard = Boolean(authSnapshotRef.current.token || getStoredAuthToken());
   const canRenderLogin = browserLoginRequired && authRestoreStatus === "unauthenticated" && !isLoading && !bootstrapPromiseRef.current;
 
@@ -2354,6 +2484,10 @@ export default function App() {
 
   if (showStartupRecovery) {
     return <StartupRecoveryScreen message={watchdogMessage} />;
+  }
+
+  if (showSuccessfulBootstrapRecovery) {
+    return <SuccessfulBootstrapRecoveryScreen onReload={reloadSuccessfulBootstrapRecovery} />;
   }
 
   if (browserLoginExternalOpenRequired) {
