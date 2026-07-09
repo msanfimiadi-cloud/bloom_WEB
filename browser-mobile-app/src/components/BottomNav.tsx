@@ -1,53 +1,79 @@
 import type { ReactNode } from 'react';
 import type { PageId } from '../App';
 
+interface NavIconProps {
+  children: ReactNode;
+}
+
+function NavIcon({ children }: NavIconProps) {
+  return (
+    <svg
+      width="20"
+      height="20"
+      viewBox="0 0 24 24"
+      fill="none"
+      stroke="currentColor"
+      strokeWidth="2"
+      strokeLinecap="round"
+      strokeLinejoin="round"
+      aria-hidden="true"
+      focusable="false"
+    >
+      {children}
+    </svg>
+  );
+}
+
 function HomeIcon() {
   return (
-    <svg viewBox="0 0 24 24" aria-hidden="true" focusable="false">
-      <path d="M3.8 10.8 12 4l8.2 6.8" />
-      <path d="M6.3 9.7v9.1h11.4V9.7" />
-      <path d="M9.8 18.8v-5h4.4v5" />
-    </svg>
+    <NavIcon>
+      <path d="m3 9 9-7 9 7" />
+      <path d="M5 11v9a2 2 0 0 0 2 2h10a2 2 0 0 0 2-2v-9" />
+      <path d="M9 22V12h6v10" />
+    </NavIcon>
   );
 }
 
 function PartnersIcon() {
   return (
-    <svg viewBox="0 0 24 24" aria-hidden="true" focusable="false">
-      <path d="M12 3.8v16.4" />
-      <path d="M4.4 8.2h15.2" />
-      <path d="M6.5 8.2 4.8 13h5.1L8.2 8.2" />
-      <path d="M17.5 8.2 15.8 13h5.1l-1.7-4.8" />
-      <path d="M8.8 20.2h6.4" />
-    </svg>
+    <NavIcon>
+      <path d="M4 10h16" />
+      <path d="M5 10l1.2-5.1A2.4 2.4 0 0 1 8.5 3h7a2.4 2.4 0 0 1 2.3 1.9L19 10" />
+      <path d="M5 10v9a2 2 0 0 0 2 2h10a2 2 0 0 0 2-2v-9" />
+      <path d="M9 21v-5a3 3 0 0 1 6 0v5" />
+      <path d="M3 10v1a3 3 0 0 0 6 0v-1" />
+      <path d="M9 10v1a3 3 0 0 0 6 0v-1" />
+      <path d="M15 10v1a3 3 0 0 0 6 0v-1" />
+    </NavIcon>
   );
 }
 
 function PrivilegesIcon() {
   return (
-    <svg viewBox="0 0 24 24" aria-hidden="true" focusable="false">
-      <path d="M12 3.4 15 8l5.2 1.4-3.4 4.2.3 5.4-5.1-2-5.1 2 .3-5.4-3.4-4.2L9 8z" />
-      <path d="m9.6 12 1.7 1.7 3.4-3.8" />
-    </svg>
+    <NavIcon>
+      <path d="M2 9a3 3 0 0 1 0 6v2a2 2 0 0 0 2 2h16a2 2 0 0 0 2-2v-2a3 3 0 0 1 0-6V7a2 2 0 0 0-2-2H4a2 2 0 0 0-2 2Z" />
+      <path d="m9 15 6-6" />
+      <path d="M9 9h.01" />
+      <path d="M15 15h.01" />
+    </NavIcon>
   );
 }
 
 function SavingsIcon() {
   return (
-    <svg viewBox="0 0 24 24" aria-hidden="true" focusable="false">
-      <path d="M7 6.7h7.1a4 4 0 0 1 0 8H7" />
-      <path d="M7 10.7h8.1" />
-      <path d="M7 3.8v16.4" />
-    </svg>
+    <NavIcon>
+      <path d="M19 7V5a2 2 0 0 0-2-2H5a3 3 0 0 0 0 6h14a2 2 0 0 1 2 2v4h-3a2 2 0 0 0 0 4h3v1a2 2 0 0 1-2 2H5a3 3 0 0 1-3-3V6" />
+      <path d="M18 15h.01" />
+    </NavIcon>
   );
 }
 
 function ProfileIcon() {
   return (
-    <svg viewBox="0 0 24 24" aria-hidden="true" focusable="false">
-      <path d="M12 12.2a4 4 0 1 0 0-8 4 4 0 0 0 0 8Z" />
-      <path d="M4.8 20.2c.8-3.8 3.4-5.8 7.2-5.8s6.4 2 7.2 5.8" />
-    </svg>
+    <NavIcon>
+      <circle cx="12" cy="8" r="4" />
+      <path d="M20 21a8 8 0 0 0-16 0" />
+    </NavIcon>
   );
 }
 
