@@ -157,6 +157,47 @@ const LOGIN_CODE_HELP_MESSAGE =
   "Введите код, который прислал Telegram или VK бот.";
 const TELEGRAM_IN_APP_BROWSER_HOST = "app.bloomclub.ru";
 
+const LOGIN_CODE_DRAFT_STORAGE_KEY = "bloom.loginCodeDraft";
+const REFERRAL_CODE_DRAFT_STORAGE_KEY = "bloom.referralCodeDraft";
+
+function getLoginDraftStorage(): Storage | null {
+  if (typeof window === "undefined") return null;
+
+  try {
+    return window.sessionStorage;
+  } catch {
+    return null;
+  }
+}
+
+function readLoginCodeDraft(key: string): string {
+  try {
+    return getLoginDraftStorage()?.getItem(key) ?? "";
+  } catch {
+    return "";
+  }
+}
+
+function writeLoginCodeDraft(key: string, value: string): void {
+  try {
+    const storage = getLoginDraftStorage();
+    if (!storage) return;
+
+    if (value) {
+      storage.setItem(key, value);
+    } else {
+      storage.removeItem(key);
+    }
+  } catch {
+    // Storage can be unavailable in private mode or restricted embedded browsers.
+  }
+}
+
+function clearLoginCodeDrafts(): void {
+  writeLoginCodeDraft(LOGIN_CODE_DRAFT_STORAGE_KEY, "");
+  writeLoginCodeDraft(REFERRAL_CODE_DRAFT_STORAGE_KEY, "");
+}
+
 
 function getStartupRecoveryTraceContext(): Record<string, unknown> {
   const markers = getStartupMarkers();
@@ -760,8 +801,8 @@ export default function App() {
   const [browserLoginRequired, setBrowserLoginRequired] = useState(false);
   const [browserLoginExternalOpenRequired, setBrowserLoginExternalOpenRequired] = useState(false);
   const [isLoginCodeFormOpen, setIsLoginCodeFormOpen] = useState(false);
-  const [loginCode, setLoginCode] = useState("");
-  const [loginReferralCode, setLoginReferralCode] = useState("");
+  const [loginCode, setLoginCode] = useState(() => readLoginCodeDraft(LOGIN_CODE_DRAFT_STORAGE_KEY));
+  const [loginReferralCode, setLoginReferralCode] = useState(() => readLoginCodeDraft(REFERRAL_CODE_DRAFT_STORAGE_KEY));
   const [loginCodeError, setLoginCodeError] = useState("");
   const [isLoginCodeSubmitting, setIsLoginCodeSubmitting] = useState(false);
   const [guestRestrictionMessage, setGuestRestrictionMessage] = useState(false);
@@ -799,6 +840,26 @@ export default function App() {
   const [catalogLoadRequestId, setCatalogLoadRequestId] = useState<
     number | undefined
   >(undefined);
+
+  const restoreLoginCodeDrafts = useCallback(() => {
+    const storedLoginCode = readLoginCodeDraft(LOGIN_CODE_DRAFT_STORAGE_KEY);
+    const storedReferralCode = readLoginCodeDraft(REFERRAL_CODE_DRAFT_STORAGE_KEY);
+
+    setLoginCode((current) => current || storedLoginCode);
+    setLoginReferralCode((current) => current || storedReferralCode);
+  }, []);
+
+  const updateLoginCodeDraft = useCallback((value: string) => {
+    const normalizedValue = value.toUpperCase();
+    setLoginCode(normalizedValue);
+    writeLoginCodeDraft(LOGIN_CODE_DRAFT_STORAGE_KEY, normalizedValue);
+  }, []);
+
+  const updateReferralCodeDraft = useCallback((value: string) => {
+    const normalizedValue = value.toUpperCase();
+    setLoginReferralCode(normalizedValue);
+    writeLoginCodeDraft(REFERRAL_CODE_DRAFT_STORAGE_KEY, normalizedValue);
+  }, []);
   // Catalog diagnostic UI intentionally allows only safe request fields plus local freshness markers.
   const [hasPartnersLoaded, setHasPartnersLoaded] = useState(false);
   const [catalogRecoveryPending, setCatalogRecoveryPending] = useState(() => hasCatalogRecoveryFlag());
@@ -1707,6 +1768,7 @@ export default function App() {
         didForceReload: false,
       });
       refreshAfterWebViewResume(event);
+      restoreLoginCodeDrafts();
       startupExecutionEnd(listenerSpan, { eventType: event.type });
       traceStartupRecovery("resumeWithoutAuthReset:exit", { eventType: event.type, returnValue: undefined });
     };
@@ -1784,7 +1846,7 @@ export default function App() {
       telegramWebApp?.offEvent?.("deactivated" as never, onTelegramDeactivated);
       startupExecutionEnd(cleanupSpan);
     };
-  }, [abortInFlightCatalogLoad, invalidateBootstrapForInactiveWebView, loadAppData, logBootstrapDeadlockDiagnostic, resetStaleBootstrapForActiveWebView]);
+  }, [abortInFlightCatalogLoad, invalidateBootstrapForInactiveWebView, loadAppData, logBootstrapDeadlockDiagnostic, resetStaleBootstrapForActiveWebView, restoreLoginCodeDrafts]);
 
   const loadPartners = useCallback(
     (forceRetry = true) => {
@@ -2426,6 +2488,7 @@ export default function App() {
     setIsLoginCodeFormOpen(false);
     setLoginCode("");
     setLoginReferralCode("");
+    clearLoginCodeDrafts();
     setLoginCodeError("");
   }, []);
 
@@ -2441,6 +2504,7 @@ export default function App() {
       setIsLoginCodeFormOpen(false);
       setLoginCode("");
       setLoginReferralCode("");
+      clearLoginCodeDrafts();
       await loadAppData("manual", false);
     } catch (error) {
       const backendDetail = isApiError(error) && typeof error.detail === "string" ? error.detail : "";
@@ -2509,13 +2573,13 @@ export default function App() {
               aria-label="Код входа"
               value={loginCode}
               placeholder="BC-XXXXXX"
-              onChange={(event) => setLoginCode(event.target.value.toUpperCase())}
+              onChange={(event) => updateLoginCodeDraft(event.target.value)}
             />
             <input
               aria-label="Реферальный код"
               value={loginReferralCode}
               placeholder="Реферальный код"
-              onChange={(event) => setLoginReferralCode(event.target.value.toUpperCase())}
+              onChange={(event) => updateReferralCodeDraft(event.target.value)}
             />
             {loginCodeError ? <p className="error-text">{loginCodeError}</p> : null}
             <button className="button button--primary" type="button" onClick={submitLoginCode} disabled={isLoginCodeSubmitting}>
