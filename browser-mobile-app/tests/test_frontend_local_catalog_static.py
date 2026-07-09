@@ -286,7 +286,7 @@ def test_upload_and_admin_endpoints_are_not_called_or_exposed_by_mini_app() -> N
 def test_reopen_bootstrap_uses_stored_token_before_telegram_login() -> None:
     bootstrap_section = APP[APP.index('const requestProfileAndSubscription'):APP.index('if (!isActive())', APP.index('const requestProfileAndSubscription'))]
     assert 'const storedAuthToken = getStoredAuthToken();' in bootstrap_section
-    assert 'if (storedAuthToken && !forceNew)' in bootstrap_section
+    assert 'if (storedAuthToken && !forceNewIdentity)' in bootstrap_section
     assert bootstrap_section.index('await requestProfileAndSubscription()') < bootstrap_section.index('await loginWithTelegramPayload()')
     assert 'getProfile()' in bootstrap_section
     assert 'getSubscription()' in bootstrap_section
@@ -294,7 +294,7 @@ def test_reopen_bootstrap_uses_stored_token_before_telegram_login() -> None:
 
 def test_empty_init_data_allows_valid_stored_token_reopen() -> None:
     bootstrap_section = APP[APP.index('const requestProfileAndSubscription'):APP.index('if (!isActive())', APP.index('const requestProfileAndSubscription'))]
-    stored_token_branch = bootstrap_section[bootstrap_section.index('if (storedAuthToken && !forceNew)'):bootstrap_section.index('} else {')]
+    stored_token_branch = bootstrap_section[bootstrap_section.index('if (storedAuthToken && !forceNewIdentity)'):bootstrap_section.index('} else {')]
     assert 'getTelegramLaunchPayloadWithRetry' not in stored_token_branch
     assert 'Telegram WebApp доступен, но Telegram не передал launch payload' not in stored_token_branch
     assert 'await requestProfileAndSubscription()' in stored_token_branch

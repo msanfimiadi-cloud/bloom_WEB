@@ -1058,16 +1058,21 @@ export default function App() {
   }, []);
 
   const loadAppData = useCallback(
-    (reason: BootstrapReason = "initial", forceNew = false) => {
-      traceStartupRecovery("loadAppData:enter", { reason, forceNew });
+    (reason: BootstrapReason = "initial", options: boolean | { forceRefresh?: boolean; forceNewIdentity?: boolean } = false) => {
+      const forceRefresh = typeof options === "boolean" ? options : Boolean(options.forceRefresh);
+      const forceNewIdentity = typeof options === "boolean" ? false : Boolean(options.forceNewIdentity);
+      const forceNew = forceRefresh || forceNewIdentity;
+      traceStartupRecovery("loadAppData:enter", { reason, forceNew, forceRefresh, forceNewIdentity });
       if (forceNew) {
         if (bootstrapPromiseRef.current) {
           logBootstrapDeadlockDiagnostic("bootstrapPromiseRef_cleared", {
-            reason: "forceNew",
+            reason: forceNewIdentity ? "forceNewIdentity" : "forceRefresh",
           });
         }
         bootstrapPromiseRef.current = null;
-        resetTelegramLoginInFlight();
+        if (forceNewIdentity) {
+          resetTelegramLoginInFlight();
+        }
       } else if (bootstrapPromiseRef.current) {
         traceStartupRecovery("loadAppData:exit", {
           reason,
@@ -1245,7 +1250,7 @@ export default function App() {
 
           let profile: ClientProfile;
           let subscription: Subscription;
-          lifecycleTrace("stored_token_auth_start", { forceNew });
+          lifecycleTrace("stored_token_auth_start", { forceNew, forceRefresh, forceNewIdentity });
           traceStart("stored_token_check_start");
           traceStartup("storage_read_started", { key: AUTH_STORAGE_KEY });
           const authSnapshot = getAuthTokenStorageSnapshot();
@@ -1275,13 +1280,19 @@ export default function App() {
           lifecycleTrace("stored_token_auth_ok", {
             hasStoredAuthToken: Boolean(storedAuthToken),
             forceNew,
+            forceRefresh,
+            forceNewIdentity,
           });
           traceOk("stored_token_check_ok", {
             hasStoredAuthToken: Boolean(storedAuthToken),
             forceNew,
+            forceRefresh,
+            forceNewIdentity,
           });
 
-          if (storedAuthToken && !forceNew) {
+          // Resume and refresh flows must always prefer the existing stored token.
+          // Only explicit identity replacement flows may bypass stored-token auth.
+          if (storedAuthToken && !forceNewIdentity) {
             try {
               ({ profile, subscription } =
                 await requestProfileAndSubscription());
@@ -1682,8 +1693,8 @@ export default function App() {
         persisted: event.persisted,
         returnValue: interruptedStartup,
       });
-      // Startup recovery decision equivalent: if (detectInterruptedStartup()) { void loadAppData("resume", true); }
-      if (interruptedStartup) { void loadAppData("resume", true); }
+      // Startup recovery refreshes app data but must preserve stored-token auth on PWA resume.
+      if (interruptedStartup) { void loadAppData("resume", false); }
       traceStartupRecovery("pageshow:exit", { persisted: event.persisted, returnValue: undefined });
     };
     const onPageHide = (event: PageTransitionEvent) => { lastPagehideAtRef.current = new Date().toISOString(); markInactive(event); };
