@@ -5485,7 +5485,7 @@ small,
 
 /* Final mobile UX polish: compact floating nav and viewport-locked modals. */
 :root {
-  --bottom-nav-reserved-height: 82px;
+  --bottom-nav-reserved-height: 98px;
 }
 
 .app-shell {
@@ -5493,13 +5493,20 @@ small,
 }
 
 .bottom-nav {
-  left: max(10px, env(safe-area-inset-left));
-  right: max(10px, env(safe-area-inset-right));
-  bottom: calc(6px + env(safe-area-inset-bottom));
+  left: 50%;
+  right: auto;
+  bottom: calc(8px + env(safe-area-inset-bottom));
+  width: min(
+    calc(100% - max(20px, calc(env(safe-area-inset-left) + env(safe-area-inset-right) + 20px))),
+    500px
+  );
   max-width: 500px;
-  min-height: 62px;
-  padding: 5px 6px;
-  border-radius: 24px;
+  min-height: 78px;
+  gap: 6px;
+  padding: 8px 10px;
+  border-radius: 28px;
+  background: rgba(255, 251, 250, 0.92);
+  transform: translateX(-50%);
   z-index: 40;
 }
 
@@ -5512,42 +5519,62 @@ small,
   height: 54px;
   min-height: 54px;
   padding: 0;
+  border-radius: 24px;
+  background: transparent;
+  color: rgba(63, 45, 50, 0.68);
+  font-weight: 500;
+  overflow: visible;
 }
 
 .bottom-nav__content {
-  min-width: 44px;
-  max-width: 68px;
-  min-height: 48px;
-  padding: 4px 4px;
-  gap: 3px;
-  border-radius: 18px;
+  display: flex;
+  width: 100%;
+  min-width: 0;
+  max-width: 72px;
+  min-height: 52px;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 5px;
+  padding: 4px 2px;
+  border-radius: 22px;
 }
 
 .bottom-nav__item--active .bottom-nav__content {
-  min-width: 58px;
-  max-width: 74px;
+  width: auto;
+  min-width: 66px;
+  max-width: 86px;
   min-height: 52px;
-  padding: 5px 7px;
-  border-radius: 20px;
+  padding: 8px 14px;
+  border-radius: 24px;
   background: #3b2029;
+  color: #fff8f6;
 }
 
 .bottom-nav__icon,
 .bottom-nav__item span.bottom-nav__icon,
 .bottom-nav__item--active .bottom-nav__icon,
 .bottom-nav__icon svg {
-  width: 20px;
-  height: 20px;
+  width: 21px;
+  height: 21px;
+  font-size: 21px;
 }
 
 .bottom-nav__label {
-  max-width: 62px;
-  font-size: clamp(9.5px, 2.65vw, 11.5px);
-  line-height: 1.02;
+  width: 100%;
+  max-width: 68px;
+  color: currentColor;
+  font-size: clamp(12px, 3vw, 13px);
+  font-weight: 500;
+  line-height: 14px;
+  letter-spacing: -0.02em;
+  text-align: center;
+  white-space: normal;
 }
 
 .bottom-nav__item:nth-child(3) .bottom-nav__label {
-  max-width: 56px;
+  max-width: 62px;
+  line-height: 14px;
 }
 
 .modal,
@@ -5628,12 +5655,13 @@ small,
 
 @media (max-width: 390px) {
   :root {
-    --bottom-nav-reserved-height: 80px;
+    --bottom-nav-reserved-height: 96px;
   }
 
   .bottom-nav {
-    min-height: 60px;
-    padding: 4px 5px;
+    min-height: 76px;
+    gap: 4px;
+    padding: 7px 8px;
   }
 
   .bottom-nav__item,
@@ -5647,21 +5675,24 @@ small,
   }
 
   .bottom-nav__item--active .bottom-nav__content {
-    min-width: 54px;
+    min-width: 62px;
     min-height: 50px;
-    padding: 4px 6px;
+    padding: 8px 10px;
   }
 
   .bottom-nav__icon,
   .bottom-nav__item span.bottom-nav__icon,
   .bottom-nav__item--active .bottom-nav__icon,
   .bottom-nav__icon svg {
-    width: 19px;
-    height: 19px;
+    width: 20px;
+    height: 20px;
+    font-size: 20px;
   }
 
   .bottom-nav__label {
-    font-size: clamp(9px, 2.5vw, 10.5px);
+    max-width: 62px;
+    font-size: 12px;
+    line-height: 14px;
   }
 }
 
