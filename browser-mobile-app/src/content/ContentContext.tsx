@@ -47,6 +47,9 @@ export function ContentProvider({ children }: PropsWithChildren) {
     setIsLoading(true);
     setLoadError("");
 
+    window.__BLOOM_CONTENT_STATIC_TEXTS_LOADED__ = false;
+    window.__BLOOM_CONTENT_BLOCKS_LOADED__ = false;
+
     Promise.allSettled([getContentBlocks(), getHomeBlocks()])
       .then(([textResult, homeResult]) => {
         if (!isMounted) {
@@ -55,10 +58,12 @@ export function ContentProvider({ children }: PropsWithChildren) {
 
         if (textResult.status === "fulfilled") {
           setBlocks(mapBlocks(textResult.value));
+          window.__BLOOM_CONTENT_STATIC_TEXTS_LOADED__ = true;
         }
 
         if (homeResult.status === "fulfilled") {
           setHomeBlocks(sortHomeBlocks(homeResult.value));
+          window.__BLOOM_CONTENT_BLOCKS_LOADED__ = true;
         }
 
         if (textResult.status === "rejected" || homeResult.status === "rejected") {
