@@ -263,5 +263,6 @@ class ClientReferralSummaryRead(BaseModel):
     referrals_count: int
     activated_referrals_count: int = 0
     earned_entries_count: int
+    earned_giveaway_entries_count: int = 0
     reward_entries_per_referral: int = 5
     referrals: list[ClientReferralSummaryItem] = Field(default_factory=list)

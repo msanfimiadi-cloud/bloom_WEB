@@ -5,11 +5,13 @@ import secrets
 import string
 from urllib.parse import quote
 
-from sqlalchemy import func, select
+from sqlalchemy import func, or_, select
 from sqlalchemy.orm import Session
 
 from app.core.config import settings
 from app.models.client import ClientProfile, ClientReferral, GiveawayEntry
+from app.models.giveaway import Giveaway, GiveawayNumber
+from app.models.payment import Subscription, SubscriptionStatus
 
 REFERRAL_EXISTING_PROFILE_ERROR = "Личный кабинет уже был создан ранее. Реферальный код можно использовать только при первом входе."
 REFERRAL_INVALID_ERROR = "Реферальный код не найден или недействителен."
@@ -47,10 +49,70 @@ def ensure_referral_code(db: Session, client: ClientProfile) -> str:
     raise RuntimeError("Could not generate referral code")
 
 
+def _referral_owner_filter(db: Session, client_id: int):
+    referral_code_value = db.execute(select(ClientProfile.referral_code).where(ClientProfile.id == client_id)).scalar_one_or_none()
+    criteria = [ClientReferral.referrer_client_id == client_id]
+    if referral_code_value:
+        criteria.append(ClientReferral.referral_code == referral_code_value)
+    return or_(*criteria)
+
+
+def _active_giveaway_id(db: Session, now: datetime | None = None) -> int | None:
+    now = now or datetime.now(timezone.utc)
+    return db.execute(
+        select(Giveaway.id)
+        .where(
+            Giveaway.is_active.is_(True),
+            or_(Giveaway.starts_at.is_(None), Giveaway.starts_at <= now),
+            or_(Giveaway.ends_at.is_(None), Giveaway.ends_at >= now),
+        )
+        .order_by(Giveaway.starts_at.desc().nullslast(), Giveaway.id.desc())
+        .limit(1)
+    ).scalar_one_or_none()
+
+
 def referral_counts(db: Session, client_id: int) -> tuple[int, int]:
-    referrals_count = db.execute(select(func.count(ClientReferral.id)).where(ClientReferral.referrer_client_id == client_id)).scalar_one()
-    entries_count = db.execute(select(func.coalesce(func.sum(GiveawayEntry.entries_count), 0)).where(GiveawayEntry.client_id == client_id)).scalar_one()
-    return int(referrals_count or 0), int(entries_count or 0)
+    criteria = _referral_owner_filter(db, client_id)
+    referrals_count = db.execute(select(func.count(func.distinct(ClientReferral.referred_client_id))).where(criteria)).scalar_one()
+    earned_entries_count = db.execute(
+        select(func.coalesce(func.sum(GiveawayEntry.entries_count), 0)).where(
+            GiveawayEntry.client_id == client_id,
+            GiveawayEntry.source == REFERRAL_SOURCE,
+        )
+    ).scalar_one()
+    active_giveaway_id = _active_giveaway_id(db)
+    referral_numbers_count = 0
+    if active_giveaway_id is not None:
+        referral_numbers_count = int(
+            db.execute(
+                select(func.count(GiveawayNumber.id)).where(
+                    GiveawayNumber.giveaway_id == active_giveaway_id,
+                    GiveawayNumber.client_id == client_id,
+                    GiveawayNumber.source == REFERRAL_SOURCE,
+                )
+            ).scalar_one()
+            or 0
+        )
+    return int(referrals_count or 0), max(int(earned_entries_count or 0), referral_numbers_count)
+
+
+def activated_referrals_count(db: Session, client_id: int, now: datetime | None = None) -> int:
+    now = now or datetime.now(timezone.utc)
+    criteria = _referral_owner_filter(db, client_id)
+    return int(
+        db.execute(
+            select(func.count(func.distinct(ClientReferral.referred_client_id)))
+            .join(ClientProfile, ClientProfile.id == ClientReferral.referred_client_id)
+            .join(Subscription, Subscription.client_id == ClientProfile.id)
+            .where(
+                criteria,
+                Subscription.status == SubscriptionStatus.active.value,
+                Subscription.starts_at <= now,
+                Subscription.ends_at >= now,
+            )
+        ).scalar_one()
+        or 0
+    )
 
 
 def normalize_referral_code(referral_code_value: str | None) -> str | None:
