@@ -270,7 +270,7 @@ function renderStartupLoadingFallback(): void {
   wrapper.className = "startup-entry-fallback";
   wrapper.setAttribute(
     "style",
-    "position: fixed; inset: 0; z-index: 2147483647; display: flex; align-items: center; justify-content: center; background: #fff7fa; color: #2b1b22; font-family: -apple-system, BlinkMacSystemFont, system-ui, sans-serif; flex-direction: column; gap: 16px; padding: 24px; box-sizing: border-box; text-align: center;",
+    "position: fixed; inset: 0; z-index: 2147483647; display: flex; align-items: center; justify-content: center; background: linear-gradient(180deg, #fffdfb 0%, #fff7f7 50%, #f8eef2 100%); color: #2b1b22; font-family: -apple-system, BlinkMacSystemFont, system-ui, sans-serif; flex-direction: column; gap: 14px; padding: 24px; box-sizing: border-box; text-align: center; opacity: 1; transition: opacity 260ms ease;",
   );
 
   window.__BLOOM_ENTRY_FALLBACK_INSERTED__ = true;
@@ -278,12 +278,28 @@ function renderStartupLoadingFallback(): void {
   window.__BLOOM_ENTRY_FALLBACK_OVERLAY_INSERTED__ = true;
   window.__BLOOM_ENTRY_FALLBACK_OVERLAY_REMOVED__ = false;
 
+  const video = document.createElement("video");
+  video.src = "/assets/loader/аним.mp4";
+  video.autoplay = true;
+  video.muted = true;
+  video.loop = true;
+  video.playsInline = true;
+  video.setAttribute("muted", "");
+  video.setAttribute("playsinline", "");
+  video.setAttribute("aria-hidden", "true");
+  video.setAttribute(
+    "style",
+    "display: block; width: clamp(180px, 42vw, 220px); height: clamp(180px, 42vw, 220px); object-fit: contain; background: transparent;",
+  );
+
   const title = document.createElement("h1");
-  title.textContent = "Bloom Club загружается";
+  title.textContent = "Загружаем Bloom Club...";
+  title.setAttribute("style", "margin: 0; color: rgba(53, 39, 43, 0.64); font-size: 0.95rem; font-weight: 600;");
 
   const description = document.createElement("p");
   description.textContent =
     "Если экран не меняется больше 10 секунд, нажмите перезагрузить";
+  description.setAttribute("style", "margin: 0; color: rgba(53, 39, 43, 0.42); font-size: 0.82rem;");
 
   const diagnostics = document.createElement("div");
   diagnostics.className = "startup-entry-diagnostics";
@@ -302,7 +318,7 @@ function renderStartupLoadingFallback(): void {
   });
 
   actions.replaceChildren(reloadButton, diagnosticsButton);
-  wrapper.replaceChildren(title, description, diagnostics, actions);
+  wrapper.replaceChildren(video, title, description, diagnostics, actions);
 
   const parentName = appendEntryFallbackOverlay(wrapper);
   if (parentName) {
@@ -583,8 +599,14 @@ async function importApplicationModules(): Promise<{
 export function removeEntryFallbackOverlay(): void {
   const entryFallback = document.getElementById("bloom-entry-fallback-overlay");
   const htmlFallback = document.getElementById("bloom-html-fallback-overlay");
-  entryFallback?.remove();
-  htmlFallback?.remove();
+  const fadeAndRemove = (element: HTMLElement | null): void => {
+    if (!element) return;
+    element.style.opacity = "0";
+    element.style.pointerEvents = "none";
+    window.setTimeout(() => element.remove(), 260);
+  };
+  fadeAndRemove(entryFallback);
+  fadeAndRemove(htmlFallback);
   window.__BLOOM_ENTRY_FALLBACK_OVERLAY_REMOVED__ = true;
   window.__BLOOM_HTML_FALLBACK_REMOVED__ = true;
   stopEntryWatchdog();
