@@ -156,6 +156,29 @@ const LOGIN_CODE_HELP_MESSAGE =
   "Введите код, который прислал Telegram или VK бот.";
 const TELEGRAM_IN_APP_BROWSER_HOST = "app.bloomclub.ru";
 
+
+function getStartupRecoveryTraceContext(): Record<string, unknown> {
+  const markers = getStartupMarkers();
+  const inProgress = markers.inProgress as { timestamp?: unknown } | null | undefined;
+  const completed = markers.completed as { timestamp?: unknown } | null | undefined;
+  const launchPayload = getTelegramLaunchPayload();
+  return {
+    startupPhase: markers.phase,
+    inProgressTimestamp: inProgress?.timestamp,
+    completedTimestamp: completed?.timestamp,
+    hasStoredAuthToken: Boolean(getStoredAuthToken()),
+    hasTelegramPayload: Boolean(launchPayload),
+    hasValidTelegramPayload: hasValidTelegramMiniAppInitData(launchPayload),
+  };
+}
+
+function traceStartupRecovery(event: string, payload: Record<string, unknown> = {}): void {
+  traceStartup(`startup_recovery:${event}`, {
+    ...getStartupRecoveryTraceContext(),
+    ...payload,
+  });
+}
+
 function getBrowserPlatform(): string {
   if (typeof navigator === "undefined") return "";
 
@@ -1036,6 +1059,7 @@ export default function App() {
 
   const loadAppData = useCallback(
     (reason: BootstrapReason = "initial", forceNew = false) => {
+      traceStartupRecovery("loadAppData:enter", { reason, forceNew });
       if (forceNew) {
         if (bootstrapPromiseRef.current) {
           logBootstrapDeadlockDiagnostic("bootstrapPromiseRef_cleared", {
@@ -1045,6 +1069,11 @@ export default function App() {
         bootstrapPromiseRef.current = null;
         resetTelegramLoginInFlight();
       } else if (bootstrapPromiseRef.current) {
+        traceStartupRecovery("loadAppData:exit", {
+          reason,
+          forceNew,
+          returnValue: "existing_bootstrap_promise",
+        });
         return bootstrapPromiseRef.current;
       }
 
@@ -1156,6 +1185,13 @@ export default function App() {
             const telegramLaunchPayload =
               await getTelegramLaunchPayloadWithRetry();
             const hasValidInitData = hasValidTelegramMiniAppInitData(telegramLaunchPayload);
+            traceStartupRecovery("loadAppData:telegram_payload_read", {
+              reason,
+              forceNew,
+              sequenceId,
+              hasTelegramPayload: Boolean(telegramLaunchPayload),
+              hasValidTelegramPayload: hasValidInitData,
+            });
             traceOk("launch_payload_read_ok", {
               hasPayload: Boolean(telegramLaunchPayload),
               hasValidInitData,
@@ -1216,6 +1252,13 @@ export default function App() {
           authSnapshotRef.current = authSnapshot;
           // Deterministic replacement for legacy startup read: const storedAuthToken = getStoredAuthToken();
           const storedAuthToken = authSnapshot.token;
+          traceStartupRecovery("loadAppData:auth_snapshot", {
+            reason,
+            forceNew,
+            sequenceId,
+            hasStoredAuthToken: Boolean(storedAuthToken),
+            tokenSource: authSnapshot.tokenSource,
+          });
           if (authSnapshot.storageReadError) {
             setAuthRestoreStatus("invalid");
             setLastAuthDecisionReason("storage_read_failed");
@@ -1275,6 +1318,7 @@ export default function App() {
                 setBrowserLoginRequired(true);
                 setIsBootstrapDone(true);
                 await loadPartners(true).catch(() => undefined);
+                traceStartupRecovery("loadAppData:exit", { reason, forceNew, sequenceId, returnValue: "unauthenticated_after_invalid_stored_token" });
                 return;
               }
               traceStart("fresh_profile_start");
@@ -1293,6 +1337,7 @@ export default function App() {
               setBrowserLoginRequired(true);
               setIsBootstrapDone(true);
               await loadPartners(true).catch(() => undefined);
+              traceStartupRecovery("loadAppData:exit", { reason, forceNew, sequenceId, returnValue: "unauthenticated_no_token_or_payload" });
               return;
             }
             traceStart("fresh_profile_start");
@@ -1329,6 +1374,7 @@ export default function App() {
                   ? "sequence_mismatch"
                   : "unknown",
             });
+            traceStartupRecovery("loadAppData:exit", { reason, forceNew, sequenceId, returnValue: "inactive_after_auth" });
             return;
           }
 
@@ -1413,6 +1459,7 @@ export default function App() {
                   ? "sequence_mismatch"
                   : "unknown",
             });
+            traceStartupRecovery("loadAppData:exit", { reason, forceNew, sequenceId, returnValue: "inactive_after_optional_requests" });
             return;
           }
 
@@ -1486,6 +1533,7 @@ export default function App() {
           traceOk("startup_completed_successfully", { sequenceId, page: pageRef.current });
           markBootstrapFinished();
           markStartupCompletedSuccessfully();
+          traceStartupRecovery("loadAppData:exit", { reason, forceNew, sequenceId, returnValue: "bootstrap_success" });
           setPreviousCrashDump(null);
           logBootstrapDiagnostic("app_bootstrap_success", {
             sequenceId,
@@ -1518,6 +1566,7 @@ export default function App() {
           if (isActive()) {
             setError(createDiagnostic(stage, caughtError));
           }
+          traceStartupRecovery("loadAppData:exit", { reason, forceNew, sequenceId, returnValue: "bootstrap_failed", stage });
         } finally {
           window.clearTimeout(hardTimeoutId);
           if (isActive()) {
@@ -1539,6 +1588,12 @@ export default function App() {
         sequenceId,
         reason,
         forceNew,
+      });
+      traceStartupRecovery("loadAppData:exit", {
+        reason,
+        forceNew,
+        sequenceId,
+        returnValue: "new_bootstrap_promise",
       });
       return bootstrapPromise;
     },
@@ -1576,6 +1631,7 @@ export default function App() {
     };
 
     const resumeWithoutAuthReset = (event: PageTransitionEvent | Event) => {
+      traceStartupRecovery("resumeWithoutAuthReset:enter", { eventType: event.type });
       const listenerSpan = startupExecutionBegin("lifecycle_listener:resumeWithoutAuthReset", { eventType: event.type });
       const pageshowPersisted =
         event instanceof PageTransitionEvent ? event.persisted : undefined;
@@ -1596,6 +1652,7 @@ export default function App() {
       });
       refreshAfterWebViewResume(event);
       startupExecutionEnd(listenerSpan, { eventType: event.type });
+      traceStartupRecovery("resumeWithoutAuthReset:exit", { eventType: event.type, returnValue: undefined });
     };
 
     const markInactive = (event: Event) => {
@@ -1616,10 +1673,18 @@ export default function App() {
     };
 
     const onPageShow = (event: PageTransitionEvent) => {
+      traceStartupRecovery("pageshow:enter", { persisted: event.persisted });
       lastPageshowAtRef.current = new Date().toISOString();
       traceStartup("pageshow", { persisted: event.persisted });
       resumeWithoutAuthReset(event);
-      if (detectInterruptedStartup()) { void loadAppData("resume", true); }
+      const interruptedStartup = detectInterruptedStartup();
+      traceStartupRecovery("pageshow:detectInterruptedStartup_return", {
+        persisted: event.persisted,
+        returnValue: interruptedStartup,
+      });
+      // Startup recovery decision equivalent: if (detectInterruptedStartup()) { void loadAppData("resume", true); }
+      if (interruptedStartup) { void loadAppData("resume", true); }
+      traceStartupRecovery("pageshow:exit", { persisted: event.persisted, returnValue: undefined });
     };
     const onPageHide = (event: PageTransitionEvent) => { lastPagehideAtRef.current = new Date().toISOString(); markInactive(event); };
     const onResume = (event: Event) => resumeWithoutAuthReset(event);

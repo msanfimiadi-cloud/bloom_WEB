@@ -25,6 +25,14 @@ function sanitizeText(text: string): string {
     .slice(0, 500);
 }
 
+function shouldRedactDiagnosticKey(key: string, value: unknown): boolean {
+  if (!SENSITIVE_KEY_PATTERN.test(key)) return false;
+  if (typeof value === "boolean" || typeof value === "number") {
+    return !/^(has|is|did|should)[A-Z_]|(Present|Length|Status|Source|Reason)$/.test(key);
+  }
+  return true;
+}
+
 function sanitizeValue(value: unknown, depth = 0): unknown {
   if (depth > 3) return "[depth-limit]";
   if (value instanceof Error) return { name: value.name, message: sanitizeText(value.message) };
@@ -34,7 +42,7 @@ function sanitizeValue(value: unknown, depth = 0): unknown {
   if (value && typeof value === "object") {
     return Object.fromEntries(
       Object.entries(value as Record<string, unknown>)
-        .filter(([key]) => !SENSITIVE_KEY_PATTERN.test(key))
+        .filter(([key, item]) => !shouldRedactDiagnosticKey(key, item))
         .map(([key, item]) => [key, sanitizeValue(item, depth + 1)]),
     );
   }
