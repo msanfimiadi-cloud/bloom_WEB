@@ -60,8 +60,8 @@ from app.schemas.payment import (
 from app.schemas.vk import VkLinkCodeRead
 from app.services.activity_feed import build_client_activity_feed
 from app.services.browser_login_codes import BrowserLoginCodeService
-from app.services.referrals import REWARD_ENTRIES_PER_REFERRAL, ensure_referral_code, referral_counts, referral_link
-from app.services.giveaways import activated_referrals_count, ensure_user_numbers, get_active_giveaway
+from app.services.referrals import REWARD_ENTRIES_PER_REFERRAL, activated_referrals_count, ensure_referral_code, referral_counts, referral_link
+from app.services.giveaways import ensure_user_numbers, get_active_giveaway
 from app.services.offer_savings import calculate_offer_saving_snapshot
 from app.services.site_credentials import (
     decrypt_site_password,
@@ -358,6 +358,7 @@ def read_client_referral(
         referrals_count=referrals_count,
         activated_referrals_count=activated_referrals_count(db, profile.id),
         earned_entries_count=earned_entries_count,
+        earned_giveaway_entries_count=earned_entries_count,
         reward_entries_per_referral=REWARD_ENTRIES_PER_REFERRAL,
         referrals=[ClientReferralSummaryItem(id=r.id, referred_client_id=r.referred_client_id, first_name=c.telegram_first_name, username=c.telegram_username, created_at=r.created_at, reward_entries_count=r.reward_entries_count) for r, c in rows],
     )
