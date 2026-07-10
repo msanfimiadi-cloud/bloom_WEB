@@ -21,7 +21,7 @@
     >
       <video
         id="bloom-startup-video"
-        src="/assets/loader/аним.mp4"
+        src="/assets/loader/bloom-loader.mp4"
         autoplay
         muted
         playsinline
@@ -59,6 +59,86 @@
       window.addEventListener("unhandledrejection", function bloomEarlyRejection(event) {
         window.__BLOOM_EARLY_STARTUP_TRACE__.push({ at: new Date().toISOString(), kind: "unhandledrejection", reason: String(event && event.reason && (event.reason.message || event.reason) || "") });
       });
+
+      (function bloomStartupVideoPlayback() {
+        var loader = document.getElementById("bloom-startup-loader");
+        var video = document.getElementById("bloom-startup-video");
+
+        if (!loader || !video) {
+          return;
+        }
+
+        var hasPlayed = false;
+        var isFinished = false;
+        var fallbackTimer = 0;
+
+        var finishSplash = function finishSplash(reason) {
+          if (isFinished) {
+            return;
+          }
+          isFinished = true;
+          if (fallbackTimer) {
+            window.clearTimeout(fallbackTimer);
+            fallbackTimer = 0;
+          }
+          window.__BLOOM_EARLY_STARTUP_TRACE__.push({ step: "startup_video_finish", reason: reason, at: new Date().toISOString() });
+          loader.style.opacity = "0";
+          window.setTimeout(function removeStartupLoader() {
+            if (loader && loader.parentNode) {
+              loader.parentNode.removeChild(loader);
+            }
+            window.__BLOOM_HTML_FALLBACK_REMOVED__ = true;
+          }, 320);
+        };
+
+        var scheduleFallback = function scheduleFallback(reason) {
+          if (fallbackTimer || isFinished) {
+            return;
+          }
+          window.__BLOOM_EARLY_STARTUP_TRACE__.push({ step: "startup_video_fallback_scheduled", reason: reason, at: new Date().toISOString() });
+          fallbackTimer = window.setTimeout(function startupVideoFallbackTimeout() {
+            finishSplash("fallback_timeout:" + reason);
+          }, 1800);
+        };
+
+        video.muted = true;
+        video.defaultMuted = true;
+        video.playsInline = true;
+        video.setAttribute("muted", "");
+        video.setAttribute("playsinline", "");
+        video.setAttribute("webkit-playsinline", "");
+
+        const tryPlay = () => {
+          const result = video.play();
+
+          if (result && typeof result.catch === "function") {
+            result.catch((error) => {
+              console.warn("Bloom startup video autoplay failed", error);
+              scheduleFallback("autoplay_failure");
+            });
+          }
+        };
+
+        video.addEventListener("loadeddata", tryPlay, { once: true });
+        video.addEventListener("canplay", tryPlay, { once: true });
+        video.addEventListener("playing", function bloomStartupVideoPlaying() {
+          hasPlayed = true;
+          window.__BLOOM_EARLY_STARTUP_TRACE__.push({ step: "startup_video_playing", at: new Date().toISOString() });
+        });
+        video.addEventListener("ended", function bloomStartupVideoEnded() {
+          if (hasPlayed) {
+            finishSplash("ended");
+          }
+        });
+        video.addEventListener("error", function bloomStartupVideoError() {
+          scheduleFallback("error");
+        });
+
+        if (video.readyState >= 2) {
+          tryPlay();
+        }
+      })();
+
       window.setTimeout(function bloomHtmlEntryWatchdog() {
         if (window.__BLOOM_ENTRY_SCRIPT_EXECUTED__ === true || window.__BLOOM_HTML_FALLBACK_REMOVED__ === true) {
           return;
