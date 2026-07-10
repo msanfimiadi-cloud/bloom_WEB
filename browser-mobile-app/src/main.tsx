@@ -282,7 +282,7 @@ function renderStartupLoadingFallback(): void {
   window.__BLOOM_ENTRY_FALLBACK_OVERLAY_REMOVED__ = false;
 
   const video = document.createElement("video");
-  video.src = "/assets/loader/аним.mp4";
+  video.src = "/assets/loader/bloom-loader.mp4";
   video.autoplay = true;
   video.muted = true;
   video.playsInline = true;
@@ -635,13 +635,38 @@ function bindStartupSplashVideo(video: HTMLVideoElement | null): void {
   video.setAttribute("playsinline", "");
   video.setAttribute("webkit-playsinline", "");
   video.setAttribute("preload", "auto");
+  const logStartupVideoDiagnostics = (reason: string) => {
+    const computedStyle = window.getComputedStyle(video);
+    console.info("bloom_startup_video_diagnostics", {
+      reason,
+      selectorResult: document.querySelector("#bloom-startup-loader video") === video,
+      currentSrc: video.currentSrc,
+      readyState: video.readyState,
+      networkState: video.networkState,
+      videoWidth: video.videoWidth,
+      videoHeight: video.videoHeight,
+      paused: video.paused,
+      error: video.error ? { code: video.error.code, message: video.error.message } : null,
+      currentTime: video.currentTime,
+      computedStyle: {
+        display: computedStyle.display,
+        visibility: computedStyle.visibility,
+        opacity: computedStyle.opacity,
+        width: computedStyle.width,
+        height: computedStyle.height,
+        zIndex: computedStyle.zIndex,
+      },
+    });
+  };
   const traceVideoEvent = (eventName: string) => {
+    logStartupVideoDiagnostics(eventName);
     earlyStartupTrace(`startup_video_${eventName}`, { currentTime: video.currentTime, readyState: video.readyState, paused: video.paused });
   };
   video.addEventListener("loadeddata", () => traceVideoEvent("loadeddata"), { once: true });
   video.addEventListener("canplay", () => traceVideoEvent("canplay"), { once: true });
   video.addEventListener("playing", () => traceVideoEvent("playing"), { once: true });
   video.addEventListener("error", () => traceVideoEvent("error"), { once: true });
+  logStartupVideoDiagnostics("startup_bind");
   const playPromise = video.play();
   if (playPromise) {
     playPromise.catch((error: unknown) => {
