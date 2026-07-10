@@ -40,6 +40,7 @@ declare global {
     __BLOOM_STARTUP_APP_READY__?: boolean;
     __BLOOM_STARTUP_VIDEO_DONE__?: boolean;
     __BLOOM_STARTUP_ROOT_REVEALED__?: boolean;
+    __BLOOM_STARTUP_FIRST_RAF_SEEN__?: boolean;
   }
 }
 
@@ -55,6 +56,50 @@ function getRootElement(): HTMLElement {
   }
 
   return rootElement;
+}
+
+function startupOrderLog(step: string, details?: Record<string, unknown>): void {
+  const rootElement = document.getElementById("root");
+  const payload = {
+    step,
+    at: new Date().toISOString(),
+    readyState: document.readyState,
+    startupActive: document.documentElement.classList.contains(STARTUP_SPLASH_ACTIVE_CLASS),
+    rootInlineVisibility: rootElement?.style.visibility || "",
+    rootComputedVisibility: rootElement ? window.getComputedStyle(rootElement).visibility : "missing",
+    beforeFirstRequestAnimationFrame: window.__BLOOM_STARTUP_FIRST_RAF_SEEN__ !== true,
+    htmlClassName: document.documentElement.className,
+    bodyClassName: document.body?.className || "",
+    ...details,
+  };
+  window.__BLOOM_EARLY_STARTUP_TRACE__ = window.__BLOOM_EARLY_STARTUP_TRACE__ || [];
+  window.__BLOOM_EARLY_STARTUP_TRACE__.push(payload);
+  console.info(step, payload);
+}
+
+function enforceStartupGuardBeforeReact(): void {
+  const rootElement = getRootElement();
+  if (!document.documentElement.classList.contains(STARTUP_SPLASH_ACTIVE_CLASS)) {
+    document.documentElement.classList.add(STARTUP_SPLASH_ACTIVE_CLASS);
+  }
+  rootElement.style.visibility = "hidden";
+  startupOrderLog("startup class added", { source: "entry", className: document.documentElement.className });
+  startupOrderLog("root hidden", { source: "entry" });
+}
+
+function observeStartupClassMutations(): void {
+  const observer = new MutationObserver((records) => {
+    for (const record of records) {
+      if (record.type === "attributes" && record.attributeName === "class") {
+        startupOrderLog("startup class mutation", {
+          target: record.target === document.documentElement ? "html" : "body",
+          className: (record.target as HTMLElement).className,
+        });
+      }
+    }
+  });
+  observer.observe(document.documentElement, { attributes: true, attributeFilter: ["class"] });
+  if (document.body) observer.observe(document.body, { attributes: true, attributeFilter: ["class"] });
 }
 
 function getStartupTraceModule(): Promise<StartupTraceModule> {
@@ -555,6 +600,8 @@ setStartupPhase("main_started");
 if (detectInterruptedStartup()) { clearInterruptedStartupTemporaryState(); }
 installProductionDiagnostics();
 earlyStartupTrace("main_after_installProductionDiagnostics");
+observeStartupClassMutations();
+enforceStartupGuardBeforeReact();
 window.__BLOOM_ENTRY_SCRIPT_EXECUTED__ = true;
 window.__BLOOM_APP_STATIC_IMPORT_ENABLED__ = true;
 initializeStartupSplashGuards();
@@ -721,8 +768,11 @@ function initializeStartupSplashGuards(): void {
 
 function revealRootAfterStartupSplash(reason: string): void {
   const rootElement = getRootElement();
+  startupOrderLog("startup class removal requested", { reason });
   document.documentElement.classList.remove(STARTUP_SPLASH_ACTIVE_CLASS);
+  startupOrderLog("startup class removed", { reason });
   rootElement.style.visibility = "visible";
+  startupOrderLog("root visible", { reason });
   window.__BLOOM_STARTUP_ROOT_REVEALED__ = true;
   earlyStartupTrace("startup_root_revealed", { reason, elapsedMs: Date.now() - splashStartedAt });
 }
@@ -796,6 +846,7 @@ async function startApp(): Promise<void> {
 
   reactRenderStarted = true;
   window.__BLOOM_APP_RENDER_ATTEMPTED__ = true;
+  startupOrderLog("React first render", { source: "main.startApp" });
   lifecycleTraceSafe("react_render_start");
   earlyStartupTrace("before_render");
   traceStartSafe("render_call_start");
@@ -811,6 +862,7 @@ async function startApp(): Promise<void> {
     );
     });
     lifecycleTraceSafe("react_render_ok");
+    startupOrderLog("React hydrated", { source: "main.startApp" });
     earlyStartupTrace("after_render");
     traceOkSafe("render_call_ok");
     // App.tsx removes the body overlay after the real App component mounts.

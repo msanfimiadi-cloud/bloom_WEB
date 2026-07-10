@@ -11,6 +11,26 @@
     <link rel="apple-touch-icon" href="/docs/icons/apple-touch-icon.png" />
     <link rel="icon" type="image/png" href="/favicon.ico" />
     <title>Bloom Club</title>
+    <script>
+      window.__BLOOM_EARLY_STARTUP_TRACE__ = window.__BLOOM_EARLY_STARTUP_TRACE__ || [];
+      (function bloomStartupGuardBeforePaint() {
+        var log = function log(step, details) {
+          var payload = Object.assign({ step: step, at: new Date().toISOString(), readyState: document.readyState }, details || {});
+          window.__BLOOM_EARLY_STARTUP_TRACE__.push(payload);
+          console.info(step, payload);
+        };
+        log("HTML parsed", { source: "head" });
+        document.documentElement.classList.add("bloom-startup-active");
+        log("startup class added", { source: "head", className: document.documentElement.className });
+        requestAnimationFrame(function bloomStartupFirstRaf() {
+          window.__BLOOM_STARTUP_FIRST_RAF_SEEN__ = true;
+          log("startup first requestAnimationFrame", {
+            startupActive: document.documentElement.classList.contains("bloom-startup-active"),
+            rootVisibility: document.getElementById("root") ? window.getComputedStyle(document.getElementById("root")).visibility : "missing",
+          });
+        });
+      })();
+    </script>
     <style>
       html.bloom-startup-active #root {
         visibility: hidden;
@@ -168,7 +188,16 @@
 
       }, 8000);
     </script>
-    <div id="root"></div>
+    <div id="root" style="visibility: hidden;"></div>
+    <script>
+      (function bloomStartupRootGuard() {
+        var root = document.getElementById("root");
+        var payload = { step: "root hidden", at: new Date().toISOString(), source: "html", inlineVisibility: root && root.style.visibility, computedVisibility: root ? window.getComputedStyle(root).visibility : "missing" };
+        window.__BLOOM_EARLY_STARTUP_TRACE__ = window.__BLOOM_EARLY_STARTUP_TRACE__ || [];
+        window.__BLOOM_EARLY_STARTUP_TRACE__.push(payload);
+        console.info("root hidden", payload);
+      })();
+    </script>
     <script type="module" src="/src/main.tsx"></script>
   </body>
 </html>
