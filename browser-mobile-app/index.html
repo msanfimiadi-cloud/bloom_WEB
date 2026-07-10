@@ -39,6 +39,8 @@
       window.__BLOOM_ENTRY_SCRIPT_EXECUTED__ = false;
       window.__BLOOM_EARLY_STARTUP_TRACE__ = window.__BLOOM_EARLY_STARTUP_TRACE__ || [];
       window.__BLOOM_RESOURCE_ERROR_TRACE__ = window.__BLOOM_RESOURCE_ERROR_TRACE__ || [];
+      const splashStartedAt = Date.now();
+      window.__BLOOM_STARTUP_SPLASH_STARTED_AT__ = splashStartedAt;
       window.__BLOOM_STARTUP_VIDEO_DONE__ = false;
       window.__BLOOM_STARTUP_SPLASH_REMOVE_REQUESTED__ = false;
       window.__BLOOM_EARLY_STARTUP_TRACE__.push({ step: "html_inline_before_module", at: new Date().toISOString(), href: location.href });
@@ -77,8 +79,6 @@
         }
 
         var hasPlayed = false;
-        var isFinished = false;
-        var fallbackTimer = 0;
         var logStartupVideoDiagnostics = function logStartupVideoDiagnostics(reason) {
           var computedStyle = window.getComputedStyle(video);
           console.info("bloom_startup_video_diagnostics", {
@@ -106,32 +106,11 @@
           });
         };
 
-        var finishSplash = function finishSplash(reason) {
-          if (isFinished) {
-            return;
-          }
-          isFinished = true;
-          if (fallbackTimer) {
-            window.clearTimeout(fallbackTimer);
-            fallbackTimer = 0;
-          }
+        var noteVideoFinished = function noteVideoFinished(reason) {
           window.__BLOOM_STARTUP_VIDEO_DONE__ = true;
           window.__BLOOM_STARTUP_VIDEO_DONE_REASON__ = reason;
           window.__BLOOM_EARLY_STARTUP_TRACE__.push({ step: "startup_video_finish", reason: reason, at: new Date().toISOString() });
           console.info("video ended", { reason: reason, source: "html" });
-          if (typeof window.__BLOOM_REQUEST_STARTUP_SPLASH_REMOVAL__ === "function") {
-            window.__BLOOM_REQUEST_STARTUP_SPLASH_REMOVAL__("html_video_" + reason);
-          }
-        };
-
-        var scheduleFallback = function scheduleFallback(reason) {
-          if (fallbackTimer || isFinished) {
-            return;
-          }
-          window.__BLOOM_EARLY_STARTUP_TRACE__.push({ step: "startup_video_fallback_scheduled", reason: reason, at: new Date().toISOString() });
-          fallbackTimer = window.setTimeout(function startupVideoFallbackTimeout() {
-            finishSplash("fallback_timeout:" + reason);
-          }, 1800);
         };
 
         video.muted = true;
@@ -149,7 +128,7 @@
           if (result && typeof result.catch === "function") {
             result.catch((error) => {
               console.warn("Bloom startup video autoplay failed", error);
-              scheduleFallback("autoplay_failure");
+              window.__BLOOM_EARLY_STARTUP_TRACE__.push({ step: "startup_video_autoplay_failure", at: new Date().toISOString() });
             });
           }
         };
@@ -164,12 +143,12 @@
         });
         video.addEventListener("ended", function bloomStartupVideoEnded() {
           if (hasPlayed) {
-            finishSplash("ended");
+            noteVideoFinished("ended");
           }
         });
         video.addEventListener("error", function bloomStartupVideoError() {
           logStartupVideoDiagnostics("error");
-          scheduleFallback("error");
+          window.__BLOOM_EARLY_STARTUP_TRACE__.push({ step: "startup_video_error", at: new Date().toISOString() });
         });
 
         if (video.readyState >= 2) {
