@@ -14,7 +14,7 @@
   </head>
   <body>
     <section
-      id="bloom-html-fallback-overlay"
+      id="bloom-startup-loader"
       role="status"
       aria-live="polite"
       style="position: fixed; inset: 0; z-index: 2147483646; display: flex; align-items: center; justify-content: center; background: linear-gradient(180deg, #fffdfb 0%, #fff7f7 50%, #f8eef2 100%); opacity: 1; transition: opacity 280ms ease; color: #2b1b22; font-family: -apple-system, BlinkMacSystemFont, system-ui, sans-serif; flex-direction: column; gap: 16px; padding: 24px; box-sizing: border-box; text-align: center;"
@@ -32,8 +32,6 @@
       ></video>
       <h1 style="margin: 0; color: rgba(53, 39, 43, 0.64); font-size: 0.95rem; font-weight: 600;">Bloom Club загружается</h1>
       <p style="margin: 0; color: rgba(53, 39, 43, 0.42); font-size: 0.82rem;">Если экран не меняется больше 10 секунд, закройте и откройте приложение заново</p>
-      <button type="button" onclick="location.reload()">Перезагрузить</button>
-      <p id="bloom-html-fallback-diagnostic" style="margin: 0; color: rgba(53, 39, 43, 0.42); font-size: 0.78rem;">Диагностика появится после запуска приложения</p>
     </section>
     <script>
       window.__BLOOM_HTML_FALLBACK_PRESENT__ = true;
@@ -57,11 +55,6 @@
         };
         window.__BLOOM_RESOURCE_ERROR_TRACE__.push(payload);
         window.__BLOOM_EARLY_STARTUP_TRACE__.push(payload);
-        var diagnostic = document.getElementById("bloom-html-fallback-diagnostic");
-        if (diagnostic && isResource) {
-          diagnostic.textContent = "Ошибка загрузки ресурса приложения: " + payload.url;
-          diagnostic.setAttribute("role", "alert");
-        }
       }, true);
       window.addEventListener("unhandledrejection", function bloomEarlyRejection(event) {
         window.__BLOOM_EARLY_STARTUP_TRACE__.push({ at: new Date().toISOString(), kind: "unhandledrejection", reason: String(event && event.reason && (event.reason.message || event.reason) || "") });
@@ -70,11 +63,7 @@
         if (window.__BLOOM_ENTRY_SCRIPT_EXECUTED__ === true || window.__BLOOM_HTML_FALLBACK_REMOVED__ === true) {
           return;
         }
-        var diagnostic = document.getElementById("bloom-html-fallback-diagnostic");
-        if (diagnostic) {
-          diagnostic.textContent = "Ошибка запуска: JS entry не выполнен. Возможна загрузка устаревшего HTML или не найден asset приложения.";
-          diagnostic.setAttribute("role", "alert");
-        }
+
       }, 8000);
     </script>
     <div id="root"></div>

@@ -16,6 +16,7 @@ interface HomePageProps {
   cities?: City[] | null;
   partners?: Partner[] | null;
   isPartnersLoading?: boolean;
+  hasPartnersLoaded?: boolean;
   onOpenCatalog: () => void;
   onOpenSubscription: () => void;
   onActivateTrial: () => Promise<Subscription>;
@@ -46,6 +47,7 @@ export function HomePage({
   cities,
   partners,
   isPartnersLoading = false,
+  hasPartnersLoaded = false,
   onOpenCatalog,
   onOpenSubscription,
   onActivateTrial,
@@ -188,7 +190,12 @@ export function HomePage({
           <strong>{block.title}</strong>
           {block.body ? <p>{block.body}</p> : null}
           <div className="home-partners-carousel" aria-label="Партнёры клуба">
-            {safePartners.slice(0, 8).map((partner) => (
+            {isPartnersLoading || !hasPartnersLoaded ? (
+              <div className="home-empty-state">
+                <strong>Загружаем партнёров</strong>
+                <p>Каталог Bloom Club уже обновляется.</p>
+              </div>
+            ) : safePartners.length ? safePartners.slice(0, 8).map((partner) => (
               <button
                 className="home-partner-card"
                 type="button"
@@ -198,7 +205,12 @@ export function HomePage({
                 <span>{getPartnerName(partner)}</span>
                 <small>{toText(partner.category) || "Партнёр Bloom Club"}</small>
               </button>
-            ))}
+            )) : (
+              <div className="home-empty-state">
+                <strong>Партнёров пока нет</strong>
+                <p>Каталог Bloom Club наполняется.</p>
+              </div>
+            )}
           </div>
           {renderCta(block)}
         </div>
@@ -405,7 +417,7 @@ export function HomePage({
                 );
               })}
             </div>
-          ) : isPartnersLoading ? (
+          ) : isPartnersLoading || !hasPartnersLoaded ? (
             <div className="home-empty-state">
               <span aria-hidden="true">♡</span>
               <strong>Загружаем партнёров</strong>
