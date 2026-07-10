@@ -36,9 +36,9 @@ declare global {
     __BLOOM_CHUNK_RECOVERY_STARTED__?: boolean;
     __BLOOM_STARTUP_PHASE__?: string;
     __BLOOM_STARTUP_SPLASH_READY__?: boolean;
+    __BLOOM_STARTUP_SPLASH_STARTED_AT__?: number;
     __BLOOM_STARTUP_APP_READY__?: boolean;
     __BLOOM_STARTUP_VIDEO_DONE__?: boolean;
-    __BLOOM_REQUEST_STARTUP_SPLASH_REMOVAL__?: (reason?: string) => void;
   }
 }
 
@@ -621,27 +621,37 @@ async function importApplicationModules(): Promise<{
 }
 
 
-const STARTUP_SPLASH_MAX_DURATION_MS = 10_000;
+const STARTUP_SPLASH_MIN_VISIBLE_MS = 5_000;
+const STARTUP_SPLASH_MAX_DURATION_MS = 15_000;
 const STARTUP_SPLASH_FADE_MS = 280;
-let startupSplashPlaybackComplete = false;
-let startupSplashReady = false;
+const splashStartedAt = typeof window.__BLOOM_STARTUP_SPLASH_STARTED_AT__ === "number" ? window.__BLOOM_STARTUP_SPLASH_STARTED_AT__ : Date.now();
+let startupMinimumSplashElapsed = false;
 let startupAppReady = false;
 let startupOverlayRemovalStarted = false;
 let startupSplashMounted = false;
+let startupMinimumSplashTimer: number | undefined;
+let startupMaximumSplashTimer: number | undefined;
 
-function markStartupSplashReady(reason: string): void {
-  if (startupSplashReady) return;
-  startupSplashReady = true;
+function markStartupMinimumSplashElapsed(reason: string): void {
+  if (startupMinimumSplashElapsed) return;
+  startupMinimumSplashElapsed = true;
   window.__BLOOM_STARTUP_SPLASH_READY__ = true;
-  earlyStartupTrace("startup_splash_ready", { reason });
-  console.info("video ended", { reason, source: "entry" });
-  maybeRemoveEntryFallbackOverlay();
+  earlyStartupTrace("startup_splash_minimum_elapsed", { reason, elapsedMs: Date.now() - splashStartedAt });
+  maybeRemoveEntryFallbackOverlay(reason);
 }
 
-function evaluateStartupSplashReadiness(reason: string): void {
-  if (startupSplashPlaybackComplete) {
-    markStartupSplashReady(reason);
-  }
+function scheduleStartupSplashTimers(): void {
+  const remainingMs = Math.max(0, STARTUP_SPLASH_MIN_VISIBLE_MS - (Date.now() - splashStartedAt));
+  startupMinimumSplashTimer = window.setTimeout(() => {
+    markStartupMinimumSplashElapsed("minimum_duration_elapsed");
+  }, remainingMs);
+  startupMaximumSplashTimer = window.setTimeout(() => {
+    earlyStartupTrace("startup_splash_maximum_elapsed", { elapsedMs: Date.now() - splashStartedAt, startupAppReady });
+    startupAppReady = true;
+    window.__BLOOM_STARTUP_APP_READY__ = true;
+    markStartupMinimumSplashElapsed("maximum_duration_elapsed");
+    maybeRemoveEntryFallbackOverlay("maximum_duration_elapsed");
+  }, STARTUP_SPLASH_MAX_DURATION_MS);
 }
 
 function bindStartupSplashVideo(video: HTMLVideoElement | null): void {
@@ -688,6 +698,10 @@ function bindStartupSplashVideo(video: HTMLVideoElement | null): void {
     traceVideoEvent("playing");
     console.info("video playing", { source: "entry" });
   }, { once: true });
+  video.addEventListener("ended", () => {
+    window.__BLOOM_STARTUP_VIDEO_DONE__ = true;
+    traceVideoEvent("ended");
+  }, { once: true });
   video.addEventListener("error", () => traceVideoEvent("error"), { once: true });
   logStartupVideoDiagnostics("startup_bind");
   const playPromise = video.play();
@@ -696,35 +710,20 @@ function bindStartupSplashVideo(video: HTMLVideoElement | null): void {
       earlyStartupTrace("startup_video_play_rejected", { error: sanitizeDiagnosticValue(error) });
     });
   }
-  video.addEventListener("ended", () => {
-    startupSplashPlaybackComplete = true;
-    window.__BLOOM_STARTUP_VIDEO_DONE__ = true;
-    evaluateStartupSplashReadiness("video_ended");
-  }, { once: true });
 }
 
 function initializeStartupSplashGuards(): void {
-  window.__BLOOM_REQUEST_STARTUP_SPLASH_REMOVAL__ = (reason?: string) => {
-    startupSplashPlaybackComplete = true;
-    evaluateStartupSplashReadiness(reason || "external_video_complete");
-  };
   bindStartupSplashVideo(document.querySelector<HTMLVideoElement>("#bloom-startup-loader video, #bloom-html-fallback-overlay video"));
-  if (window.__BLOOM_STARTUP_VIDEO_DONE__ === true) {
-    startupSplashPlaybackComplete = true;
-    evaluateStartupSplashReadiness("html_video_already_complete");
-  }
-  window.setTimeout(() => {
-    startupSplashPlaybackComplete = true;
-    window.__BLOOM_STARTUP_VIDEO_DONE__ = true;
-    evaluateStartupSplashReadiness("fallback_max_duration_elapsed");
-  }, STARTUP_SPLASH_MAX_DURATION_MS);
+  scheduleStartupSplashTimers();
 }
 
-function maybeRemoveEntryFallbackOverlay(): void {
-  earlyStartupTrace("splash remove requested", { startupAppReady, startupSplashReady, startupSplashMounted, startupOverlayRemovalStarted });
-  console.info("splash remove requested", { startupAppReady, startupSplashReady, startupSplashMounted, startupOverlayRemovalStarted });
-  if (!startupAppReady || !startupSplashReady || !startupSplashMounted || startupOverlayRemovalStarted) return;
+function maybeRemoveEntryFallbackOverlay(reason = "conditions_changed"): void {
+  earlyStartupTrace("splash remove requested", { reason, startupAppReady, startupMinimumSplashElapsed, startupSplashMounted, startupOverlayRemovalStarted, elapsedMs: Date.now() - splashStartedAt });
+  console.info("splash remove requested", { reason, startupAppReady, startupMinimumSplashElapsed, startupSplashMounted, startupOverlayRemovalStarted });
+  if (!startupAppReady || !startupMinimumSplashElapsed || !startupSplashMounted || startupOverlayRemovalStarted) return;
   startupOverlayRemovalStarted = true;
+  if (startupMinimumSplashTimer) window.clearTimeout(startupMinimumSplashTimer);
+  if (startupMaximumSplashTimer) window.clearTimeout(startupMaximumSplashTimer);
   const startupFallback = document.getElementById("bloom-startup-loader");
   const entryFallback = document.getElementById("bloom-entry-fallback-overlay");
   const htmlFallback = document.getElementById("bloom-html-fallback-overlay");
@@ -749,9 +748,9 @@ function maybeRemoveEntryFallbackOverlay(): void {
 export function removeEntryFallbackOverlay(): void {
   startupAppReady = true;
   window.__BLOOM_STARTUP_APP_READY__ = true;
-  earlyStartupTrace("startup_app_ready_for_overlay_removal");
+  earlyStartupTrace("startup_app_ready_for_overlay_removal", { elapsedMs: Date.now() - splashStartedAt });
   console.info("app ready", { source: "entry" });
-  maybeRemoveEntryFallbackOverlay();
+  maybeRemoveEntryFallbackOverlay("app_ready");
 }
 
 async function startApp(): Promise<void> {
