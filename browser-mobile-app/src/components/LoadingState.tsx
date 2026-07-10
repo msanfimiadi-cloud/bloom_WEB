@@ -10,7 +10,7 @@ function LoadingStateComponent({ title = "Загружаем Bloom Club...", com
     <div className={compact ? "state state--loading state--compact" : "state state--loading"} role="status" aria-live="polite">
       <video
         className="state__loader-video"
-        src="/assets/loader/аним.mp4"
+        src="/assets/loader/bloom-loader.mp4"
         autoPlay
         muted
         loop

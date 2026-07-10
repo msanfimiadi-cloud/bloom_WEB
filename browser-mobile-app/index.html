@@ -71,6 +71,32 @@
         var hasPlayed = false;
         var isFinished = false;
         var fallbackTimer = 0;
+        var logStartupVideoDiagnostics = function logStartupVideoDiagnostics(reason) {
+          var computedStyle = window.getComputedStyle(video);
+          console.info("bloom_startup_video_diagnostics", {
+            reason: reason,
+            selectorResult: document.querySelector("#bloom-startup-loader video") === video,
+            currentSrc: video.currentSrc,
+            readyState: video.readyState,
+            networkState: video.networkState,
+            videoWidth: video.videoWidth,
+            videoHeight: video.videoHeight,
+            paused: video.paused,
+            error: video.error ? {
+              code: video.error.code,
+              message: video.error.message || "",
+            } : null,
+            currentTime: video.currentTime,
+            computedStyle: {
+              display: computedStyle.display,
+              visibility: computedStyle.visibility,
+              opacity: computedStyle.opacity,
+              width: computedStyle.width,
+              height: computedStyle.height,
+              zIndex: computedStyle.zIndex,
+            },
+          });
+        };
 
         var finishSplash = function finishSplash(reason) {
           if (isFinished) {
@@ -107,8 +133,10 @@
         video.setAttribute("muted", "");
         video.setAttribute("playsinline", "");
         video.setAttribute("webkit-playsinline", "");
+        logStartupVideoDiagnostics("startup_bind");
 
         const tryPlay = () => {
+          logStartupVideoDiagnostics("try_play");
           const result = video.play();
 
           if (result && typeof result.catch === "function") {
@@ -123,6 +151,7 @@
         video.addEventListener("canplay", tryPlay, { once: true });
         video.addEventListener("playing", function bloomStartupVideoPlaying() {
           hasPlayed = true;
+          logStartupVideoDiagnostics("playing");
           window.__BLOOM_EARLY_STARTUP_TRACE__.push({ step: "startup_video_playing", at: new Date().toISOString() });
         });
         video.addEventListener("ended", function bloomStartupVideoEnded() {
@@ -131,6 +160,7 @@
           }
         });
         video.addEventListener("error", function bloomStartupVideoError() {
+          logStartupVideoDiagnostics("error");
           scheduleFallback("error");
         });
 

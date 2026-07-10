@@ -193,3 +193,38 @@ def test_telegram_sdk_loads_lazily_after_app_needs_it() -> None:
     assert "scheduleTelegramSdkRetry();" in webapp
     assert "await loadTelegramSdk();" in webapp
     assert "preloadTelegramSdkInBackground();" in webapp
+
+
+def test_startup_loader_video_uses_existing_built_asset() -> None:
+    assert '/assets/loader/bloom-loader.mp4' in INDEX
+    assert '/assets/loader/bloom-loader.mp4' in MAIN
+    loading_state = (ROOT / 'src/components/LoadingState.tsx').read_text(encoding='utf-8')
+    assert '/assets/loader/bloom-loader.mp4' in loading_state
+    assert '/assets/loader/аним.mp4' not in INDEX
+    assert '/assets/loader/аним.mp4' not in MAIN
+    assert '/assets/loader/аним.mp4' not in loading_state
+    assert (ROOT / 'public/assets/loader/bloom-loader.mp4').exists()
+
+
+def test_startup_video_diagnostics_include_dom_media_and_computed_style_fields() -> None:
+    for source in [INDEX, MAIN]:
+        assert 'bloom_startup_video_diagnostics' in source
+        for token in [
+            'document.querySelector("#bloom-startup-loader video")',
+            'currentSrc',
+            'readyState',
+            'networkState',
+            'videoWidth',
+            'videoHeight',
+            'paused',
+            'error',
+            'currentTime',
+            'computedStyle',
+            'display',
+            'visibility',
+            'opacity',
+            'width',
+            'height',
+            'zIndex',
+        ]:
+            assert token in source
