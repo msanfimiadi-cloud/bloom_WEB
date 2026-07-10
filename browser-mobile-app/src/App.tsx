@@ -2032,6 +2032,14 @@ export default function App() {
     ],
   );
 
+  useEffect(() => {
+    if (isLoading || error || !isBootstrapDone || hasPartnersLoaded || isPartnersLoading || partnersError || partnersPromiseRef.current) {
+      return;
+    }
+
+    void traceStartupStep("home bootstrap:loadPartners", () => loadPartners(false), { source: "home_initial_catalog_load" });
+  }, [error, hasPartnersLoaded, isBootstrapDone, isLoading, isPartnersLoading, loadPartners, partnersError]);
+
   const openCatalog = useCallback(() => {
     lifecycleTrace("catalog_open", { forceReload: false });
     console.info("catalog_open_requested", {
@@ -2702,6 +2710,7 @@ export default function App() {
             cities={safeData.cities}
             partners={safeData.partners}
             isPartnersLoading={isPartnersLoading}
+            hasPartnersLoaded={hasPartnersLoaded}
             onOpenCatalog={openCatalog}
             onOpenSubscription={() => setPage("subscription")}
             onActivateTrial={activateTrial}
