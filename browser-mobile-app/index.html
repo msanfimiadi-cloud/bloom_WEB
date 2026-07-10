@@ -1,5 +1,5 @@
 <!doctype html>
-<html lang="ru" class="bloom-startup-active">
+<html lang="ru">
   <head>
     <meta charset="UTF-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover" />
@@ -11,52 +11,18 @@
     <link rel="apple-touch-icon" href="/docs/icons/apple-touch-icon.png" />
     <link rel="icon" type="image/png" href="/favicon.ico" />
     <title>Bloom Club</title>
-    <script>
-      window.__BLOOM_EARLY_STARTUP_TRACE__ = window.__BLOOM_EARLY_STARTUP_TRACE__ || [];
-      (function bloomStartupGuardBeforePaint() {
-        var log = function log(step, details) {
-          var payload = Object.assign({ step: step, at: new Date().toISOString(), readyState: document.readyState }, details || {});
-          window.__BLOOM_EARLY_STARTUP_TRACE__.push(payload);
-          console.info(step, payload);
-        };
-        log("HTML parsed", { source: "head" });
-        document.documentElement.classList.add("bloom-startup-active");
-        log("startup class added", { source: "head", className: document.documentElement.className });
-        requestAnimationFrame(function bloomStartupFirstRaf() {
-          window.__BLOOM_STARTUP_FIRST_RAF_SEEN__ = true;
-          log("startup first requestAnimationFrame", {
-            startupActive: document.documentElement.classList.contains("bloom-startup-active"),
-            rootVisibility: document.getElementById("root") ? window.getComputedStyle(document.getElementById("root")).visibility : "missing",
-          });
-        });
-      })();
-    </script>
-    <style>
-      html.bloom-startup-active #root {
-        visibility: hidden;
-      }
-    </style>
   </head>
   <body>
     <section
-      id="bloom-startup-loader"
+      id="bloom-html-fallback-overlay"
       role="status"
       aria-live="polite"
-      style="position: fixed; inset: 0; z-index: 2147483646; display: flex; align-items: center; justify-content: center; background: linear-gradient(180deg, #fffdfb 0%, #fff7f7 50%, #f8eef2 100%); opacity: 1; transition: opacity 280ms ease; color: #2b1b22; font-family: -apple-system, BlinkMacSystemFont, system-ui, sans-serif; flex-direction: column; gap: 16px; padding: 24px; box-sizing: border-box; text-align: center;"
+      style="position: fixed; inset: 0; z-index: 2147483646; display: flex; align-items: center; justify-content: center; background: #fff7fa; color: #2b1b22; font-family: -apple-system, BlinkMacSystemFont, system-ui, sans-serif; flex-direction: column; gap: 16px; padding: 24px; box-sizing: border-box; text-align: center;"
     >
-      <video
-        id="bloom-startup-video"
-        src="/assets/loader/bloom-loader.mp4"
-        autoplay
-        muted
-        playsinline
-        webkit-playsinline
-        preload="auto"
-        aria-hidden="true"
-        style="display: block; width: clamp(180px, 42vw, 220px); height: clamp(180px, 42vw, 220px); object-fit: contain; background: transparent;"
-      ></video>
-      <h1 style="margin: 0; color: rgba(53, 39, 43, 0.64); font-size: 0.95rem; font-weight: 600;">Bloom Club загружается</h1>
-      <p style="margin: 0; color: rgba(53, 39, 43, 0.42); font-size: 0.82rem;">Если экран не меняется больше 10 секунд, закройте и откройте приложение заново</p>
+      <h1>Bloom Club загружается</h1>
+      <p>Если экран не меняется больше 10 секунд, закройте и откройте приложение заново</p>
+      <button type="button" onclick="location.reload()">Перезагрузить</button>
+      <p id="bloom-html-fallback-diagnostic">Диагностика появится после запуска приложения</p>
     </section>
     <script>
       window.__BLOOM_HTML_FALLBACK_PRESENT__ = true;
@@ -64,17 +30,7 @@
       window.__BLOOM_ENTRY_SCRIPT_EXECUTED__ = false;
       window.__BLOOM_EARLY_STARTUP_TRACE__ = window.__BLOOM_EARLY_STARTUP_TRACE__ || [];
       window.__BLOOM_RESOURCE_ERROR_TRACE__ = window.__BLOOM_RESOURCE_ERROR_TRACE__ || [];
-      const splashStartedAt = Date.now();
-      window.__BLOOM_STARTUP_SPLASH_STARTED_AT__ = splashStartedAt;
-      window.__BLOOM_STARTUP_VIDEO_DONE__ = false;
-      window.__BLOOM_STARTUP_SPLASH_REMOVE_REQUESTED__ = false;
       window.__BLOOM_EARLY_STARTUP_TRACE__.push({ step: "html_inline_before_module", at: new Date().toISOString(), href: location.href });
-      window.__BLOOM_EARLY_STARTUP_TRACE__.push({ step: "splash created", at: new Date().toISOString(), source: "html" });
-      console.info("splash created", { source: "html", loaderPresent: Boolean(document.getElementById("bloom-startup-loader")) });
-      requestAnimationFrame(function bloomStartupMountedLog() {
-        window.__BLOOM_EARLY_STARTUP_TRACE__.push({ step: "splash mounted", at: new Date().toISOString(), source: "html" });
-        console.info("splash mounted", { source: "html", loaderPresent: Boolean(document.getElementById("bloom-startup-loader")) });
-      });
       window.addEventListener("error", function bloomEarlyError(event) {
         var target = event && event.target;
         var isResource = target && target !== window && (target.src || target.href);
@@ -90,114 +46,27 @@
         };
         window.__BLOOM_RESOURCE_ERROR_TRACE__.push(payload);
         window.__BLOOM_EARLY_STARTUP_TRACE__.push(payload);
+        var diagnostic = document.getElementById("bloom-html-fallback-diagnostic");
+        if (diagnostic && isResource) {
+          diagnostic.textContent = "Ошибка загрузки ресурса приложения: " + payload.url;
+          diagnostic.setAttribute("role", "alert");
+        }
       }, true);
       window.addEventListener("unhandledrejection", function bloomEarlyRejection(event) {
         window.__BLOOM_EARLY_STARTUP_TRACE__.push({ at: new Date().toISOString(), kind: "unhandledrejection", reason: String(event && event.reason && (event.reason.message || event.reason) || "") });
       });
-
-      (function bloomStartupVideoPlayback() {
-        var loader = document.getElementById("bloom-startup-loader");
-        var video = document.getElementById("bloom-startup-video");
-
-        if (!loader || !video) {
-          return;
-        }
-
-        var hasPlayed = false;
-        var logStartupVideoDiagnostics = function logStartupVideoDiagnostics(reason) {
-          var computedStyle = window.getComputedStyle(video);
-          console.info("bloom_startup_video_diagnostics", {
-            reason: reason,
-            selectorResult: document.querySelector("#bloom-startup-loader video") === video,
-            currentSrc: video.currentSrc,
-            readyState: video.readyState,
-            networkState: video.networkState,
-            videoWidth: video.videoWidth,
-            videoHeight: video.videoHeight,
-            paused: video.paused,
-            error: video.error ? {
-              code: video.error.code,
-              message: video.error.message || "",
-            } : null,
-            currentTime: video.currentTime,
-            computedStyle: {
-              display: computedStyle.display,
-              visibility: computedStyle.visibility,
-              opacity: computedStyle.opacity,
-              width: computedStyle.width,
-              height: computedStyle.height,
-              zIndex: computedStyle.zIndex,
-            },
-          });
-        };
-
-        var noteVideoFinished = function noteVideoFinished(reason) {
-          window.__BLOOM_STARTUP_VIDEO_DONE__ = true;
-          window.__BLOOM_STARTUP_VIDEO_DONE_REASON__ = reason;
-          window.__BLOOM_EARLY_STARTUP_TRACE__.push({ step: "startup_video_finish", reason: reason, at: new Date().toISOString() });
-          console.info("video ended", { reason: reason, source: "html" });
-        };
-
-        video.muted = true;
-        video.defaultMuted = true;
-        video.playsInline = true;
-        video.setAttribute("muted", "");
-        video.setAttribute("playsinline", "");
-        video.setAttribute("webkit-playsinline", "");
-        logStartupVideoDiagnostics("startup_bind");
-
-        const tryPlay = () => {
-          logStartupVideoDiagnostics("try_play");
-          const result = video.play();
-
-          if (result && typeof result.catch === "function") {
-            result.catch((error) => {
-              console.warn("Bloom startup video autoplay failed", error);
-              window.__BLOOM_EARLY_STARTUP_TRACE__.push({ step: "startup_video_autoplay_failure", at: new Date().toISOString() });
-            });
-          }
-        };
-
-        video.addEventListener("loadeddata", tryPlay, { once: true });
-        video.addEventListener("canplay", tryPlay, { once: true });
-        video.addEventListener("playing", function bloomStartupVideoPlaying() {
-          hasPlayed = true;
-          logStartupVideoDiagnostics("playing");
-          window.__BLOOM_EARLY_STARTUP_TRACE__.push({ step: "startup_video_playing", at: new Date().toISOString() });
-          console.info("video playing", { source: "html" });
-        });
-        video.addEventListener("ended", function bloomStartupVideoEnded() {
-          if (hasPlayed) {
-            noteVideoFinished("ended");
-          }
-        });
-        video.addEventListener("error", function bloomStartupVideoError() {
-          logStartupVideoDiagnostics("error");
-          window.__BLOOM_EARLY_STARTUP_TRACE__.push({ step: "startup_video_error", at: new Date().toISOString() });
-        });
-
-        if (video.readyState >= 2) {
-          tryPlay();
-        }
-      })();
-
       window.setTimeout(function bloomHtmlEntryWatchdog() {
         if (window.__BLOOM_ENTRY_SCRIPT_EXECUTED__ === true || window.__BLOOM_HTML_FALLBACK_REMOVED__ === true) {
           return;
         }
-
+        var diagnostic = document.getElementById("bloom-html-fallback-diagnostic");
+        if (diagnostic) {
+          diagnostic.textContent = "Ошибка запуска: JS entry не выполнен. Возможна загрузка устаревшего HTML или не найден asset приложения.";
+          diagnostic.setAttribute("role", "alert");
+        }
       }, 8000);
     </script>
-    <div id="root" style="visibility: hidden;"></div>
-    <script>
-      (function bloomStartupRootGuard() {
-        var root = document.getElementById("root");
-        var payload = { step: "root hidden", at: new Date().toISOString(), source: "html", inlineVisibility: root && root.style.visibility, computedVisibility: root ? window.getComputedStyle(root).visibility : "missing" };
-        window.__BLOOM_EARLY_STARTUP_TRACE__ = window.__BLOOM_EARLY_STARTUP_TRACE__ || [];
-        window.__BLOOM_EARLY_STARTUP_TRACE__.push(payload);
-        console.info("root hidden", payload);
-      })();
-    </script>
+    <div id="root"></div>
     <script type="module" src="/src/main.tsx"></script>
   </body>
 </html>

@@ -35,12 +35,6 @@ declare global {
     __BLOOM_RESOURCE_ERROR_TRACE__?: Array<Record<string, unknown>>;
     __BLOOM_CHUNK_RECOVERY_STARTED__?: boolean;
     __BLOOM_STARTUP_PHASE__?: string;
-    __BLOOM_STARTUP_SPLASH_READY__?: boolean;
-    __BLOOM_STARTUP_SPLASH_STARTED_AT__?: number;
-    __BLOOM_STARTUP_APP_READY__?: boolean;
-    __BLOOM_STARTUP_VIDEO_DONE__?: boolean;
-    __BLOOM_STARTUP_ROOT_REVEALED__?: boolean;
-    __BLOOM_STARTUP_FIRST_RAF_SEEN__?: boolean;
   }
 }
 
@@ -56,50 +50,6 @@ function getRootElement(): HTMLElement {
   }
 
   return rootElement;
-}
-
-function startupOrderLog(step: string, details?: Record<string, unknown>): void {
-  const rootElement = document.getElementById("root");
-  const payload = {
-    step,
-    at: new Date().toISOString(),
-    readyState: document.readyState,
-    startupActive: document.documentElement.classList.contains(STARTUP_SPLASH_ACTIVE_CLASS),
-    rootInlineVisibility: rootElement?.style.visibility || "",
-    rootComputedVisibility: rootElement ? window.getComputedStyle(rootElement).visibility : "missing",
-    beforeFirstRequestAnimationFrame: window.__BLOOM_STARTUP_FIRST_RAF_SEEN__ !== true,
-    htmlClassName: document.documentElement.className,
-    bodyClassName: document.body?.className || "",
-    ...details,
-  };
-  window.__BLOOM_EARLY_STARTUP_TRACE__ = window.__BLOOM_EARLY_STARTUP_TRACE__ || [];
-  window.__BLOOM_EARLY_STARTUP_TRACE__.push(payload);
-  console.info(step, payload);
-}
-
-function enforceStartupGuardBeforeReact(): void {
-  const rootElement = getRootElement();
-  if (!document.documentElement.classList.contains(STARTUP_SPLASH_ACTIVE_CLASS)) {
-    document.documentElement.classList.add(STARTUP_SPLASH_ACTIVE_CLASS);
-  }
-  rootElement.style.visibility = "hidden";
-  startupOrderLog("startup class added", { source: "entry", className: document.documentElement.className });
-  startupOrderLog("root hidden", { source: "entry" });
-}
-
-function observeStartupClassMutations(): void {
-  const observer = new MutationObserver((records) => {
-    for (const record of records) {
-      if (record.type === "attributes" && record.attributeName === "class") {
-        startupOrderLog("startup class mutation", {
-          target: record.target === document.documentElement ? "html" : "body",
-          className: (record.target as HTMLElement).className,
-        });
-      }
-    }
-  });
-  observer.observe(document.documentElement, { attributes: true, attributeFilter: ["class"] });
-  if (document.body) observer.observe(document.body, { attributes: true, attributeFilter: ["class"] });
 }
 
 function getStartupTraceModule(): Promise<StartupTraceModule> {
@@ -266,7 +216,7 @@ function getStandaloneDiagnostics(): Record<string, unknown> {
     url: window.location.href,
     lastStartupError: window.__BLOOM_LAST_STARTUP_ERROR__,
     appInteractive: window.__BLOOM_APP_INTERACTIVE__ === true,
-    fallbackPresent: Boolean(document.getElementById("bloom-startup-loader") || document.getElementById("bloom-entry-fallback-overlay")),
+    fallbackPresent: Boolean(document.getElementById("bloom-entry-fallback-overlay") || document.getElementById("bloom-html-fallback-overlay")),
     rootChildCount: document.getElementById("root")?.childElementCount ?? 0,
     visibilityState: document.visibilityState,
     readyState: document.readyState,
@@ -284,7 +234,7 @@ function reportStartupFailure(eventType: string, reason: string, error: unknown 
 function renderStartupRecoveryScreen(reason = "startup_watchdog_timeout"): void {
   if (reactRenderStarted || window.__BLOOM_APP_INTERACTIVE__) return;
   startupFailureRendered = true;
-  const rootElement = document.getElementById("bloom-startup-loader") ?? document.getElementById("bloom-entry-fallback-overlay") ?? getRootElement();
+  const rootElement = document.getElementById("bloom-entry-fallback-overlay") ?? getRootElement();
   const panel = document.createElement("section");
   panel.setAttribute("role", "alert");
   panel.className = "startup-entry-error-panel";
@@ -308,32 +258,21 @@ function renderStartupRecoveryScreen(reason = "startup_watchdog_timeout"): void 
 }
 
 function renderStartupLoadingFallback(): void {
-  const existing = document.getElementById("bloom-startup-loader") ?? document.getElementById("bloom-entry-fallback-overlay");
+  const existing = document.getElementById("bloom-entry-fallback-overlay");
   if (existing) {
-    earlyStartupTrace("splash created", { source: "existing_dom", id: existing.id });
-    console.info("splash created", { source: "existing_dom", id: existing.id });
-    requestAnimationFrame(() => {
-      startupSplashMounted = true;
-      earlyStartupTrace("splash mounted", { source: "existing_dom", id: existing.id, connected: existing.isConnected });
-      console.info("splash mounted", { source: "existing_dom", id: existing.id, connected: existing.isConnected });
-      maybeRemoveEntryFallbackOverlay();
-    });
-    bindStartupSplashVideo(existing.querySelector("video"));
     return;
   }
 
   const wrapper = document.createElement("section");
   wrapper.setAttribute("role", "status");
   wrapper.setAttribute("aria-live", "polite");
-  wrapper.id = "bloom-startup-loader";
+  wrapper.id = "bloom-entry-fallback-overlay";
   wrapper.className = "startup-entry-fallback";
   wrapper.setAttribute(
     "style",
-    "position: fixed; inset: 0; z-index: 2147483647; display: flex; align-items: center; justify-content: center; background: linear-gradient(180deg, #fffdfb 0%, #fff7f7 50%, #f8eef2 100%); color: #2b1b22; font-family: -apple-system, BlinkMacSystemFont, system-ui, sans-serif; flex-direction: column; gap: 14px; padding: 24px; box-sizing: border-box; text-align: center; opacity: 1; transition: opacity 280ms ease;",
+    "position: fixed; inset: 0; z-index: 2147483647; display: flex; align-items: center; justify-content: center; background: linear-gradient(180deg, #fffdfb 0%, #fff7f7 50%, #f8eef2 100%); color: #2b1b22; font-family: -apple-system, BlinkMacSystemFont, system-ui, sans-serif; flex-direction: column; gap: 14px; padding: 24px; box-sizing: border-box; text-align: center; opacity: 1; transition: opacity 260ms ease;",
   );
 
-  earlyStartupTrace("splash created", { source: "entry" });
-  console.info("splash created", { source: "entry" });
   window.__BLOOM_ENTRY_FALLBACK_INSERTED__ = true;
   window.__BLOOM_ENTRY_FALLBACK_INSERTED_AT__ = new Date().toISOString();
   window.__BLOOM_ENTRY_FALLBACK_OVERLAY_INSERTED__ = true;
@@ -343,12 +282,10 @@ function renderStartupLoadingFallback(): void {
   video.src = "/assets/loader/bloom-loader.mp4";
   video.autoplay = true;
   video.muted = true;
+  video.loop = true;
   video.playsInline = true;
-  video.preload = "auto";
   video.setAttribute("muted", "");
   video.setAttribute("playsinline", "");
-  video.setAttribute("webkit-playsinline", "");
-  video.setAttribute("preload", "auto");
   video.setAttribute("aria-hidden", "true");
   video.setAttribute(
     "style",
@@ -382,15 +319,8 @@ function renderStartupLoadingFallback(): void {
 
   actions.replaceChildren(reloadButton, diagnosticsButton);
   wrapper.replaceChildren(video, title, description, diagnostics, actions);
-  bindStartupSplashVideo(video);
 
   const parentName = appendEntryFallbackOverlay(wrapper);
-  requestAnimationFrame(() => {
-    startupSplashMounted = true;
-    earlyStartupTrace("splash mounted", { source: "entry", parentName, connected: wrapper.isConnected });
-    console.info("splash mounted", { source: "entry", parentName, connected: wrapper.isConnected });
-    maybeRemoveEntryFallbackOverlay();
-  });
   if (parentName) {
     window.__BLOOM_ENTRY_FALLBACK_OVERLAY_PARENT__ = parentName;
   }
@@ -466,7 +396,7 @@ function renderModuleLoadErrorPanel(
   }
 
   startupFailureRendered = true;
-  const fallback = document.getElementById("bloom-startup-loader") ?? document.getElementById("bloom-entry-fallback-overlay");
+  const fallback = document.getElementById("bloom-entry-fallback-overlay");
   const rootElement = fallback ?? getRootElement();
   const message = sanitizeDiagnosticValue(error);
   const panel = document.createElement("section");
@@ -536,14 +466,14 @@ function startEntryWatchdog(): void {
   watchdogTimers = [
     window.setTimeout(() => {
       updateStartupFallback("Загрузка модулей приложения...");
-    }, 8_000),
+    }, 3_000),
     window.setTimeout(() => {
       updateStartupFallback("Приложение не завершило запуск", true);
       if (!window.__BLOOM_APP_INTERACTIVE__) {
         reportStartupFailure("bootstrap_timeout", "entry_watchdog_timeout");
         renderStartupRecoveryScreen();
       }
-    }, 10_000),
+    }, 8_000),
   ];
 }
 
@@ -600,11 +530,8 @@ setStartupPhase("main_started");
 if (detectInterruptedStartup()) { clearInterruptedStartupTemporaryState(); }
 installProductionDiagnostics();
 earlyStartupTrace("main_after_installProductionDiagnostics");
-observeStartupClassMutations();
-enforceStartupGuardBeforeReact();
 window.__BLOOM_ENTRY_SCRIPT_EXECUTED__ = true;
 window.__BLOOM_APP_STATIC_IMPORT_ENABLED__ = true;
-initializeStartupSplashGuards();
 renderStartupLoadingFallback();
 startEntryWatchdog();
 lifecycleTraceSafe("entry_start");
@@ -669,152 +596,20 @@ async function importApplicationModules(): Promise<{
 }
 
 
-const STARTUP_SPLASH_MIN_VISIBLE_MS = 5_000;
-const STARTUP_SPLASH_MAX_DURATION_MS = 15_000;
-const STARTUP_SPLASH_FADE_MS = 280;
-const STARTUP_SPLASH_ACTIVE_CLASS = "bloom-startup-active";
-const splashStartedAt = typeof window.__BLOOM_STARTUP_SPLASH_STARTED_AT__ === "number" ? window.__BLOOM_STARTUP_SPLASH_STARTED_AT__ : Date.now();
-let startupMinimumSplashElapsed = false;
-let startupAppReady = false;
-let startupOverlayRemovalStarted = false;
-let startupSplashMounted = false;
-let startupMinimumSplashTimer: number | undefined;
-let startupMaximumSplashTimer: number | undefined;
-
-function markStartupMinimumSplashElapsed(reason: string): void {
-  if (startupMinimumSplashElapsed) return;
-  startupMinimumSplashElapsed = true;
-  window.__BLOOM_STARTUP_SPLASH_READY__ = true;
-  earlyStartupTrace("startup_splash_minimum_elapsed", { reason, elapsedMs: Date.now() - splashStartedAt });
-  maybeRemoveEntryFallbackOverlay(reason);
-}
-
-function scheduleStartupSplashTimers(): void {
-  const remainingMs = Math.max(0, STARTUP_SPLASH_MIN_VISIBLE_MS - (Date.now() - splashStartedAt));
-  startupMinimumSplashTimer = window.setTimeout(() => {
-    markStartupMinimumSplashElapsed("minimum_duration_elapsed");
-  }, remainingMs);
-  startupMaximumSplashTimer = window.setTimeout(() => {
-    earlyStartupTrace("startup_splash_maximum_elapsed", { elapsedMs: Date.now() - splashStartedAt, startupAppReady });
-    startupAppReady = true;
-    window.__BLOOM_STARTUP_APP_READY__ = true;
-    markStartupMinimumSplashElapsed("maximum_duration_elapsed");
-    maybeRemoveEntryFallbackOverlay("maximum_duration_elapsed");
-  }, STARTUP_SPLASH_MAX_DURATION_MS);
-}
-
-function bindStartupSplashVideo(video: HTMLVideoElement | null): void {
-  if (!video || video.dataset.bloomSplashBound === "true") return;
-  video.dataset.bloomSplashBound = "true";
-  video.loop = false;
-  video.muted = true;
-  video.defaultMuted = true;
-  video.playsInline = true;
-  video.setAttribute("muted", "");
-  video.setAttribute("playsinline", "");
-  video.setAttribute("webkit-playsinline", "");
-  video.setAttribute("preload", "auto");
-  const logStartupVideoDiagnostics = (reason: string) => {
-    const computedStyle = window.getComputedStyle(video);
-    console.info("bloom_startup_video_diagnostics", {
-      reason,
-      selectorResult: document.querySelector("#bloom-startup-loader video") === video,
-      currentSrc: video.currentSrc,
-      readyState: video.readyState,
-      networkState: video.networkState,
-      videoWidth: video.videoWidth,
-      videoHeight: video.videoHeight,
-      paused: video.paused,
-      error: video.error ? { code: video.error.code, message: video.error.message } : null,
-      currentTime: video.currentTime,
-      computedStyle: {
-        display: computedStyle.display,
-        visibility: computedStyle.visibility,
-        opacity: computedStyle.opacity,
-        width: computedStyle.width,
-        height: computedStyle.height,
-        zIndex: computedStyle.zIndex,
-      },
-    });
-  };
-  const traceVideoEvent = (eventName: string) => {
-    logStartupVideoDiagnostics(eventName);
-    earlyStartupTrace(`startup_video_${eventName}`, { currentTime: video.currentTime, readyState: video.readyState, paused: video.paused });
-  };
-  video.addEventListener("loadeddata", () => traceVideoEvent("loadeddata"), { once: true });
-  video.addEventListener("canplay", () => traceVideoEvent("canplay"), { once: true });
-  video.addEventListener("playing", () => {
-    traceVideoEvent("playing");
-    console.info("video playing", { source: "entry" });
-  }, { once: true });
-  video.addEventListener("ended", () => {
-    window.__BLOOM_STARTUP_VIDEO_DONE__ = true;
-    traceVideoEvent("ended");
-  }, { once: true });
-  video.addEventListener("error", () => traceVideoEvent("error"), { once: true });
-  logStartupVideoDiagnostics("startup_bind");
-  const playPromise = video.play();
-  if (playPromise) {
-    playPromise.catch((error: unknown) => {
-      earlyStartupTrace("startup_video_play_rejected", { error: sanitizeDiagnosticValue(error) });
-    });
-  }
-}
-
-function initializeStartupSplashGuards(): void {
-  bindStartupSplashVideo(document.querySelector<HTMLVideoElement>("#bloom-startup-loader video, #bloom-html-fallback-overlay video"));
-  scheduleStartupSplashTimers();
-}
-
-function revealRootAfterStartupSplash(reason: string): void {
-  const rootElement = getRootElement();
-  startupOrderLog("startup class removal requested", { reason });
-  document.documentElement.classList.remove(STARTUP_SPLASH_ACTIVE_CLASS);
-  startupOrderLog("startup class removed", { reason });
-  rootElement.style.visibility = "visible";
-  startupOrderLog("root visible", { reason });
-  window.__BLOOM_STARTUP_ROOT_REVEALED__ = true;
-  earlyStartupTrace("startup_root_revealed", { reason, elapsedMs: Date.now() - splashStartedAt });
-}
-
-function maybeRemoveEntryFallbackOverlay(reason = "conditions_changed"): void {
-  earlyStartupTrace("splash remove requested", { reason, startupAppReady, startupMinimumSplashElapsed, startupSplashMounted, startupOverlayRemovalStarted, elapsedMs: Date.now() - splashStartedAt });
-  console.info("splash remove requested", { reason, startupAppReady, startupMinimumSplashElapsed, startupSplashMounted, startupOverlayRemovalStarted });
-  if (!startupAppReady || !startupMinimumSplashElapsed || !startupSplashMounted || startupOverlayRemovalStarted) return;
-  startupOverlayRemovalStarted = true;
-  if (startupMinimumSplashTimer) window.clearTimeout(startupMinimumSplashTimer);
-  if (startupMaximumSplashTimer) window.clearTimeout(startupMaximumSplashTimer);
-  const startupFallback = document.getElementById("bloom-startup-loader");
+export function removeEntryFallbackOverlay(): void {
   const entryFallback = document.getElementById("bloom-entry-fallback-overlay");
   const htmlFallback = document.getElementById("bloom-html-fallback-overlay");
-  const overlays = [startupFallback, entryFallback, htmlFallback].filter(
-    (element, index, elements): element is HTMLElement => Boolean(element) && elements.indexOf(element) === index,
-  );
-  const fadeAndRemove = (element: HTMLElement): void => {
+  const fadeAndRemove = (element: HTMLElement | null): void => {
+    if (!element) return;
     element.style.opacity = "0";
     element.style.pointerEvents = "none";
+    window.setTimeout(() => element.remove(), 260);
   };
-
-  overlays.forEach(fadeAndRemove);
-  window.setTimeout(() => {
-    overlays.forEach((element) => {
-      element.remove();
-      earlyStartupTrace("splash removed", { id: element.id });
-      console.info("splash removed", { id: element.id });
-    });
-    revealRootAfterStartupSplash(reason);
-  }, overlays.length > 0 ? STARTUP_SPLASH_FADE_MS : 0);
+  fadeAndRemove(entryFallback);
+  fadeAndRemove(htmlFallback);
   window.__BLOOM_ENTRY_FALLBACK_OVERLAY_REMOVED__ = true;
   window.__BLOOM_HTML_FALLBACK_REMOVED__ = true;
   stopEntryWatchdog();
-}
-
-export function removeEntryFallbackOverlay(): void {
-  startupAppReady = true;
-  window.__BLOOM_STARTUP_APP_READY__ = true;
-  earlyStartupTrace("startup_app_ready_for_overlay_removal", { elapsedMs: Date.now() - splashStartedAt });
-  console.info("app ready", { source: "entry" });
-  maybeRemoveEntryFallbackOverlay("app_ready");
 }
 
 async function startApp(): Promise<void> {
@@ -846,7 +641,6 @@ async function startApp(): Promise<void> {
 
   reactRenderStarted = true;
   window.__BLOOM_APP_RENDER_ATTEMPTED__ = true;
-  startupOrderLog("React first render", { source: "main.startApp" });
   lifecycleTraceSafe("react_render_start");
   earlyStartupTrace("before_render");
   traceStartSafe("render_call_start");
@@ -862,7 +656,6 @@ async function startApp(): Promise<void> {
     );
     });
     lifecycleTraceSafe("react_render_ok");
-    startupOrderLog("React hydrated", { source: "main.startApp" });
     earlyStartupTrace("after_render");
     traceOkSafe("render_call_ok");
     // App.tsx removes the body overlay after the real App component mounts.
