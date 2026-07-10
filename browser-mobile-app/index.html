@@ -39,7 +39,15 @@
       window.__BLOOM_ENTRY_SCRIPT_EXECUTED__ = false;
       window.__BLOOM_EARLY_STARTUP_TRACE__ = window.__BLOOM_EARLY_STARTUP_TRACE__ || [];
       window.__BLOOM_RESOURCE_ERROR_TRACE__ = window.__BLOOM_RESOURCE_ERROR_TRACE__ || [];
+      window.__BLOOM_STARTUP_VIDEO_DONE__ = false;
+      window.__BLOOM_STARTUP_SPLASH_REMOVE_REQUESTED__ = false;
       window.__BLOOM_EARLY_STARTUP_TRACE__.push({ step: "html_inline_before_module", at: new Date().toISOString(), href: location.href });
+      window.__BLOOM_EARLY_STARTUP_TRACE__.push({ step: "splash created", at: new Date().toISOString(), source: "html" });
+      console.info("splash created", { source: "html", loaderPresent: Boolean(document.getElementById("bloom-startup-loader")) });
+      requestAnimationFrame(function bloomStartupMountedLog() {
+        window.__BLOOM_EARLY_STARTUP_TRACE__.push({ step: "splash mounted", at: new Date().toISOString(), source: "html" });
+        console.info("splash mounted", { source: "html", loaderPresent: Boolean(document.getElementById("bloom-startup-loader")) });
+      });
       window.addEventListener("error", function bloomEarlyError(event) {
         var target = event && event.target;
         var isResource = target && target !== window && (target.src || target.href);
@@ -107,14 +115,13 @@
             window.clearTimeout(fallbackTimer);
             fallbackTimer = 0;
           }
+          window.__BLOOM_STARTUP_VIDEO_DONE__ = true;
+          window.__BLOOM_STARTUP_VIDEO_DONE_REASON__ = reason;
           window.__BLOOM_EARLY_STARTUP_TRACE__.push({ step: "startup_video_finish", reason: reason, at: new Date().toISOString() });
-          loader.style.opacity = "0";
-          window.setTimeout(function removeStartupLoader() {
-            if (loader && loader.parentNode) {
-              loader.parentNode.removeChild(loader);
-            }
-            window.__BLOOM_HTML_FALLBACK_REMOVED__ = true;
-          }, 320);
+          console.info("video ended", { reason: reason, source: "html" });
+          if (typeof window.__BLOOM_REQUEST_STARTUP_SPLASH_REMOVAL__ === "function") {
+            window.__BLOOM_REQUEST_STARTUP_SPLASH_REMOVAL__("html_video_" + reason);
+          }
         };
 
         var scheduleFallback = function scheduleFallback(reason) {
@@ -153,6 +160,7 @@
           hasPlayed = true;
           logStartupVideoDiagnostics("playing");
           window.__BLOOM_EARLY_STARTUP_TRACE__.push({ step: "startup_video_playing", at: new Date().toISOString() });
+          console.info("video playing", { source: "html" });
         });
         video.addEventListener("ended", function bloomStartupVideoEnded() {
           if (hasPlayed) {

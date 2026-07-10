@@ -37,6 +37,8 @@ declare global {
     __BLOOM_STARTUP_PHASE__?: string;
     __BLOOM_STARTUP_SPLASH_READY__?: boolean;
     __BLOOM_STARTUP_APP_READY__?: boolean;
+    __BLOOM_STARTUP_VIDEO_DONE__?: boolean;
+    __BLOOM_REQUEST_STARTUP_SPLASH_REMOVAL__?: (reason?: string) => void;
   }
 }
 
@@ -262,6 +264,14 @@ function renderStartupRecoveryScreen(reason = "startup_watchdog_timeout"): void 
 function renderStartupLoadingFallback(): void {
   const existing = document.getElementById("bloom-startup-loader") ?? document.getElementById("bloom-entry-fallback-overlay");
   if (existing) {
+    earlyStartupTrace("splash created", { source: "existing_dom", id: existing.id });
+    console.info("splash created", { source: "existing_dom", id: existing.id });
+    requestAnimationFrame(() => {
+      startupSplashMounted = true;
+      earlyStartupTrace("splash mounted", { source: "existing_dom", id: existing.id, connected: existing.isConnected });
+      console.info("splash mounted", { source: "existing_dom", id: existing.id, connected: existing.isConnected });
+      maybeRemoveEntryFallbackOverlay();
+    });
     bindStartupSplashVideo(existing.querySelector("video"));
     return;
   }
@@ -276,6 +286,8 @@ function renderStartupLoadingFallback(): void {
     "position: fixed; inset: 0; z-index: 2147483647; display: flex; align-items: center; justify-content: center; background: linear-gradient(180deg, #fffdfb 0%, #fff7f7 50%, #f8eef2 100%); color: #2b1b22; font-family: -apple-system, BlinkMacSystemFont, system-ui, sans-serif; flex-direction: column; gap: 14px; padding: 24px; box-sizing: border-box; text-align: center; opacity: 1; transition: opacity 260ms ease;",
   );
 
+  earlyStartupTrace("splash created", { source: "entry" });
+  console.info("splash created", { source: "entry" });
   window.__BLOOM_ENTRY_FALLBACK_INSERTED__ = true;
   window.__BLOOM_ENTRY_FALLBACK_INSERTED_AT__ = new Date().toISOString();
   window.__BLOOM_ENTRY_FALLBACK_OVERLAY_INSERTED__ = true;
@@ -327,6 +339,12 @@ function renderStartupLoadingFallback(): void {
   bindStartupSplashVideo(video);
 
   const parentName = appendEntryFallbackOverlay(wrapper);
+  requestAnimationFrame(() => {
+    startupSplashMounted = true;
+    earlyStartupTrace("splash mounted", { source: "entry", parentName, connected: wrapper.isConnected });
+    console.info("splash mounted", { source: "entry", parentName, connected: wrapper.isConnected });
+    maybeRemoveEntryFallbackOverlay();
+  });
   if (parentName) {
     window.__BLOOM_ENTRY_FALLBACK_OVERLAY_PARENT__ = parentName;
   }
@@ -609,12 +627,14 @@ let startupSplashPlaybackComplete = false;
 let startupSplashReady = false;
 let startupAppReady = false;
 let startupOverlayRemovalStarted = false;
+let startupSplashMounted = false;
 
 function markStartupSplashReady(reason: string): void {
   if (startupSplashReady) return;
   startupSplashReady = true;
   window.__BLOOM_STARTUP_SPLASH_READY__ = true;
   earlyStartupTrace("startup_splash_ready", { reason });
+  console.info("video ended", { reason, source: "entry" });
   maybeRemoveEntryFallbackOverlay();
 }
 
@@ -664,7 +684,10 @@ function bindStartupSplashVideo(video: HTMLVideoElement | null): void {
   };
   video.addEventListener("loadeddata", () => traceVideoEvent("loadeddata"), { once: true });
   video.addEventListener("canplay", () => traceVideoEvent("canplay"), { once: true });
-  video.addEventListener("playing", () => traceVideoEvent("playing"), { once: true });
+  video.addEventListener("playing", () => {
+    traceVideoEvent("playing");
+    console.info("video playing", { source: "entry" });
+  }, { once: true });
   video.addEventListener("error", () => traceVideoEvent("error"), { once: true });
   logStartupVideoDiagnostics("startup_bind");
   const playPromise = video.play();
@@ -675,20 +698,32 @@ function bindStartupSplashVideo(video: HTMLVideoElement | null): void {
   }
   video.addEventListener("ended", () => {
     startupSplashPlaybackComplete = true;
+    window.__BLOOM_STARTUP_VIDEO_DONE__ = true;
     evaluateStartupSplashReadiness("video_ended");
   }, { once: true });
 }
 
 function initializeStartupSplashGuards(): void {
+  window.__BLOOM_REQUEST_STARTUP_SPLASH_REMOVAL__ = (reason?: string) => {
+    startupSplashPlaybackComplete = true;
+    evaluateStartupSplashReadiness(reason || "external_video_complete");
+  };
   bindStartupSplashVideo(document.querySelector<HTMLVideoElement>("#bloom-startup-loader video, #bloom-html-fallback-overlay video"));
+  if (window.__BLOOM_STARTUP_VIDEO_DONE__ === true) {
+    startupSplashPlaybackComplete = true;
+    evaluateStartupSplashReadiness("html_video_already_complete");
+  }
   window.setTimeout(() => {
     startupSplashPlaybackComplete = true;
+    window.__BLOOM_STARTUP_VIDEO_DONE__ = true;
     evaluateStartupSplashReadiness("fallback_max_duration_elapsed");
   }, STARTUP_SPLASH_MAX_DURATION_MS);
 }
 
 function maybeRemoveEntryFallbackOverlay(): void {
-  if (!startupAppReady || !startupSplashReady || startupOverlayRemovalStarted) return;
+  earlyStartupTrace("splash remove requested", { startupAppReady, startupSplashReady, startupSplashMounted, startupOverlayRemovalStarted });
+  console.info("splash remove requested", { startupAppReady, startupSplashReady, startupSplashMounted, startupOverlayRemovalStarted });
+  if (!startupAppReady || !startupSplashReady || !startupSplashMounted || startupOverlayRemovalStarted) return;
   startupOverlayRemovalStarted = true;
   const startupFallback = document.getElementById("bloom-startup-loader");
   const entryFallback = document.getElementById("bloom-entry-fallback-overlay");
@@ -697,7 +732,11 @@ function maybeRemoveEntryFallbackOverlay(): void {
     if (!element) return;
     element.style.opacity = "0";
     element.style.pointerEvents = "none";
-    window.setTimeout(() => element.remove(), STARTUP_SPLASH_FADE_MS);
+    window.setTimeout(() => {
+      element.remove();
+      earlyStartupTrace("splash removed", { id: element.id });
+      console.info("splash removed", { id: element.id });
+    }, STARTUP_SPLASH_FADE_MS);
   };
   fadeAndRemove(startupFallback);
   if (entryFallback !== startupFallback) fadeAndRemove(entryFallback);
@@ -711,6 +750,7 @@ export function removeEntryFallbackOverlay(): void {
   startupAppReady = true;
   window.__BLOOM_STARTUP_APP_READY__ = true;
   earlyStartupTrace("startup_app_ready_for_overlay_removal");
+  console.info("app ready", { source: "entry" });
   maybeRemoveEntryFallbackOverlay();
 }
 
