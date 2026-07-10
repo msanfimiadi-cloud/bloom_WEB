@@ -39,6 +39,7 @@ declare global {
     __BLOOM_STARTUP_SPLASH_STARTED_AT__?: number;
     __BLOOM_STARTUP_APP_READY__?: boolean;
     __BLOOM_STARTUP_VIDEO_DONE__?: boolean;
+    __BLOOM_STARTUP_ROOT_REVEALED__?: boolean;
   }
 }
 
@@ -283,7 +284,7 @@ function renderStartupLoadingFallback(): void {
   wrapper.className = "startup-entry-fallback";
   wrapper.setAttribute(
     "style",
-    "position: fixed; inset: 0; z-index: 2147483647; display: flex; align-items: center; justify-content: center; background: linear-gradient(180deg, #fffdfb 0%, #fff7f7 50%, #f8eef2 100%); color: #2b1b22; font-family: -apple-system, BlinkMacSystemFont, system-ui, sans-serif; flex-direction: column; gap: 14px; padding: 24px; box-sizing: border-box; text-align: center; opacity: 1; transition: opacity 260ms ease;",
+    "position: fixed; inset: 0; z-index: 2147483647; display: flex; align-items: center; justify-content: center; background: linear-gradient(180deg, #fffdfb 0%, #fff7f7 50%, #f8eef2 100%); color: #2b1b22; font-family: -apple-system, BlinkMacSystemFont, system-ui, sans-serif; flex-direction: column; gap: 14px; padding: 24px; box-sizing: border-box; text-align: center; opacity: 1; transition: opacity 280ms ease;",
   );
 
   earlyStartupTrace("splash created", { source: "entry" });
@@ -624,6 +625,7 @@ async function importApplicationModules(): Promise<{
 const STARTUP_SPLASH_MIN_VISIBLE_MS = 5_000;
 const STARTUP_SPLASH_MAX_DURATION_MS = 15_000;
 const STARTUP_SPLASH_FADE_MS = 280;
+const STARTUP_SPLASH_ACTIVE_CLASS = "bloom-startup-active";
 const splashStartedAt = typeof window.__BLOOM_STARTUP_SPLASH_STARTED_AT__ === "number" ? window.__BLOOM_STARTUP_SPLASH_STARTED_AT__ : Date.now();
 let startupMinimumSplashElapsed = false;
 let startupAppReady = false;
@@ -717,6 +719,14 @@ function initializeStartupSplashGuards(): void {
   scheduleStartupSplashTimers();
 }
 
+function revealRootAfterStartupSplash(reason: string): void {
+  const rootElement = getRootElement();
+  document.documentElement.classList.remove(STARTUP_SPLASH_ACTIVE_CLASS);
+  rootElement.style.visibility = "visible";
+  window.__BLOOM_STARTUP_ROOT_REVEALED__ = true;
+  earlyStartupTrace("startup_root_revealed", { reason, elapsedMs: Date.now() - splashStartedAt });
+}
+
 function maybeRemoveEntryFallbackOverlay(reason = "conditions_changed"): void {
   earlyStartupTrace("splash remove requested", { reason, startupAppReady, startupMinimumSplashElapsed, startupSplashMounted, startupOverlayRemovalStarted, elapsedMs: Date.now() - splashStartedAt });
   console.info("splash remove requested", { reason, startupAppReady, startupMinimumSplashElapsed, startupSplashMounted, startupOverlayRemovalStarted });
@@ -727,19 +737,23 @@ function maybeRemoveEntryFallbackOverlay(reason = "conditions_changed"): void {
   const startupFallback = document.getElementById("bloom-startup-loader");
   const entryFallback = document.getElementById("bloom-entry-fallback-overlay");
   const htmlFallback = document.getElementById("bloom-html-fallback-overlay");
-  const fadeAndRemove = (element: HTMLElement | null): void => {
-    if (!element) return;
+  const overlays = [startupFallback, entryFallback, htmlFallback].filter(
+    (element, index, elements): element is HTMLElement => Boolean(element) && elements.indexOf(element) === index,
+  );
+  const fadeAndRemove = (element: HTMLElement): void => {
     element.style.opacity = "0";
     element.style.pointerEvents = "none";
-    window.setTimeout(() => {
+  };
+
+  overlays.forEach(fadeAndRemove);
+  window.setTimeout(() => {
+    overlays.forEach((element) => {
       element.remove();
       earlyStartupTrace("splash removed", { id: element.id });
       console.info("splash removed", { id: element.id });
-    }, STARTUP_SPLASH_FADE_MS);
-  };
-  fadeAndRemove(startupFallback);
-  if (entryFallback !== startupFallback) fadeAndRemove(entryFallback);
-  if (htmlFallback !== startupFallback) fadeAndRemove(htmlFallback);
+    });
+    revealRootAfterStartupSplash(reason);
+  }, overlays.length > 0 ? STARTUP_SPLASH_FADE_MS : 0);
   window.__BLOOM_ENTRY_FALLBACK_OVERLAY_REMOVED__ = true;
   window.__BLOOM_HTML_FALLBACK_REMOVED__ = true;
   stopEntryWatchdog();
