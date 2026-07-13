@@ -2582,14 +2582,24 @@ export default function App() {
               <p>{LOGIN_CODE_HELP_MESSAGE}</p>
               <input
                 aria-label="Код входа"
+                className="auth-code-input"
                 value={loginCode}
                 placeholder="BC-XXXXXX"
+                inputMode="text"
+                autoCapitalize="characters"
+                autoCorrect="off"
+                spellCheck={false}
                 onChange={(event) => updateLoginCodeDraft(event.target.value)}
               />
               <input
                 aria-label="Реферальный код"
+                className="auth-code-input"
                 value={loginReferralCode}
                 placeholder="Реферальный код"
+                inputMode="text"
+                autoCapitalize="characters"
+                autoCorrect="off"
+                spellCheck={false}
                 onChange={(event) => updateReferralCodeDraft(event.target.value)}
               />
               {loginCodeError ? <p className="error-text">{loginCodeError}</p> : null}
