@@ -2572,42 +2572,46 @@ export default function App() {
 
   if (canRenderLogin) {
     return (
-      <div className="state" role="status">
-        <h1>{BROWSER_LOGIN_REQUIRED_MESSAGE}</h1>
-        {isLoginCodeFormOpen ? (
-          <>
-            <p>{LOGIN_CODE_HELP_MESSAGE}</p>
-            <input
-              aria-label="Код входа"
-              value={loginCode}
-              placeholder="BC-XXXXXX"
-              onChange={(event) => updateLoginCodeDraft(event.target.value)}
-            />
-            <input
-              aria-label="Реферальный код"
-              value={loginReferralCode}
-              placeholder="Реферальный код"
-              onChange={(event) => updateReferralCodeDraft(event.target.value)}
-            />
-            {loginCodeError ? <p className="error-text">{loginCodeError}</p> : null}
-            <button className="button button--primary" type="button" onClick={submitLoginCode} disabled={isLoginCodeSubmitting}>
-              {isLoginCodeSubmitting ? "Входим…" : "Войти"}
-            </button>
-            <p className="login-code-legal-text">
-              Нажимая «Войти», вы принимаете условия{' '}
-              <a href={LEGAL_DOCUMENT_LINKS.agreement} target="_blank" rel="noopener noreferrer">Пользовательского соглашения</a>
-              ,{' '}
-              <a href={LEGAL_DOCUMENT_LINKS.privacy} target="_blank" rel="noopener noreferrer">Политики конфиденциальности</a>
-              {' '}и даёте согласие на{' '}
-              <a href={LEGAL_DOCUMENT_LINKS.personalDataConsent} target="_blank" rel="noopener noreferrer">обработку персональных данных</a>.
-            </p>
-          </>
-        ) : (
-          <>
-            <button className="button button--primary" type="button" onClick={() => setIsLoginCodeFormOpen(true)}>Войти по коду</button>
-            <button className="button button--secondary" type="button" onClick={() => setBrowserLoginRequired(false)}>Продолжить без регистрации</button>
-          </>
-        )}
+      <div className="welcome-auth-screen" role="status">
+        <div className="welcome-auth-screen__background" aria-hidden="true" />
+        <div className="welcome-auth-screen__overlay" aria-hidden="true" />
+        <div className="state welcome-auth-screen__card">
+          <h1>{BROWSER_LOGIN_REQUIRED_MESSAGE}</h1>
+          {isLoginCodeFormOpen ? (
+            <>
+              <p>{LOGIN_CODE_HELP_MESSAGE}</p>
+              <input
+                aria-label="Код входа"
+                value={loginCode}
+                placeholder="BC-XXXXXX"
+                onChange={(event) => updateLoginCodeDraft(event.target.value)}
+              />
+              <input
+                aria-label="Реферальный код"
+                value={loginReferralCode}
+                placeholder="Реферальный код"
+                onChange={(event) => updateReferralCodeDraft(event.target.value)}
+              />
+              {loginCodeError ? <p className="error-text">{loginCodeError}</p> : null}
+              <button className="button button--primary" type="button" onClick={submitLoginCode} disabled={isLoginCodeSubmitting}>
+                {isLoginCodeSubmitting ? "Входим…" : "Войти"}
+              </button>
+              <p className="login-code-legal-text">
+                Нажимая «Войти», вы принимаете условия{' '}
+                <a href={LEGAL_DOCUMENT_LINKS.agreement} target="_blank" rel="noopener noreferrer">Пользовательского соглашения</a>
+                ,{' '}
+                <a href={LEGAL_DOCUMENT_LINKS.privacy} target="_blank" rel="noopener noreferrer">Политики конфиденциальности</a>
+                {' '}и даёте согласие на{' '}
+                <a href={LEGAL_DOCUMENT_LINKS.personalDataConsent} target="_blank" rel="noopener noreferrer">обработку персональных данных</a>.
+              </p>
+            </>
+          ) : (
+            <>
+              <button className="button button--primary" type="button" onClick={() => setIsLoginCodeFormOpen(true)}>Войти по коду</button>
+              <button className="button button--secondary" type="button" onClick={() => setBrowserLoginRequired(false)}>Продолжить без регистрации</button>
+            </>
+          )}
+        </div>
       </div>
     );
   }
