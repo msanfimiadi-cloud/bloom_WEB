@@ -88,6 +88,9 @@ export function ProfilePage({ profile, cities, onSaveProfile, referralSummary, o
   const defaultProfileName = useContentText('profile.default_name', 'Участница Bloom Club');
   const defaultProfileCity = useContentText('profile.default_city', 'Город можно указать ниже.');
   const referralCode = toText(referralSummary?.referral_code || profile?.referral_code);
+  const invited = referralSummary?.invited_count ?? referralSummary?.referrals_count ?? 0;
+  const activated = referralSummary?.activated_count ?? referralSummary?.activated_referrals_count ?? 0;
+  const additionalEntries = referralSummary?.earned_giveaway_entries_count ?? referralSummary?.earned_entries_count ?? 0;
   const [copyMessage, setCopyMessage] = useState('');
   const addToHomeScreen = useAddToHomeScreen();
 
@@ -254,6 +257,11 @@ export function ProfilePage({ profile, cities, onSaveProfile, referralSummary, o
           <p>Реферальный код скоро появится</p>
         )}
         {copyMessage ? <p className="success-text">{copyMessage}</p> : null}
+        <div className="referral-stats" aria-label="Реферальная программа">
+          <span>Приглашено: {invited}</span>
+          <span>Активировали тестовый период: {activated}</span>
+          <span>Дополнительных номеров в розыгрыше: {additionalEntries}</span>
+        </div>
       </div>
 
       <button className="button button--ghost profile-logout-button" type="button" onClick={() => { console.info("[BLOOM_LOGOUT_TRACE] logout_button_clicked"); onLogout(); }}>
