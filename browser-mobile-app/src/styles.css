@@ -6043,3 +6043,44 @@ small,
     padding-inline: 7px;
   }
 }
+
+/* Welcome auth screen background. */
+.welcome-auth-screen {
+  min-height: 100vh;
+  min-height: 100dvh;
+  position: relative;
+  isolation: isolate;
+  display: flow-root;
+}
+
+.welcome-auth-screen__background,
+.welcome-auth-screen__overlay {
+  position: fixed;
+  inset: 0;
+  pointer-events: none;
+}
+
+.welcome-auth-screen__background {
+  z-index: -2;
+  background-image: url('/assets/images/welcome-bg.webp');
+  background-size: cover;
+  background-position: center;
+  background-repeat: no-repeat;
+}
+
+.welcome-auth-screen__overlay {
+  z-index: -1;
+  background: linear-gradient(
+    rgba(255, 245, 247, 0.20),
+    rgba(255, 245, 247, 0.38)
+  );
+}
+
+.welcome-auth-screen__card {
+  position: relative;
+  background: rgba(255,255,255,0.78);
+  backdrop-filter: blur(18px);
+  -webkit-backdrop-filter: blur(18px);
+  border: 1px solid rgba(255,255,255,0.55);
+  box-shadow: 0 20px 60px rgba(71, 38, 48, 0.14);
+}
