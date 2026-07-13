@@ -2,6 +2,7 @@ from __future__ import annotations
 
 from dataclasses import dataclass
 from datetime import datetime, timezone
+import logging
 from typing import Literal
 
 from sqlalchemy import select
@@ -10,6 +11,8 @@ from sqlalchemy.orm import Session, joinedload
 from app.models.client import ClientIdentityLink, ClientProfile
 from app.models.user import User, UserRole
 from app.services.referrals import REFERRAL_EXISTING_PROFILE_ERROR, ReferralError, apply_referral_on_new_client, ensure_referral_code, normalize_referral_code, validate_referral_for_new_client
+
+logger = logging.getLogger(__name__)
 
 BrowserIdentityResolveStatus = Literal["linked", "legacy_linked", "created", "not_found"]
 
@@ -69,13 +72,16 @@ class BrowserIdentityResolver:
             self._sync_profile_metadata(profile, normalized_provider, normalized_provider_user_id, normalized_display_name, normalized_username, self._clean(photo_url), normalized_source)
             ensure_referral_code(self.db, profile)
             if normalized_referral_code:
+                logger.info("browser_identity_referral_rejected", extra={"action": "browser_identity_referral_rejected", "provider_user_id": normalized_provider_user_id, "client_id": profile.id, "reason": "existing_identity_link"})
                 raise ReferralError(REFERRAL_EXISTING_PROFILE_ERROR)
+            logger.info("browser_identity_resolved", extra={"action": "browser_identity_resolved", "provider_user_id": normalized_provider_user_id, "client_id": profile.id, "status": "reused", "existing_deleted_client": False})
             return BrowserIdentityResolveResult("linked", normalized_provider, normalized_provider_user_id, profile, identity_link)
 
         profile = self._get_legacy_profile(normalized_provider, normalized_provider_user_id)
         status: BrowserIdentityResolveStatus = "legacy_linked"
         created_profile = False
         if profile is not None and normalized_referral_code:
+            logger.info("browser_identity_referral_rejected", extra={"action": "browser_identity_referral_rejected", "provider_user_id": normalized_provider_user_id, "client_id": profile.id, "reason": "existing_legacy_profile"})
             raise ReferralError(REFERRAL_EXISTING_PROFILE_ERROR)
         if profile is None and not create_if_missing:
             return BrowserIdentityResolveResult("not_found", normalized_provider, normalized_provider_user_id)
@@ -93,7 +99,18 @@ class BrowserIdentityResolver:
         self._sync_profile_metadata(profile, normalized_provider, normalized_provider_user_id, normalized_display_name, normalized_username, self._clean(photo_url), normalized_source)
         ensure_referral_code(self.db, profile)
         if created_profile:
-            apply_referral_on_new_client(self.db, profile, normalized_referral_code)
+            referral = apply_referral_on_new_client(self.db, profile, normalized_referral_code)
+            logger.info(
+                "browser_identity_referral_applied",
+                extra={
+                    "action": "browser_identity_referral_applied",
+                    "provider_user_id": normalized_provider_user_id,
+                    "client_id": profile.id,
+                    "referral_code_present": normalized_referral_code is not None,
+                    "referral_relation_created": referral is not None,
+                    "skip_reason": None if normalized_referral_code and referral is not None else ("no_referral_code" if not normalized_referral_code else "referral_not_created"),
+                },
+            )
 
         identity_link = ClientIdentityLink(
             client_profile_id=profile.id,
@@ -104,6 +121,7 @@ class BrowserIdentityResolver:
         )
         self.db.add(identity_link)
         self.db.flush()
+        logger.info("browser_identity_resolved", extra={"action": "browser_identity_resolved", "provider_user_id": normalized_provider_user_id, "client_id": profile.id, "status": "created" if created_profile else "legacy_linked", "existing_deleted_client": False})
         return BrowserIdentityResolveResult(status, normalized_provider, normalized_provider_user_id, profile, identity_link, True, created_profile)
 
     def _sync_profile_metadata(self, profile: ClientProfile, provider: str, provider_user_id: str, display_name: str | None, username: str | None, photo_url: str | None, source: str | None) -> None:

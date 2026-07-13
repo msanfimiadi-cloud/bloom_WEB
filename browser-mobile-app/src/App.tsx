@@ -796,6 +796,7 @@ export default function App() {
     null,
   );
   const [isLoading, setIsLoading] = useState(true);
+  const [isGiveawayLoading, setIsGiveawayLoading] = useState(true);
   const [error, setError] = useState<AppDiagnostic | null>(null);
   const [authRestoreStatus, setAuthRestoreStatus] = useState<AuthRestoreStatus>("unknown");
   const [lastAuthDecisionReason, setLastAuthDecisionReason] = useState("initial_unknown");
@@ -1620,6 +1621,7 @@ export default function App() {
           }
 
           traceStartup("loadAppData_optional_requests_started", { sequenceId });
+          setIsGiveawayLoading(true);
           traceStart("secondary_requests_start");
           traceStart("verifications_start");
           traceStart("savings_start");
@@ -1690,6 +1692,7 @@ export default function App() {
               ? linkingStatusResult.value
               : null;
 
+          setIsGiveawayLoading(false);
           setData((current) =>
             normalizeAppData({
               ...current,
@@ -2330,7 +2333,9 @@ export default function App() {
       );
       const refreshed = await refreshProfileAndSubscription().catch(() => null);
       const referralSummary = await traceStartupStep("action:activateTrial.getReferralSummary", getReferralSummary).catch(() => null);
+      setIsGiveawayLoading(true);
       const giveawayState = await traceStartupStep("action:activateTrial.getGiveawayState", getGiveawayState).catch(() => null);
+      setIsGiveawayLoading(false);
       if (referralSummary || giveawayState) {
         setData((current) => normalizeAppData({ ...current, referralSummary: referralSummary ?? current.referralSummary, giveawayState: giveawayState ?? current.giveawayState }));
       }
@@ -2834,6 +2839,7 @@ export default function App() {
             onActivateTrial={activateTrial}
             referralSummary={safeData.referralSummary}
             giveawayState={safeData.giveawayState}
+            isGiveawayLoading={isGiveawayLoading}
           />
         ) : null}
 

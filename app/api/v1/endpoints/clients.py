@@ -2,6 +2,7 @@ from __future__ import annotations
 
 from datetime import date, datetime, time, timedelta, timezone
 from decimal import Decimal
+import logging
 import hashlib
 import hmac
 import secrets
@@ -19,7 +20,7 @@ from app.db.session import get_db
 from app.models.city import City
 from app.models.category import Category
 from app.models.client import AccountLinkingChallenge, ClientIdentityLink, ClientProfile, ClientReferral, GiveawayEntry, VkLinkCode, VkLinkCodeStatus
-from app.models.giveaway import Giveaway
+from app.models.giveaway import Giveaway, GiveawayNumber
 from app.models.partner import OfferPhoto, Partner, PartnerOffer, PartnerPhoto
 from app.models.payment import PaymentReceipt, PaymentRequest, PaymentRequestStatus, Subscription, SubscriptionStatus
 from app.models.verification import PrivilegeVerificationSession, PrivilegeVerificationStatus
@@ -76,6 +77,7 @@ from app.services.privilege_verifications import (
 )
 
 router = APIRouter(prefix="/clients", tags=["clients"])
+logger = logging.getLogger(__name__)
 
 CITY_NOT_FOUND_DETAIL = "City not found"
 PARTNER_NOT_FOUND_DETAIL = "Partner not found"
@@ -556,6 +558,38 @@ def activate_client_trial_subscription(
                 source=TRIAL_SOURCE,
             )
         )
+
+    db.flush()
+    active_giveaway = get_active_giveaway(db, now)
+    base_number_created = False
+    if active_giveaway is not None:
+        had_base_number = db.execute(
+            select(GiveawayNumber.id).where(
+                GiveawayNumber.giveaway_id == active_giveaway.id,
+                GiveawayNumber.client_id == profile.id,
+                GiveawayNumber.source == "subscription",
+            )
+        ).scalar_one_or_none() is not None
+        ensure_user_numbers(db, active_giveaway.id, profile.id)
+        base_number_created = not had_base_number and db.execute(
+            select(GiveawayNumber.id).where(
+                GiveawayNumber.giveaway_id == active_giveaway.id,
+                GiveawayNumber.client_id == profile.id,
+                GiveawayNumber.source == "subscription",
+            )
+        ).scalar_one_or_none() is not None
+    logger.info(
+        "client_trial_activated",
+        extra={
+            "action": "client_trial_activated",
+            "provider_user_id": profile.telegram_user_id or profile.vk_user_id,
+            "client_id": profile.id,
+            "trial_activated": True,
+            "active_giveaway_id": active_giveaway.id if active_giveaway is not None else None,
+            "base_giveaway_entry_created": base_number_created,
+            "base_giveaway_entry_skip_reason": None if active_giveaway is not None else "no_active_giveaway",
+        },
+    )
 
     db.commit()
     db.refresh(profile)

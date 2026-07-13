@@ -97,6 +97,15 @@ def delete_user_with_relations(*, db: Session, admin: AdminUser, user_id: int) -
                     .where(ClientProfile.referred_by_referral_id.in_(referral_ids))
                     .values(referred_by_referral_id=None)
                 )
+                # Keep already granted giveaway rewards on the inviter account.
+                # Detach them from the deleted referral rows so the old reward
+                # numbers remain visible and the same Telegram ID can register
+                # again as a brand-new client with a brand-new referral relation.
+                db.execute(
+                    update(GiveawayEntry)
+                    .where(GiveawayEntry.related_referral_id.in_(referral_ids), GiveawayEntry.client_id != client.id)
+                    .values(related_referral_id=None)
+                )
                 deleted["giveaway_entries"] += db.execute(
                     delete(GiveawayEntry).where(GiveawayEntry.related_referral_id.in_(referral_ids))
                 ).rowcount or 0
