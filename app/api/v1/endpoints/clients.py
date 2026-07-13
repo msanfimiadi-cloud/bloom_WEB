@@ -347,18 +347,34 @@ def read_client_referral(
     profile = _get_or_create_client_profile(db, current_user.id)
     code = ensure_referral_code(db, profile)
     db.commit()
-    referrals_count, earned_entries_count = referral_counts(db, profile.id)
+    now = datetime.now(timezone.utc)
+    referrals_count, earned_entries_count = referral_counts(db, profile.id, now)
+    activated_count = activated_referrals_count(db, profile.id, now)
+    active_giveaway = get_active_giveaway(db, now)
     rows = db.execute(
         select(ClientReferral, ClientProfile)
         .join(ClientProfile, ClientProfile.id == ClientReferral.referred_client_id)
-        .where(ClientReferral.referrer_client_id == profile.id)
+        .where(ClientReferral.referrer_client_id == profile.id, ClientProfile.is_active.is_(True))
         .order_by(ClientReferral.created_at.desc(), ClientReferral.id.desc())
     ).all()
+    logger.info(
+        "client_referral_stats_read",
+        extra={
+            "action": "client_referral_stats_read",
+            "referrer_client_id": profile.id,
+            "invited_count": referrals_count,
+            "activated_count": activated_count,
+            "referral_entries_count": earned_entries_count,
+            "active_giveaway_id": active_giveaway.id if active_giveaway is not None else None,
+        },
+    )
     return ClientReferralSummaryRead(
         referral_code=code,
         referral_link=referral_link(code) or "",
+        invited_count=referrals_count,
         referrals_count=referrals_count,
-        activated_referrals_count=activated_referrals_count(db, profile.id),
+        activated_count=activated_count,
+        activated_referrals_count=activated_count,
         earned_entries_count=earned_entries_count,
         earned_giveaway_entries_count=earned_entries_count,
         reward_entries_per_referral=REWARD_ENTRIES_PER_REFERRAL,

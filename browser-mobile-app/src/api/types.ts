@@ -259,6 +259,7 @@ export interface ReferralSummary {
   invited_count?: number;
   referrals_count?: number;
   pending_referrals_count?: number;
+  activated_count?: number;
   activated_referrals_count?: number;
   earned_entries_count?: number;
   earned_giveaway_entries_count?: number;

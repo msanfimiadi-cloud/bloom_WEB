@@ -280,9 +280,9 @@ export function HomePage({
         )}
         {referralCopyMessage ? <p className="success-text">{referralCopyMessage}</p> : null}
         <div className="referral-banner__stats" aria-label="Статистика реферальной программы">
-          <span>Приглашено: {referralSummary?.referrals_count ?? referralSummary?.invited_count ?? 0}</span>
-          <span>Активировали тестовый период: {referralSummary?.activated_referrals_count ?? 0}</span>
-          <span>Дополнительных номеров в розыгрыше: {referralSummary?.earned_entries_count ?? referralSummary?.earned_giveaway_entries_count ?? 0}</span>
+          <span>Приглашено: {referralSummary?.invited_count ?? referralSummary?.referrals_count ?? 0}</span>
+          <span>Активировали тестовый период: {referralSummary?.activated_count ?? referralSummary?.activated_referrals_count ?? 0}</span>
+          <span>Дополнительных номеров в розыгрыше: {referralSummary?.earned_giveaway_entries_count ?? referralSummary?.earned_entries_count ?? 0}</span>
         </div>
       </div>
     );
