@@ -22,6 +22,7 @@ interface HomePageProps {
   onActivateTrial: () => Promise<Subscription>;
   referralSummary?: ReferralSummary | null;
   giveawayState?: GiveawayState | null;
+  isGiveawayLoading?: boolean;
 }
 
 function getCityName(city: unknown): string {
@@ -53,6 +54,7 @@ export function HomePage({
   onActivateTrial,
   referralSummary,
   giveawayState,
+  isGiveawayLoading = false,
 }: HomePageProps) {
   const safeCities = Array.isArray(cities) ? cities : [];
   const safePartners = Array.isArray(partners) ? partners : [];
@@ -289,12 +291,30 @@ export function HomePage({
   function renderGiveawayBlock() {
     const giveaway = giveawayState?.giveaway;
     const prizes = Array.isArray(giveaway?.prizes) ? giveaway?.prizes ?? [] : [];
-    if (!giveawayState?.has_active_giveaway || !giveaway) {
+    if (isGiveawayLoading || giveawayState == null) {
+      return (
+        <div className="info-panel info-panel--soft giveaway-panel">
+          <p className="eyebrow">Розыгрыш</p>
+          <strong>Загружаем активный розыгрыш</strong>
+          <p>Проверяем ваши номера участия.</p>
+        </div>
+      );
+    }
+    if (!giveawayState.has_active_giveaway) {
       return (
         <div className="info-panel info-panel--soft giveaway-panel">
           <p className="eyebrow">Розыгрыш</p>
           <strong>Скоро объявим новый розыгрыш</strong>
           <p>Новый розыгрыш появится в ближайшее время.</p>
+        </div>
+      );
+    }
+    if (!giveaway) {
+      return (
+        <div className="info-panel info-panel--soft giveaway-panel">
+          <p className="eyebrow">Розыгрыш</p>
+          <strong>Активный розыгрыш</strong>
+          <p>Данные розыгрыша обновляются. Попробуйте открыть приложение ещё раз.</p>
         </div>
       );
     }

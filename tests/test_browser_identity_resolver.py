@@ -7,7 +7,7 @@ from sqlalchemy.pool import StaticPool
 
 import app.models  # noqa: F401 - register all SQLAlchemy models for test metadata
 from app.db.base import Base
-from app.models.client import ClientIdentityLink, ClientProfile
+from app.models.client import ClientIdentityLink, ClientProfile, ClientReferral, GiveawayEntry
 from app.models.user import User, UserRole
 from app.services.browser_identity_resolver import BrowserIdentityResolver
 
@@ -104,7 +104,9 @@ def test_vk_provider_finds_legacy_user_id_and_creates_identity_link(db_session) 
 
 
 def test_unknown_provider_user_id_creates_client_profile(db_session) -> None:
-    _create_profile(db_session, telegram_user_id="known")
+    referrer = _create_profile(db_session, telegram_user_id="known")
+    referrer.referral_code = "REF123"
+    db_session.flush()
 
     result = BrowserIdentityResolver(db_session).resolve(
         provider="telegram",
@@ -144,3 +146,30 @@ def test_repeated_resolve_does_not_create_duplicate_identity_link(db_session) ->
     assert second.client_profile.id == profile.id
     assert second.created_identity_link is False
     assert len(links) == 1
+
+
+def test_same_provider_user_id_can_register_after_hard_delete_with_new_referral(db_session) -> None:
+    referrer = _create_profile(db_session)
+    referrer.referral_code = "REF123"
+    db_session.flush()
+    resolver = BrowserIdentityResolver(db_session)
+
+    first = resolver.resolve(provider="telegram", provider_user_id="tg-deleted", referral_code="REF123")
+    db_session.commit()
+    first_client_id = first.client_profile.id
+    first_user_id = first.client_profile.user_id
+    first_referral_id = db_session.execute(select(ClientReferral.id).where(ClientReferral.referred_client_id == first_client_id)).scalar_one()
+    db_session.query(GiveawayEntry).filter(GiveawayEntry.related_referral_id == first_referral_id).update({"related_referral_id": None})
+    db_session.query(ClientReferral).filter(ClientReferral.id == first_referral_id).delete()
+    db_session.query(ClientIdentityLink).filter(ClientIdentityLink.client_profile_id == first_client_id).delete()
+    db_session.query(ClientProfile).filter(ClientProfile.id == first_client_id).delete()
+    db_session.query(User).filter(User.id == first_user_id).delete()
+    db_session.commit()
+
+    second = resolver.resolve(provider="telegram", provider_user_id="tg-deleted", referral_code="REF123")
+    db_session.commit()
+
+    assert second.status == "created"
+    assert db_session.query(ClientProfile).filter_by(telegram_user_id="tg-deleted").count() == 1
+    assert db_session.execute(select(ClientReferral).where(ClientReferral.referred_client_id == second.client_profile.id)).scalar_one().referrer_client_id == referrer.id
+    assert db_session.query(GiveawayEntry).filter_by(client_id=referrer.id, source="referral").count() == 2

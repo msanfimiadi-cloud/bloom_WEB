@@ -19,6 +19,7 @@ from app.main import app
 from app.models.category import Category
 from app.models.city import City
 from app.models.client import ClientProfile
+from app.models.giveaway import Giveaway, GiveawayNumber
 from app.models.partner import Partner, PartnerOffer, PartnerPhoto
 from app.models.payment import PaymentRequest, PaymentRequestStatus, Subscription, SubscriptionStatus
 from app.models.user import AdminUser, User, UserRole
@@ -568,6 +569,42 @@ def test_documented_risk_trial_subscription_is_per_client_profile_today(
     assert first_response.json()["client_id"] != second_response.json()["client_id"]
     assert first_response.json()["trial_used"] is True
     assert second_response.json()["trial_used"] is True
+
+
+def test_client_trial_subscription_creates_base_giveaway_number(client_cabinet_client: TestClient) -> None:
+    token = _client_token(client_cabinet_client)
+    with next(app.dependency_overrides[get_db]()) as session:
+        session.add(Giveaway(title="active", is_active=True, winners_count=1))
+        session.commit()
+
+    response = client_cabinet_client.post("/api/v1/clients/me/trial-subscription", headers=_auth_headers(token))
+    assert response.status_code == 200
+
+    giveaway_response = client_cabinet_client.get("/api/v1/clients/giveaway", headers=_auth_headers(token))
+    assert giveaway_response.status_code == 200
+    data = giveaway_response.json()
+    assert data["has_active_giveaway"] is True
+    assert data["user_numbers_count"] == 1
+    assert data["numbers"][0]["source"] == "subscription"
+
+    repeat_response = client_cabinet_client.get("/api/v1/clients/giveaway", headers=_auth_headers(token))
+    assert repeat_response.status_code == 200
+    with next(app.dependency_overrides[get_db]()) as session:
+        assert session.query(GiveawayNumber).count() == 1
+
+
+def test_active_giveaway_visible_with_zero_entries_for_guest(client_cabinet_client: TestClient) -> None:
+    with next(app.dependency_overrides[get_db]()) as session:
+        session.add(Giveaway(title="active", is_active=True, winners_count=1))
+        session.commit()
+
+    response = client_cabinet_client.get("/api/v1/clients/giveaway")
+    assert response.status_code == 200
+    data = response.json()
+    assert data["has_active_giveaway"] is True
+    assert data["giveaway"]["title"] == "active"
+    assert data["guest"] is True
+    assert data["numbers"] == []
 
 def test_client_trial_subscription_repeated_activation_is_blocked(client_cabinet_client: TestClient) -> None:
     token = _client_token(client_cabinet_client)

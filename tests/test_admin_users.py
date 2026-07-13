@@ -630,3 +630,40 @@ def test_admin_users_shows_vk_provider_user_id_and_username(admin_users_client: 
     user = next(item for item in users_response.json() if item["vk_user_id"] == "vk-admin-visible")
     assert user["vk_username"] == "vk_domain"
     assert user["vk_url"] == "https://vk.com/vk_domain"
+
+def test_admin_delete_referred_client_preserves_referrer_reward_entries(admin_users_client: TestClient, admin_token: str) -> None:
+    create_referrer = admin_users_client.post(
+        "/api/v1/admin/users",
+        headers=_auth_headers(admin_token),
+        json={"email": "referrer-preserve@example.com", "password": "ClientVk123", "role": "client"},
+    )
+    create_referred = admin_users_client.post(
+        "/api/v1/admin/users",
+        headers=_auth_headers(admin_token),
+        json={"email": "referred-preserve@example.com", "password": "ClientVk123", "role": "client"},
+    )
+    assert create_referrer.status_code == 200
+    assert create_referred.status_code == 200
+    referrer_user_id = create_referrer.json()["id"]
+    referred_user_id = create_referred.json()["id"]
+
+    with next(app.dependency_overrides[get_db]()) as session:
+        referrer = ClientProfile(user_id=referrer_user_id, contact_email="referrer-preserve-profile@example.com")
+        referred = ClientProfile(user_id=referred_user_id, contact_email="referred-preserve-profile@example.com")
+        session.add_all([referrer, referred])
+        session.flush()
+        referral = ClientReferral(referrer_client_id=referrer.id, referred_client_id=referred.id, referral_code="REF-PRESERVE", reward_entries_count=5)
+        session.add(referral)
+        session.flush()
+        referred.referred_by_referral_id = referral.id
+        session.add(GiveawayEntry(client_id=referrer.id, entries_count=5, source="referral", related_referral_id=referral.id))
+        session.commit()
+        referrer_id = referrer.id
+
+    response = admin_users_client.delete(f"/api/v1/admin/users/{referred_user_id}", headers=_auth_headers(admin_token))
+
+    assert response.status_code == 200
+    with next(app.dependency_overrides[get_db]()) as session:
+        reward = session.query(GiveawayEntry).filter_by(client_id=referrer_id, source="referral").one()
+        assert reward.entries_count == 5
+        assert reward.related_referral_id is None
