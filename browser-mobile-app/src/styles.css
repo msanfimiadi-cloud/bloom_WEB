@@ -6084,3 +6084,45 @@ small,
   border: 1px solid rgba(255,255,255,0.55);
   box-shadow: 0 20px 60px rgba(71, 38, 48, 0.14);
 }
+
+.auth-code-input {
+  min-height: 48px;
+  width: 100%;
+  border: 1px solid rgba(201, 128, 141, 0.28);
+  border-radius: var(--radius-input);
+  background: rgba(255, 250, 250, 0.94);
+  color: var(--color-text);
+  padding: 0 14px;
+  font-family: inherit;
+  font-size: 16px;
+  font-weight: 700;
+  line-height: 1.25;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  transition: border-color var(--motion-fast), box-shadow var(--motion-fast), background var(--motion-fast);
+}
+
+.auth-code-input:focus,
+.auth-code-input:active {
+  border-color: rgba(201, 128, 141, 0.5);
+  box-shadow: 0 0 0 4px rgba(201, 128, 141, 0.12);
+  font-size: 16px;
+  outline: 0;
+}
+
+.auth-code-input:disabled {
+  background: rgba(255, 250, 250, 0.62);
+  color: var(--color-disabled);
+  cursor: not-allowed;
+  opacity: 1;
+}
+
+.auth-code-input:-webkit-autofill,
+.auth-code-input:-webkit-autofill:hover,
+.auth-code-input:-webkit-autofill:focus,
+.auth-code-input:-webkit-autofill:active {
+  -webkit-text-fill-color: var(--color-text);
+  box-shadow: 0 0 0 1000px rgba(255, 250, 250, 0.94) inset;
+  font-size: 16px;
+  transition: background-color 9999s ease-out;
+}
