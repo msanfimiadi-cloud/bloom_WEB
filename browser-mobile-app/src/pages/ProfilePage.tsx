@@ -256,7 +256,7 @@ export function ProfilePage({ profile, cities, onSaveProfile, referralSummary, o
         {copyMessage ? <p className="success-text">{copyMessage}</p> : null}
       </div>
 
-      <button className="button button--ghost profile-logout-button" type="button" onClick={onLogout}>
+      <button className="button button--ghost profile-logout-button" type="button" onClick={() => { console.info("[BLOOM_LOGOUT_TRACE] logout_button_clicked"); onLogout(); }}>
         Выйти из профиля
       </button>
 

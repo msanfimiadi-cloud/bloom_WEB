@@ -114,3 +114,43 @@ def test_manual_logout_finishes_auth_locally_without_bootstrap_or_draft_clear() 
     assert 'clearLoginCodeDrafts();' not in logout_section
     assert 'setLoginCode("");' not in logout_section
     assert 'setLoginReferralCode("");' not in logout_section
+
+
+def test_manual_logout_blocks_lifecycle_bootstrap_and_renders_auth_screen() -> None:
+    assert 'const manualLogoutInProgressRef = useRef(false);' in APP
+    assert 'const logoutGenerationRef = useRef(0);' in APP
+    logout_section = APP[APP.index('const logout = useCallback(() => {'):APP.index('const submitLoginCode', APP.index('const logout = useCallback(() => {'))]
+    assert 'manualLogoutInProgressRef.current = true;' in logout_section
+    assert 'logoutGenerationRef.current += 1;' in logout_section
+    assert 'setAuthRestoreStatus("unauthenticated");' in logout_section
+    assert 'setIsLoading(false);' in logout_section
+    assert 'setIsBootstrapDone(true);' in logout_section
+    assert 'setBrowserLoginRequired(true);' in logout_section
+    assert 'setData(emptyData);' in logout_section
+    assert 'loadAppData(' not in logout_section
+
+    load_app_data_guard = APP[APP.index('traceStartupRecovery("loadAppData:enter"'):APP.index('if (forceNew) {')]
+    assert 'manualLogoutInProgressRef.current' in load_app_data_guard
+    assert 'manual_logout_bootstrap_blocked' in load_app_data_guard
+    assert 'setIsLoading(true);' not in load_app_data_guard
+
+    pageshow_section = APP[APP.index('const onPageShow = (event: PageTransitionEvent) => {'):APP.index('const onPageHide', APP.index('const onPageShow = (event: PageTransitionEvent) => {'))]
+    assert 'interruptedStartup && !manualLogoutInProgressRef.current' in pageshow_section
+
+    home_catalog_effect = APP[APP.rfind('useEffect(() => {', 0, APP.index('home bootstrap:loadPartners')):APP.index('const openCatalog = useCallback')]
+    assert 'manualLogoutInProgressRef.current' in home_catalog_effect
+    assert 'browserLoginRequired' in home_catalog_effect
+    assert 'authRestoreStatus !== "authenticated"' in home_catalog_effect
+
+    render_section = APP[APP.index('const canRenderLogin ='):APP.index('if (error) {')]
+    assert 'const canRenderLogin = browserLoginRequired && authRestoreStatus === "unauthenticated" && !isLoading && !bootstrapPromiseRef.current;' in render_section
+    assert 'if (canRenderLogin)' in render_section
+    assert 'welcome-auth-screen' in render_section
+    assert render_section.index('if (canRenderLogin)') < render_section.index('if (isLoading)')
+
+
+def test_profile_logout_button_uses_app_logout_callback_with_trace() -> None:
+    profile = (ROOT / "src" / "pages" / "ProfilePage.tsx").read_text(encoding="utf-8")
+    button_section = profile[profile.index('profile-logout-button'):profile.index('Выйти из профиля')]
+    assert '[BLOOM_LOGOUT_TRACE] logout_button_clicked' in button_section
+    assert 'onLogout();' in button_section
