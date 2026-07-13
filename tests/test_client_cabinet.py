@@ -12,17 +12,18 @@ from sqlalchemy.pool import StaticPool
 
 import app.models  # noqa: F401 - register all SQLAlchemy models for test metadata
 import app.api.v1.endpoints.clients as clients_endpoint
-from app.core.security import hash_password
+from app.core.security import create_access_token, hash_password
 from app.db.base import Base
 from app.db.session import get_db
 from app.main import app
 from app.models.category import Category
 from app.models.city import City
-from app.models.client import ClientProfile
+from app.models.client import ClientProfile, ClientReferral, GiveawayEntry
 from app.models.giveaway import Giveaway, GiveawayNumber
 from app.models.partner import Partner, PartnerOffer, PartnerPhoto
 from app.models.payment import PaymentRequest, PaymentRequestStatus, Subscription, SubscriptionStatus
 from app.models.user import AdminUser, User, UserRole
+from app.services.referrals import apply_referral_on_new_client
 
 
 @pytest.fixture()
@@ -591,6 +592,105 @@ def test_client_trial_subscription_creates_base_giveaway_number(client_cabinet_c
     assert repeat_response.status_code == 200
     with next(app.dependency_overrides[get_db]()) as session:
         assert session.query(GiveawayNumber).count() == 1
+
+
+def _seed_referral_with_active_trial(session: Session, referrer: ClientProfile, referred: ClientProfile) -> None:
+    apply_referral_on_new_client(session, referred, referrer.referral_code)
+    now = datetime.now(timezone.utc)
+    referred.trial_subscription_used_at = now
+    session.add(
+        Subscription(
+            client_id=referred.id,
+            status=SubscriptionStatus.active.value,
+            starts_at=now - timedelta(minutes=1),
+            ends_at=now + timedelta(days=15),
+            source="trial",
+        )
+    )
+    session.flush()
+
+
+def test_client_referral_summary_counts_single_active_trial_referral(client_cabinet_client: TestClient) -> None:
+    with next(app.dependency_overrides[get_db]()) as session:
+        session.add(Giveaway(title="active referral summary", is_active=True, winners_count=1))
+        referrer_user = User(email="referrer-summary@example.com", password_hash=hash_password("ClientPassword123"), role=UserRole.CLIENT.value, is_active=True)
+        referred_user = User(email="referred-summary@example.com", password_hash=hash_password("ClientPassword123"), role=UserRole.CLIENT.value, is_active=True)
+        session.add_all([referrer_user, referred_user])
+        session.flush()
+        referrer = ClientProfile(user_id=referrer_user.id, referral_code="REFSUM01", is_active=True)
+        referred = ClientProfile(user_id=referred_user.id, telegram_user_id="tg-summary-1", is_active=True)
+        session.add_all([referrer, referred])
+        session.flush()
+        _seed_referral_with_active_trial(session, referrer, referred)
+        session.commit()
+        referrer_user_id = referrer_user.id
+
+    response = client_cabinet_client.get(
+        "/api/v1/clients/me/referral",
+        headers=_auth_headers(create_access_token(f"user:{referrer_user_id}")),
+    )
+
+    assert response.status_code == 200
+    data = response.json()
+    assert data["invited_count"] == 1
+    assert data["referrals_count"] == 1
+    assert data["activated_count"] == 1
+    assert data["activated_referrals_count"] == 1
+    assert data["earned_giveaway_entries_count"] == 5
+
+
+def test_client_referral_summary_counts_reregistered_deleted_referral_rewards(
+    client_cabinet_client: TestClient,
+    admin_token: str,
+) -> None:
+    with next(app.dependency_overrides[get_db]()) as session:
+        session.add(Giveaway(title="active referral reregister", is_active=True, winners_count=1))
+        referrer_user = User(email="referrer-reregister@example.com", password_hash=hash_password("ClientPassword123"), role=UserRole.CLIENT.value, is_active=True)
+        first_user = User(email="first-reregister@example.com", password_hash=hash_password("ClientPassword123"), role=UserRole.CLIENT.value, is_active=True)
+        session.add_all([referrer_user, first_user])
+        session.flush()
+        referrer = ClientProfile(user_id=referrer_user.id, referral_code="REFRE001", is_active=True)
+        first_referred = ClientProfile(user_id=first_user.id, telegram_user_id="tg-reregister", is_active=True)
+        session.add_all([referrer, first_referred])
+        session.flush()
+        _seed_referral_with_active_trial(session, referrer, first_referred)
+        session.commit()
+        referrer_user_id = referrer_user.id
+        first_user_id = first_user.id
+
+    delete_response = client_cabinet_client.delete(
+        f"/api/v1/admin/users/{first_user_id}",
+        headers=_auth_headers(admin_token),
+    )
+    assert delete_response.status_code == 200
+
+    with next(app.dependency_overrides[get_db]()) as session:
+        referrer = session.execute(select(ClientProfile).where(ClientProfile.user_id == referrer_user_id)).scalar_one()
+        second_user = User(email="second-reregister@example.com", password_hash=hash_password("ClientPassword123"), role=UserRole.CLIENT.value, is_active=True)
+        session.add(second_user)
+        session.flush()
+        second_referred = ClientProfile(user_id=second_user.id, telegram_user_id="tg-reregister", is_active=True)
+        session.add(second_referred)
+        session.flush()
+        _seed_referral_with_active_trial(session, referrer, second_referred)
+        session.commit()
+
+    response = client_cabinet_client.get(
+        "/api/v1/clients/me/referral",
+        headers=_auth_headers(create_access_token(f"user:{referrer_user_id}")),
+    )
+
+    assert response.status_code == 200
+    data = response.json()
+    assert data["invited_count"] == 1
+    assert data["referrals_count"] == 1
+    assert data["activated_count"] == 1
+    assert data["activated_referrals_count"] == 1
+    assert data["earned_giveaway_entries_count"] == 10
+    with next(app.dependency_overrides[get_db]()) as session:
+        referrer = session.execute(select(ClientProfile).where(ClientProfile.user_id == referrer_user_id)).scalar_one()
+        assert session.query(ClientReferral).filter_by(referrer_client_id=referrer.id).count() == 1
+        assert session.query(GiveawayEntry).filter_by(client_id=referrer.id, source="referral").count() == 2
 
 
 def test_active_giveaway_visible_with_zero_entries_for_guest(client_cabinet_client: TestClient) -> None:

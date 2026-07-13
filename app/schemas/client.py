@@ -260,7 +260,9 @@ class ClientReferralSummaryItem(BaseModel):
 class ClientReferralSummaryRead(BaseModel):
     referral_code: str
     referral_link: str
+    invited_count: int = 0
     referrals_count: int
+    activated_count: int = 0
     activated_referrals_count: int = 0
     earned_entries_count: int
     earned_giveaway_entries_count: int = 0

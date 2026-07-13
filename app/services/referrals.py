@@ -71,16 +71,31 @@ def _active_giveaway_id(db: Session, now: datetime | None = None) -> int | None:
     ).scalar_one_or_none()
 
 
-def referral_counts(db: Session, client_id: int) -> tuple[int, int]:
+def _active_referral_relations_filter(db: Session, client_id: int):
     criteria = _referral_owner_filter(db, client_id)
-    referrals_count = db.execute(select(func.count(func.distinct(ClientReferral.referred_client_id))).where(criteria)).scalar_one()
+    return criteria, ClientProfile.is_active.is_(True)
+
+
+def referral_counts(db: Session, client_id: int, now: datetime | None = None) -> tuple[int, int]:
+    criteria, active_invited_client = _active_referral_relations_filter(db, client_id)
+    referrals_count = (
+        db.execute(
+            select(func.count(func.distinct(ClientReferral.referred_client_id)))
+            .join(ClientProfile, ClientProfile.id == ClientReferral.referred_client_id)
+            .where(criteria, active_invited_client)
+        ).scalar_one()
+        or 0
+    )
+    active_giveaway_id = _active_giveaway_id(db, now)
+    entry_filters = [
+        GiveawayEntry.client_id == client_id,
+        GiveawayEntry.source == REFERRAL_SOURCE,
+    ]
+    if active_giveaway_id is not None:
+        entry_filters.append(or_(GiveawayEntry.giveaway_id == active_giveaway_id, GiveawayEntry.giveaway_id.is_(None)))
     earned_entries_count = db.execute(
-        select(func.coalesce(func.sum(GiveawayEntry.entries_count), 0)).where(
-            GiveawayEntry.client_id == client_id,
-            GiveawayEntry.source == REFERRAL_SOURCE,
-        )
+        select(func.coalesce(func.sum(GiveawayEntry.entries_count), 0)).where(*entry_filters)
     ).scalar_one()
-    active_giveaway_id = _active_giveaway_id(db)
     referral_numbers_count = 0
     if active_giveaway_id is not None:
         referral_numbers_count = int(
@@ -98,7 +113,7 @@ def referral_counts(db: Session, client_id: int) -> tuple[int, int]:
 
 def activated_referrals_count(db: Session, client_id: int, now: datetime | None = None) -> int:
     now = now or datetime.now(timezone.utc)
-    criteria = _referral_owner_filter(db, client_id)
+    criteria, active_invited_client = _active_referral_relations_filter(db, client_id)
     return int(
         db.execute(
             select(func.count(func.distinct(ClientReferral.referred_client_id)))
@@ -106,6 +121,7 @@ def activated_referrals_count(db: Session, client_id: int, now: datetime | None 
             .join(Subscription, Subscription.client_id == ClientProfile.id)
             .where(
                 criteria,
+                active_invited_client,
                 Subscription.status == SubscriptionStatus.active.value,
                 Subscription.starts_at <= now,
                 Subscription.ends_at >= now,
