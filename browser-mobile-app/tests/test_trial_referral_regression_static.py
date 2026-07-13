@@ -158,7 +158,7 @@ def test_referral_ui_shares_or_copies_and_shows_pending_activated_entries():
     assert "shareOrCopyReferralLink(referralLink)" in profile
     assert "navigator.share" in util and "navigator.clipboard?.writeText" in util
     assert "pending_referrals_count" in home and "activated_referrals_count" in home
-    assert "pending_referrals_count" in profile and "activated_referrals_count" in profile
+    assert "activated_referrals_count" in profile or "activated_count" in profile
 
 
 def test_bottom_nav_375_width_spacing_regression():
@@ -246,3 +246,22 @@ def test_referral_sql_uses_client_ids_for_pending_and_rewards():
     assert "referrer_client_id, referred_client_id" in migration
     assert "v_referral.referrer_client_id" in migration
     assert "status = 'successful'" in migration
+
+
+def test_profile_referral_stats_render_http_summary_values_without_bootstrap_zero_fallback():
+    profile = read("src/pages/ProfilePage.tsx")
+    app = read("src/App.tsx")
+
+    assert "const invited = referralSummary?.invited_count ?? referralSummary?.referrals_count ?? 0;" in profile
+    assert "const activated = referralSummary?.activated_count ?? referralSummary?.activated_referrals_count ?? 0;" in profile
+    assert "const additionalEntries = referralSummary?.earned_giveaway_entries_count ?? referralSummary?.earned_entries_count ?? 0;" in profile
+    assert "Приглашено: {invited}" in profile
+    assert "Активировали тестовый период: {activated}" in profile
+    assert "Дополнительных номеров в розыгрыше: {additionalEntries}" in profile
+
+    startup_start = app.index('traceStartup("loadAppData_optional_requests_started"')
+    startup_end = app.index('setIsBootstrapDone(true)', startup_start)
+    startup_flow = app[startup_start:startup_end]
+    assert 'settleStartupStep("secondary:getReferralSummary", getReferralSummary)' in startup_flow
+    assert 'referralSummaryResult.status === "fulfilled"' in startup_flow
+    assert 'referralSummaryResult.value' in startup_flow

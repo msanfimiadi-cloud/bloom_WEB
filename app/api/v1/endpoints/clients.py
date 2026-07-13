@@ -357,15 +357,28 @@ def read_client_referral(
         .where(ClientReferral.referrer_client_id == profile.id, ClientProfile.is_active.is_(True))
         .order_by(ClientReferral.created_at.desc(), ClientReferral.id.desc())
     ).all()
+    referral_relation_ids = [int(row[0].id) for row in rows]
+    referral_entry_count = int(
+        db.execute(
+            select(func.count(GiveawayEntry.id)).where(
+                GiveawayEntry.client_id == profile.id,
+                GiveawayEntry.source == "referral",
+            )
+        ).scalar_one()
+        or 0
+    )
     logger.info(
-        "client_referral_stats_read",
+        "[BLOOM_REFERRAL_STATS_TRACE] backend_summary",
         extra={
             "action": "client_referral_stats_read",
-            "referrer_client_id": profile.id,
+            "current_client_id": profile.id,
+            "referral_code": code,
             "invited_count": referrals_count,
             "activated_count": activated_count,
-            "referral_entries_count": earned_entries_count,
+            "earned_giveaway_entries_count": earned_entries_count,
             "active_giveaway_id": active_giveaway.id if active_giveaway is not None else None,
+            "referral_relation_ids": referral_relation_ids,
+            "referral_entry_count": referral_entry_count,
         },
     )
     return ClientReferralSummaryRead(

@@ -1627,6 +1627,7 @@ export default function App() {
           traceStart("savings_start");
           traceStart("cities_start");
           traceStart("linking_status_start");
+          traceStart("referral_summary_start");
           const settleStartupStep = async <T,>(label: string, fn: () => Promise<T>) => {
             try {
               return { status: "fulfilled" as const, value: await traceStartupStep(label, fn, { sequenceId }) };
@@ -1638,6 +1639,7 @@ export default function App() {
           const savingsResult = await settleStartupStep("secondary:getSavings", getSavings);
           const citiesResult = await settleStartupStep("secondary:getCities", getCities);
           const linkingStatusResult = await settleStartupStep("secondary:getLinkingStatus", getLinkingStatus);
+          const referralSummaryResult = await settleStartupStep("secondary:getReferralSummary", getReferralSummary);
           const giveawayStateResult = await settleStartupStep("secondary:getGiveawayState", getGiveawayState);
 
           traceStartup("loadAppData_before_post_optional_isActive_guard", {
@@ -1669,6 +1671,7 @@ export default function App() {
             savings: savingsResult.status,
             cities: citiesResult.status,
             linkingStatus: linkingStatusResult.status,
+            referralSummary: referralSummaryResult.status,
             giveawayState: giveawayStateResult.status,
           });
           verificationsResult.status === "fulfilled"
@@ -1683,6 +1686,9 @@ export default function App() {
           linkingStatusResult.status === "fulfilled"
             ? traceOk("linking_status_ok")
             : traceFail("linking_status_fail", linkingStatusResult.reason);
+          referralSummaryResult.status === "fulfilled"
+            ? traceOk("referral_summary_ok")
+            : traceFail("referral_summary_fail", referralSummaryResult.reason);
           giveawayStateResult.status === "fulfilled"
             ? traceOk("giveaway_state_ok")
             : traceFail("giveaway_state_fail", giveawayStateResult.reason);
@@ -1709,6 +1715,10 @@ export default function App() {
                   ? citiesResult.value
                   : current.cities,
               linkingStatus: nextLinkingStatus ?? current.linkingStatus,
+              referralSummary:
+                referralSummaryResult.status === "fulfilled"
+                  ? referralSummaryResult.value
+                  : current.referralSummary,
               giveawayState:
                 giveawayStateResult.status === "fulfilled"
                   ? giveawayStateResult.value
