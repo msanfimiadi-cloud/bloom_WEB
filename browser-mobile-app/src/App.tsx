@@ -2478,8 +2478,22 @@ export default function App() {
       return;
     }
 
+    // Logout must be a local, terminal auth transition for Browser/PWA users.
+    // Do not run bootstrap here: browser startup auth can wait for Telegram/user data
+    // and leave the login guard behind LoadingState after the token was already removed.
+    bootstrapSequenceRef.current += 1;
+    bootstrapPromiseRef.current = null;
     clearStoredAuthToken();
+    authSnapshotRef.current = getAuthTokenStorageSnapshot();
     resetTelegramLoginInFlight();
+    setAuthRestoreStatus("unauthenticated");
+    setLastAuthDecisionReason("manual_logout_local_clear");
+    setIsLoading(false);
+    setIsBootstrapDone(true);
+    setError(null);
+    setShowStartupRecovery(false);
+    setShowSuccessfulBootstrapRecovery(false);
+    setWatchdogMessage(null);
     setData(emptyData);
     setSelectedPartner(null);
     setPartnerOffers([]);
@@ -2493,11 +2507,10 @@ export default function App() {
     setShouldShowLinking(false);
     setPage("home");
     setBrowserLoginRequired(true);
+    setBrowserLoginExternalOpenRequired(false);
     setIsLoginCodeFormOpen(false);
-    setLoginCode("");
-    setLoginReferralCode("");
-    clearLoginCodeDrafts();
     setLoginCodeError("");
+    lifecycleTrace("manual_logout_complete", { authClearedReason: "manual_logout" });
   }, []);
 
   const submitLoginCode = useCallback(async () => {
@@ -2567,7 +2580,7 @@ export default function App() {
   }
 
   if (browserLoginRequired && !canRenderLogin) {
-    return <LoadingState title={hasAnyAuthTokenForLoginGuard ? "Подготавливаем ваши привилегии..." : "Загружаем Bloom Club..."} />;
+    return <LoadingState title={hasAnyAuthTokenForLoginGuard ? "Проверяем вход..." : "Загружаем Bloom Club..."} />;
   }
 
   if (canRenderLogin) {

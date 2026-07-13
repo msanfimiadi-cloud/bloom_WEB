@@ -97,3 +97,20 @@ def test_unexpected_login_screen_with_token_not_reachable_from_resume_stored_tok
     assert 'loadAppData("resume", true)' not in pageshow_section
     login_guard_section = APP[APP.index('if (browserLoginRequired && !canRenderLogin)'):APP.index('if (canRenderLogin)')]
     assert 'Проверяем вход...' in login_guard_section
+
+
+def test_manual_logout_finishes_auth_locally_without_bootstrap_or_draft_clear() -> None:
+    logout_section = APP[APP.index('const logout = useCallback(() => {'):APP.index('const submitLoginCode', APP.index('const logout = useCallback(() => {'))]
+    assert 'clearStoredAuthToken();' in logout_section
+    assert 'authSnapshotRef.current = getAuthTokenStorageSnapshot();' in logout_section
+    assert 'resetTelegramLoginInFlight();' in logout_section
+    assert 'setAuthRestoreStatus("unauthenticated");' in logout_section
+    assert 'setLastAuthDecisionReason("manual_logout_local_clear");' in logout_section
+    assert 'setIsLoading(false);' in logout_section
+    assert 'setIsBootstrapDone(true);' in logout_section
+    assert 'setBrowserLoginRequired(true);' in logout_section
+    assert 'bootstrapPromiseRef.current = null;' in logout_section
+    assert 'loadAppData(' not in logout_section
+    assert 'clearLoginCodeDrafts();' not in logout_section
+    assert 'setLoginCode("");' not in logout_section
+    assert 'setLoginReferralCode("");' not in logout_section
