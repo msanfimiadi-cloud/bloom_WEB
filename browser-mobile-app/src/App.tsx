@@ -885,6 +885,8 @@ export default function App() {
   const clearCatalogDiagnostic = setPartnersErrorDetails;
   const bootstrapPromiseRef = useRef<Promise<void> | null>(null);
   const bootstrapSequenceRef = useRef(0);
+  const manualLogoutInProgressRef = useRef(false);
+  const logoutGenerationRef = useRef(0);
   const appActiveRef = useRef(true);
   const catalogLoadingRef = useRef(false);
   const mountedRef = useRef(false);
@@ -970,6 +972,10 @@ export default function App() {
   }, []);
 
   const invalidateBootstrapForInactiveWebView = useCallback((eventName: string) => {
+    if (manualLogoutInProgressRef.current) {
+      logBootstrapDeadlockDiagnostic("manual_logout_lifecycle_restore_blocked", { lifecycleEvent: eventName, logoutGeneration: logoutGenerationRef.current });
+      return;
+    }
     appActiveRef.current = false;
     bootstrapSequenceRef.current += 1;
     const hadBootstrapPromise = Boolean(bootstrapPromiseRef.current);
@@ -989,6 +995,10 @@ export default function App() {
   }, [clearBloomBootstrapRecoveryStorage, logBootstrapDeadlockDiagnostic]);
 
   const resetStaleBootstrapForActiveWebView = useCallback((eventName: string) => {
+    if (manualLogoutInProgressRef.current) {
+      logBootstrapDeadlockDiagnostic("manual_logout_bootstrap_reset_blocked", { lifecycleEvent: eventName, logoutGeneration: logoutGenerationRef.current });
+      return;
+    }
     appActiveRef.current = true;
     if (bootstrapPromiseRef.current) {
       logBootstrapDeadlockDiagnostic("bootstrapPromiseRef_cleared", {
@@ -1169,6 +1179,15 @@ export default function App() {
       const forceNewIdentity = typeof options === "boolean" ? false : Boolean(options.forceNewIdentity);
       const forceNew = forceRefresh || forceNewIdentity;
       traceStartupRecovery("loadAppData:enter", { reason, forceNew, forceRefresh, forceNewIdentity });
+      if (manualLogoutInProgressRef.current) {
+        traceStartupRecovery("loadAppData:exit", {
+          reason,
+          forceNew,
+          logoutGeneration: logoutGenerationRef.current,
+          returnValue: "manual_logout_bootstrap_blocked",
+        });
+        return Promise.resolve();
+      }
       if (forceNew) {
         if (bootstrapPromiseRef.current) {
           logBootstrapDeadlockDiagnostic("bootstrapPromiseRef_cleared", {
@@ -1201,6 +1220,7 @@ export default function App() {
       if (isActive()) {
         setIsLoading(true);
         setError(null);
+        manualLogoutInProgressRef.current = false;
         setBrowserLoginRequired(false);
         setBrowserLoginExternalOpenRequired(false);
       }
@@ -1360,6 +1380,10 @@ export default function App() {
           traceStart("stored_token_check_start");
           traceStartup("storage_read_started", { key: AUTH_STORAGE_KEY });
           const authSnapshot = getAuthTokenStorageSnapshot();
+          if (manualLogoutInProgressRef.current) {
+            traceStartupRecovery("loadAppData:exit", { reason, forceNew, sequenceId, returnValue: "manual_logout_storage_restore_blocked" });
+            return;
+          }
           authSnapshotRef.current = authSnapshot;
           // Deterministic replacement for legacy startup read: const storedAuthToken = getStoredAuthToken();
           const storedAuthToken = authSnapshot.token;
@@ -1801,7 +1825,7 @@ export default function App() {
         returnValue: interruptedStartup,
       });
       // Startup recovery refreshes app data but must preserve stored-token auth on PWA resume.
-      if (interruptedStartup) { void loadAppData("resume", false); }
+      if (interruptedStartup && !manualLogoutInProgressRef.current) { void loadAppData("resume", false); }
       traceStartupRecovery("pageshow:exit", { persisted: event.persisted, returnValue: undefined });
     };
     const onPageHide = (event: PageTransitionEvent) => { lastPagehideAtRef.current = new Date().toISOString(); markInactive(event); };
@@ -2033,12 +2057,12 @@ export default function App() {
   );
 
   useEffect(() => {
-    if (isLoading || error || !isBootstrapDone || hasPartnersLoaded || isPartnersLoading || partnersError || partnersPromiseRef.current) {
+    if (manualLogoutInProgressRef.current || browserLoginRequired || authRestoreStatus !== "authenticated" || isLoading || error || !isBootstrapDone || hasPartnersLoaded || isPartnersLoading || partnersError || partnersPromiseRef.current) {
       return;
     }
 
     void traceStartupStep("home bootstrap:loadPartners", () => loadPartners(false), { source: "home_initial_catalog_load" });
-  }, [error, hasPartnersLoaded, isBootstrapDone, isLoading, isPartnersLoading, loadPartners, partnersError]);
+  }, [authRestoreStatus, browserLoginRequired, error, hasPartnersLoaded, isBootstrapDone, isLoading, isPartnersLoading, loadPartners, partnersError]);
 
   const openCatalog = useCallback(() => {
     lifecycleTrace("catalog_open", { forceReload: false });
@@ -2481,6 +2505,8 @@ export default function App() {
     // Logout must be a local, terminal auth transition for Browser/PWA users.
     // Do not run bootstrap here: browser startup auth can wait for Telegram/user data
     // and leave the login guard behind LoadingState after the token was already removed.
+    manualLogoutInProgressRef.current = true;
+    logoutGenerationRef.current += 1;
     bootstrapSequenceRef.current += 1;
     bootstrapPromiseRef.current = null;
     clearStoredAuthToken();
@@ -2510,7 +2536,8 @@ export default function App() {
     setBrowserLoginExternalOpenRequired(false);
     setIsLoginCodeFormOpen(false);
     setLoginCodeError("");
-    lifecycleTrace("manual_logout_complete", { authClearedReason: "manual_logout" });
+    lifecycleTrace("manual_logout_complete", { authClearedReason: "manual_logout", logoutGeneration: logoutGenerationRef.current });
+    console.info("[BLOOM_LOGOUT_TRACE] manual_logout_complete", { logoutGeneration: logoutGenerationRef.current });
   }, []);
 
   const submitLoginCode = useCallback(async () => {
@@ -2521,6 +2548,7 @@ export default function App() {
       if (!storeAuthTokenFromResponse(loginResponse)) {
         throw new Error("invalid_login_code_response");
       }
+      manualLogoutInProgressRef.current = false;
       setBrowserLoginRequired(false);
       setIsLoginCodeFormOpen(false);
       setLoginCode("");
