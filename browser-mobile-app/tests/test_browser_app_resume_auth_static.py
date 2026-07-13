@@ -85,8 +85,10 @@ def test_browser_pwa_without_telegram_payload_keeps_valid_stored_token_restoring
 def test_unauthenticated_requires_no_stored_token_or_confirmed_auth_clear() -> None:
     invalid_token_clear = APP.index('clearStoredAuthToken();')
     no_token_else = APP.index('} else {', APP.index('if (storedAuthToken && !forceNewIdentity)'))
+    preserve_start = APP.index('const preservePendingBrowserLoginFlow = useCallback')
+    preserve_end = APP.index('const updateLoginCodeDraft')
     for marker in [i for i in range(len(APP)) if APP.startswith('setAuthRestoreStatus("unauthenticated")', i)]:
-        assert marker > invalid_token_clear or marker > no_token_else
+        assert (preserve_start < marker < preserve_end) or marker > invalid_token_clear or marker > no_token_else
     assert 'authClearedReason: "auth_check_401_403"' in APP
 
 
@@ -154,3 +156,45 @@ def test_profile_logout_button_uses_app_logout_callback_with_trace() -> None:
     button_section = profile[profile.index('profile-logout-button'):profile.index('Выйти из профиля')]
     assert '[BLOOM_LOGOUT_TRACE] logout_button_clicked' in button_section
     assert 'onLogout();' in button_section
+
+
+def test_pending_browser_login_draft_resume_does_not_bootstrap_or_show_loader() -> None:
+    assert 'const pendingBrowserLoginRef = useRef(false);' in APP
+    assert 'function hasStoredBrowserLoginDraft(): boolean' in APP
+    assert 'const hasPendingBrowserLoginDraft = useCallback' in APP
+    assert 'const preservePendingBrowserLoginFlow = useCallback' in APP
+
+    preserve_section = APP[APP.index('const preservePendingBrowserLoginFlow = useCallback'):APP.index('const updateLoginCodeDraft')]
+    assert 'pendingBrowserLoginRef.current = true;' in preserve_section
+    assert 'restoreLoginCodeDrafts();' in preserve_section
+    assert 'setIsLoading(false);' in preserve_section
+    assert 'setAuthRestoreStatus("unauthenticated");' in preserve_section
+    assert 'setBrowserLoginRequired(true);' in preserve_section
+    assert 'setBrowserLoginExternalOpenRequired(false);' in preserve_section
+    assert 'loadAppData(' not in preserve_section
+
+    load_app_data_guard = APP[APP.index('traceStartupRecovery("loadAppData:enter"'):APP.index('if (forceNew) {')]
+    assert 'reason === "resume" && preservePendingBrowserLoginFlow("loadAppData:resume")' in load_app_data_guard
+    assert 'pending_browser_login_bootstrap_blocked' in load_app_data_guard
+    assert 'setIsLoading(true);' not in load_app_data_guard
+    assert 'setAuthRestoreStatus("restoring")' not in load_app_data_guard
+
+    pageshow_section = APP[APP.index('const onPageShow = (event: PageTransitionEvent) => {'):APP.index('const onPageHide', APP.index('const onPageShow = (event: PageTransitionEvent) => {'))]
+    assert 'interruptedStartup && !manualLogoutInProgressRef.current && !hasPendingBrowserLoginDraft()' in pageshow_section
+    assert 'void loadAppData("resume", false);' in pageshow_section
+
+    mark_inactive_section = APP[APP.index('const markInactive = (event: Event) => {'):APP.index('const onPageShow = (event: PageTransitionEvent) => {')]
+    assert '!hasPendingBrowserLoginDraft() &&' in mark_inactive_section
+    assert 'markStartupInterrupted(event.type);' in mark_inactive_section
+
+
+def test_pending_browser_login_guard_clears_after_successful_code_login() -> None:
+    submit_section = APP[APP.index('const submitLoginCode = useCallback(async () => {'):APP.index('const reloadSuccessfulBootstrapRecovery')]
+    assert 'pendingBrowserLoginRef.current = false;' in submit_section
+    assert 'setBrowserLoginRequired(false);' in submit_section
+    assert 'clearLoginCodeDrafts();' in submit_section
+    assert 'await loadAppData("manual", false);' in submit_section
+
+    pageshow_section = APP[APP.index('const onPageShow = (event: PageTransitionEvent) => {'):APP.index('const onPageHide', APP.index('const onPageShow = (event: PageTransitionEvent) => {'))]
+    assert 'void loadAppData("resume", false);' in pageshow_section
+    assert 'hasPendingBrowserLoginDraft()' in pageshow_section
