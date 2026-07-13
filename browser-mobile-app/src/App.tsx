@@ -160,6 +160,13 @@ const TELEGRAM_IN_APP_BROWSER_HOST = "app.bloomclub.ru";
 const LOGIN_CODE_DRAFT_STORAGE_KEY = "bloom.loginCodeDraft";
 const REFERRAL_CODE_DRAFT_STORAGE_KEY = "bloom.referralCodeDraft";
 
+function hasStoredBrowserLoginDraft(): boolean {
+  return Boolean(
+    readLoginCodeDraft(LOGIN_CODE_DRAFT_STORAGE_KEY) ||
+      readLoginCodeDraft(REFERRAL_CODE_DRAFT_STORAGE_KEY),
+  );
+}
+
 function getLoginDraftStorage(): Storage | null {
   if (typeof window === "undefined") return null;
 
@@ -805,6 +812,7 @@ export default function App() {
   const [loginReferralCode, setLoginReferralCode] = useState(() => readLoginCodeDraft(REFERRAL_CODE_DRAFT_STORAGE_KEY));
   const [loginCodeError, setLoginCodeError] = useState("");
   const [isLoginCodeSubmitting, setIsLoginCodeSubmitting] = useState(false);
+  const pendingBrowserLoginRef = useRef(false);
   const [guestRestrictionMessage, setGuestRestrictionMessage] = useState(false);
   const [isCreatingPayment, setIsCreatingPayment] = useState(false);
   const [trialMessage, setTrialMessage] = useState<string | null>(null);
@@ -849,14 +857,46 @@ export default function App() {
     setLoginReferralCode((current) => current || storedReferralCode);
   }, []);
 
+  const hasPendingBrowserLoginDraft = useCallback(() => (
+    pendingBrowserLoginRef.current ||
+    (browserLoginRequired && (Boolean(loginCode) || Boolean(loginReferralCode) || hasStoredBrowserLoginDraft()))
+  ), [browserLoginRequired, loginCode, loginReferralCode]);
+
+  const preservePendingBrowserLoginFlow = useCallback((eventName: string) => {
+    if (!hasPendingBrowserLoginDraft()) {
+      return false;
+    }
+
+    pendingBrowserLoginRef.current = true;
+    restoreLoginCodeDrafts();
+    appActiveRef.current = true;
+    bootstrapSequenceRef.current += 1;
+    bootstrapPromiseRef.current = null;
+    resetTelegramLoginInFlight();
+    setIsLoading(false);
+    setAuthRestoreStatus("unauthenticated");
+    setLastAuthDecisionReason("pending_browser_login_resume_preserved");
+    pendingBrowserLoginRef.current = true;
+    setBrowserLoginRequired(true);
+    setBrowserLoginExternalOpenRequired(false);
+    setError(null);
+    setShowStartupRecovery(false);
+    setShowSuccessfulBootstrapRecovery(false);
+    setWatchdogMessage(null);
+    traceStartupRecovery("pendingBrowserLoginFlow:preserved", { eventType: eventName, returnValue: true });
+    return true;
+  }, [hasPendingBrowserLoginDraft, restoreLoginCodeDrafts]);
+
   const updateLoginCodeDraft = useCallback((value: string) => {
     const normalizedValue = value.toUpperCase();
+    pendingBrowserLoginRef.current = true;
     setLoginCode(normalizedValue);
     writeLoginCodeDraft(LOGIN_CODE_DRAFT_STORAGE_KEY, normalizedValue);
   }, []);
 
   const updateReferralCodeDraft = useCallback((value: string) => {
     const normalizedValue = value.toUpperCase();
+    pendingBrowserLoginRef.current = true;
     setLoginReferralCode(normalizedValue);
     writeLoginCodeDraft(REFERRAL_CODE_DRAFT_STORAGE_KEY, normalizedValue);
   }, []);
@@ -976,6 +1016,9 @@ export default function App() {
       logBootstrapDeadlockDiagnostic("manual_logout_lifecycle_restore_blocked", { lifecycleEvent: eventName, logoutGeneration: logoutGenerationRef.current });
       return;
     }
+    if (preservePendingBrowserLoginFlow(eventName)) {
+      return;
+    }
     appActiveRef.current = false;
     bootstrapSequenceRef.current += 1;
     const hadBootstrapPromise = Boolean(bootstrapPromiseRef.current);
@@ -992,11 +1035,14 @@ export default function App() {
       removedLocalStorageKeys: removedStorage.localStorage,
       removedSessionStorageKeys: removedStorage.sessionStorage,
     });
-  }, [clearBloomBootstrapRecoveryStorage, logBootstrapDeadlockDiagnostic]);
+  }, [clearBloomBootstrapRecoveryStorage, logBootstrapDeadlockDiagnostic, preservePendingBrowserLoginFlow]);
 
   const resetStaleBootstrapForActiveWebView = useCallback((eventName: string) => {
     if (manualLogoutInProgressRef.current) {
       logBootstrapDeadlockDiagnostic("manual_logout_bootstrap_reset_blocked", { lifecycleEvent: eventName, logoutGeneration: logoutGenerationRef.current });
+      return;
+    }
+    if (preservePendingBrowserLoginFlow(eventName)) {
       return;
     }
     appActiveRef.current = true;
@@ -1018,7 +1064,7 @@ export default function App() {
       lifecycleEvent: eventName,
       invalidatedSequence: bootstrapSequenceRef.current,
     });
-  }, [logBootstrapDeadlockDiagnostic]);
+  }, [logBootstrapDeadlockDiagnostic, preservePendingBrowserLoginFlow]);
 
   const resetCatalogStateForForceReload = useCallback(() => {
     catalogAbortControllerRef.current?.abort("catalog_force_reload");
@@ -1179,6 +1225,14 @@ export default function App() {
       const forceNewIdentity = typeof options === "boolean" ? false : Boolean(options.forceNewIdentity);
       const forceNew = forceRefresh || forceNewIdentity;
       traceStartupRecovery("loadAppData:enter", { reason, forceNew, forceRefresh, forceNewIdentity });
+      if (reason === "resume" && preservePendingBrowserLoginFlow("loadAppData:resume")) {
+        traceStartupRecovery("loadAppData:exit", {
+          reason,
+          forceNew,
+          returnValue: "pending_browser_login_bootstrap_blocked",
+        });
+        return Promise.resolve();
+      }
       if (manualLogoutInProgressRef.current) {
         traceStartupRecovery("loadAppData:exit", {
           reason,
@@ -1456,6 +1510,7 @@ export default function App() {
               if (!(await loginWithTelegramPayload())) {
                 setAuthRestoreStatus("unauthenticated");
                 setLastAuthDecisionReason("no_valid_token_no_telegram_payload_after_401");
+                pendingBrowserLoginRef.current = true;
                 setBrowserLoginRequired(true);
                 setIsBootstrapDone(true);
                 await loadPartners(true).catch(() => undefined);
@@ -1475,6 +1530,7 @@ export default function App() {
             if (!(await loginWithTelegramPayload())) {
               setAuthRestoreStatus("unauthenticated");
               setLastAuthDecisionReason("no_token_no_telegram_payload_restore_complete");
+              pendingBrowserLoginRef.current = true;
               setBrowserLoginRequired(true);
               setIsBootstrapDone(true);
               await loadPartners(true).catch(() => undefined);
@@ -1738,7 +1794,7 @@ export default function App() {
       });
       return bootstrapPromise;
     },
-    [logBootstrapDeadlockDiagnostic, resetCatalogStateForForceReload, resetPartnerFlowState],
+    [logBootstrapDeadlockDiagnostic, preservePendingBrowserLoginFlow, resetCatalogStateForForceReload, resetPartnerFlowState],
   );
 
   useEffect(() => {
@@ -1791,6 +1847,11 @@ export default function App() {
         resumeEvent: event.type,
         didForceReload: false,
       });
+      if (preservePendingBrowserLoginFlow(event.type)) {
+        startupExecutionEnd(listenerSpan, { eventType: event.type, pendingBrowserLogin: true });
+        traceStartupRecovery("resumeWithoutAuthReset:exit", { eventType: event.type, returnValue: "pending_browser_login_preserved" });
+        return;
+      }
       refreshAfterWebViewResume(event);
       restoreLoginCodeDrafts();
       startupExecutionEnd(listenerSpan, { eventType: event.type });
@@ -1806,7 +1867,7 @@ export default function App() {
         console.info("catalog_load_aborted_on_hide", { eventType: event.type, page: pageRef.current });
         traceStartup("catalog_load_aborted_on_hide", { eventType: event.type, page: pageRef.current });
       }
-      if (!window.__BLOOM_STARTUP_PHASE__ || !["first_visible_paint", "bootstrap_finished"].includes(String(window.__BLOOM_STARTUP_PHASE__))) {
+      if (!hasPendingBrowserLoginDraft() && (!window.__BLOOM_STARTUP_PHASE__ || !["first_visible_paint", "bootstrap_finished"].includes(String(window.__BLOOM_STARTUP_PHASE__)))) {
         markStartupInterrupted(event.type);
       }
       abortInFlightCatalogLoad(event.type);
@@ -1825,7 +1886,7 @@ export default function App() {
         returnValue: interruptedStartup,
       });
       // Startup recovery refreshes app data but must preserve stored-token auth on PWA resume.
-      if (interruptedStartup && !manualLogoutInProgressRef.current) { void loadAppData("resume", false); }
+      if (interruptedStartup && !manualLogoutInProgressRef.current && !hasPendingBrowserLoginDraft()) { void loadAppData("resume", false); }
       traceStartupRecovery("pageshow:exit", { persisted: event.persisted, returnValue: undefined });
     };
     const onPageHide = (event: PageTransitionEvent) => { lastPagehideAtRef.current = new Date().toISOString(); markInactive(event); };
@@ -1870,7 +1931,7 @@ export default function App() {
       telegramWebApp?.offEvent?.("deactivated" as never, onTelegramDeactivated);
       startupExecutionEnd(cleanupSpan);
     };
-  }, [abortInFlightCatalogLoad, invalidateBootstrapForInactiveWebView, loadAppData, logBootstrapDeadlockDiagnostic, resetStaleBootstrapForActiveWebView, restoreLoginCodeDrafts]);
+  }, [abortInFlightCatalogLoad, hasPendingBrowserLoginDraft, invalidateBootstrapForInactiveWebView, loadAppData, logBootstrapDeadlockDiagnostic, preservePendingBrowserLoginFlow, restoreLoginCodeDrafts]);
 
   const loadPartners = useCallback(
     (forceRetry = true) => {
@@ -2532,6 +2593,7 @@ export default function App() {
     setGuestRestrictionMessage(false);
     setShouldShowLinking(false);
     setPage("home");
+    pendingBrowserLoginRef.current = false;
     setBrowserLoginRequired(true);
     setBrowserLoginExternalOpenRequired(false);
     setIsLoginCodeFormOpen(false);
@@ -2549,6 +2611,7 @@ export default function App() {
         throw new Error("invalid_login_code_response");
       }
       manualLogoutInProgressRef.current = false;
+      pendingBrowserLoginRef.current = false;
       setBrowserLoginRequired(false);
       setIsLoginCodeFormOpen(false);
       setLoginCode("");
@@ -2658,8 +2721,8 @@ export default function App() {
             </>
           ) : (
             <>
-              <button className="button button--primary" type="button" onClick={() => setIsLoginCodeFormOpen(true)}>Войти по коду</button>
-              <button className="button button--secondary" type="button" onClick={() => setBrowserLoginRequired(false)}>Продолжить без регистрации</button>
+              <button className="button button--primary" type="button" onClick={() => { pendingBrowserLoginRef.current = true; setIsLoginCodeFormOpen(true); }}>Войти по коду</button>
+              <button className="button button--secondary" type="button" onClick={() => { pendingBrowserLoginRef.current = false; setBrowserLoginRequired(false); }}>Продолжить без регистрации</button>
             </>
           )}
         </div>
