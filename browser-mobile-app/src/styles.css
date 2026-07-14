@@ -4766,6 +4766,21 @@ small,
   font-weight: 700;
 }
 
+.referral-stats {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  margin-top: 12px;
+  color: #6b4327;
+  font-weight: 700;
+}
+
+.referral-stats span {
+  display: block;
+  line-height: 1.45;
+  overflow-wrap: anywhere;
+}
+
 .referral-link {
   display: block;
   overflow-wrap: anywhere;
