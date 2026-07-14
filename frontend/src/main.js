@@ -4194,12 +4194,12 @@ const renderGiveawayEntrySourceBadge = (source, fullLabel) => {
 
 const renderGiveawayEntriesSection = (selected) => {
   const hasGiveaways = Array.isArray(adminState.giveaways) && adminState.giveaways.length > 0;
-  if (!hasGiveaways) return `<section class="ui-card"><div class="admin-section-heading"><h4>Участники и номера</h4><p>Сначала создайте и сохраните розыгрыш.</p></div></section>`;
-  if (!selected) return `<section class="ui-card"><div class="admin-section-heading"><h4>Участники и номера</h4><p>Выберите розыгрыш, чтобы открыть список участников.</p></div>${renderGiveawayEntriesSelector(selected)}</section>`;
+  if (!hasGiveaways) return `<section class="ui-card giveaway-participants-section"><div class="admin-section-heading"><h4>Участники и номера</h4><p>Сначала создайте и сохраните розыгрыш.</p></div></section>`;
+  if (!selected) return `<section class="ui-card giveaway-participants-section"><div class="admin-section-heading"><h4>Участники и номера</h4><p>Выберите розыгрыш, чтобы открыть список участников.</p></div>${renderGiveawayEntriesSelector(selected)}</section>`;
   const data = adminState.giveawayEntries;
   const rows = Array.isArray(data?.items) ? data.items : [];
   const summary = data?.summary || {};
-  return `<section class="ui-card"><div class="admin-section-heading"><h4>Участники и номера — ${escapeHtml(getGiveawayTitle(selected))}</h4><p>Каждый номер показан отдельной строкой. Excel выгружает весь выбранный розыгрыш.</p></div>
+  return `<section class="ui-card giveaway-participants-section"><div class="admin-section-heading"><h4>Участники и номера — ${escapeHtml(getGiveawayTitle(selected))}</h4><p>Каждый номер показан отдельной строкой. Excel выгружает весь выбранный розыгрыш.</p></div>
     ${renderGiveawayEntriesSelector(selected)}
     <div class="admin-toolbar"><a class="ui-button ui-button--secondary" href="/api/v1/admin/giveaways/${escapeHtml(selected.id)}/entries/export.xlsx" target="_blank" rel="noopener">Выгрузить в Excel (весь розыгрыш)</a><button class="ui-button" type="button" data-admin-giveaway-recheck="${escapeHtml(selected.id)}">Перепроверить подписки</button></div>
     ${adminState.giveawayRecheckResult ? `<p class="form-message">Проверено: ${escapeHtml(adminState.giveawayRecheckResult.checked || 0)}, активных: ${escapeHtml(adminState.giveawayRecheckResult.active || 0)}, деактивировано: ${escapeHtml(adminState.giveawayRecheckResult.deactivated || 0)}, повторно активировано: ${escapeHtml(adminState.giveawayRecheckResult.reactivated || 0)}, ошибок: ${escapeHtml(adminState.giveawayRecheckResult.errors || 0)}</p>` : ''}
@@ -4211,9 +4211,9 @@ const renderGiveawayEntriesSection = (selected) => {
 const renderGiveawaysTab = () => {
   const selected = adminState.giveaways.find((item) => String(item.id) === String(adminState.selectedGiveawayIdForEdit));
   const entriesSelection = resolveGiveawayForEntries();
-  return `<div class="admin-section-heading admin-page-heading"><p class="section-eyebrow section-kicker">WEB Admin</p><h3>Розыгрыши</h3><p>Создавайте розыгрыш и места победителей для Browser Mobile App.</p></div>
-  <section class="ui-card"><h4>${selected ? 'Редактировать розыгрыш' : 'Создать розыгрыш'}</h4>${renderGiveawayForm(selected || {})}</section>
-  <section class="ui-card"><h4>Все розыгрыши</h4>${renderTable(
+  return `<div class="giveaways-page"><div class="admin-section-heading admin-page-heading"><p class="section-eyebrow section-kicker">WEB Admin</p><h3>Розыгрыши</h3><p>Создавайте розыгрыш и места победителей для Browser Mobile App.</p></div>
+  <section class="ui-card giveaway-section"><h4>${selected ? 'Редактировать розыгрыш' : 'Создать розыгрыш'}</h4>${renderGiveawayForm(selected || {})}</section>
+  <section class="ui-card giveaway-section"><h4>Все розыгрыши</h4>${renderTable(
     ['ID', 'Название', 'Статус', 'Победителей', 'Действия'],
     adminState.giveaways.map((g) => [
       formatValue(g.id),
@@ -4225,7 +4225,7 @@ const renderGiveawaysTab = () => {
     true,
     'admin-table--compact',
     'Розыгрышей пока нет.',
-  )}</section>${renderGiveawayEntriesSection(entriesSelection.giveaway)}`;
+  )}</section>${renderGiveawayEntriesSection(entriesSelection.giveaway)}</div>`;
 };
 
 const buildGiveawayPayload = (form) => {
@@ -5433,10 +5433,12 @@ const renderTable = (headers, rows, trustedHtml = false, tableModifier = '', emp
     return `<div class="empty-note">${escapeHtml(emptyMessage)}</div>`;
   }
 
-  const tableClassName = ['admin-table', tableModifier].filter(Boolean).join(' ');
+  const isGiveawayEntriesTable = tableModifier.split(/\s+/).includes('admin-table--giveaway-entries');
+  const tableClassName = ['admin-table', isGiveawayEntriesTable ? 'giveaway-participants-table' : '', tableModifier].filter(Boolean).join(' ');
+  const wrapperClassName = ['admin-table-wrap', isGiveawayEntriesTable ? 'giveaway-participants-table-wrapper' : ''].filter(Boolean).join(' ');
 
   return `
-    <div class="admin-table-wrap">
+    <div class="${wrapperClassName}">
       <table class="${tableClassName}">
         <thead><tr>${headers.map((header) => `<th class="${getAdminTableCellClass(header)}">${escapeHtml(header)}</th>`).join('')}</tr></thead>
         <tbody>
