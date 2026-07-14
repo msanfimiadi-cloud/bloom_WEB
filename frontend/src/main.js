@@ -581,6 +581,8 @@ const adminState = {
   giveawayRecheckResult: null,
   giveaways: [],
   selectedGiveawayIdForEdit: '',
+  selectedGiveawayIdForEntries: '',
+  selectedGiveawayIdForEntriesManual: '',
 };
 
 const adminPartnerWizardSteps = [
@@ -4024,6 +4026,53 @@ const loadGiveaways = async () => {
   adminState.giveaways = await apiFetch('/api/v1/admin/giveaways');
 };
 
+const getGiveawayTitle = (giveaway = {}) => giveaway.title || `Розыгрыш #${giveaway.id}`;
+
+const resolveGiveawayForEntries = () => {
+  const giveaways = Array.isArray(adminState.giveaways) ? adminState.giveaways : [];
+  const editing = giveaways.find((item) => String(item.id) === String(adminState.selectedGiveawayIdForEdit));
+  if (editing) return { giveaway: editing, source: 'editing' };
+
+  const manual = giveaways.find((item) => String(item.id) === String(adminState.selectedGiveawayIdForEntriesManual));
+  if (manual) return { giveaway: manual, source: 'manual' };
+
+  const active = giveaways.find((item) => item.is_active);
+  if (active) return { giveaway: active, source: 'active' };
+
+  if (giveaways.length === 1) return { giveaway: giveaways[0], source: 'single' };
+
+  return { giveaway: null, source: 'manual' };
+};
+
+const logSelectedGiveawayForEntries = ({ giveaway, source }) => {
+  console.info('[BLOOM_ADMIN_GIVEAWAY_ENTRIES] selected giveaway', {
+    source,
+    giveawayId: giveaway?.id || null,
+  });
+};
+
+const syncGiveawayEntriesSelection = async ({ force = false } = {}) => {
+  const selection = resolveGiveawayForEntries();
+  const selectedId = selection.giveaway?.id ? String(selection.giveaway.id) : '';
+  const previousId = String(adminState.selectedGiveawayIdForEntries || '');
+  adminState.selectedGiveawayIdForEntries = selectedId;
+  logSelectedGiveawayForEntries(selection);
+
+  if (!selectedId) {
+    adminState.giveawayEntries = null;
+    adminState.giveawayEntriesLoading = false;
+    return null;
+  }
+
+  if (!force && adminState.giveawayEntries && previousId === selectedId) {
+    return adminState.giveawayEntries;
+  }
+
+  adminState.giveawayEntries = null;
+  adminState.giveawayRecheckResult = null;
+  return loadGiveawayEntries(selectedId);
+};
+
 const loadGiveawayEntries = async (giveawayId) => {
   if (!giveawayId) {
     adminState.giveawayEntries = null;
@@ -4106,21 +4155,31 @@ const renderGiveawayForm = (giveaway = {}) => `<form class="admin-form" data-adm
   <p class="form-message" data-form-message="giveaway">${escapeHtml(adminState.formMessages.giveaway || '')}</p>
 </form>`;
 
+const renderGiveawayEntriesSelector = (selected) => {
+  const giveaways = Array.isArray(adminState.giveaways) ? adminState.giveaways : [];
+  if (giveaways.length < 2) return '';
+  return `<label class="field admin-giveaway-entries-picker"><span>Розыгрыш для участников</span><select data-admin-giveaway-entries-select>${giveaways.map((giveaway) => `<option value="${escapeHtml(giveaway.id)}" ${String(giveaway.id) === String(selected?.id) ? 'selected' : ''}>${escapeHtml(getGiveawayTitle(giveaway))}${giveaway.is_active ? ' — активный' : ''}</option>`).join('')}</select></label>`;
+};
+
 const renderGiveawayEntriesSection = (selected) => {
-  if (!selected) return `<section class="ui-card"><div class="admin-section-heading"><h4>Участники и номера</h4><p>Сначала сохраните розыгрыш, чтобы открыть список участников.</p></div></section>`;
+  const hasGiveaways = Array.isArray(adminState.giveaways) && adminState.giveaways.length > 0;
+  if (!hasGiveaways) return `<section class="ui-card"><div class="admin-section-heading"><h4>Участники и номера</h4><p>Сначала создайте и сохраните розыгрыш.</p></div></section>`;
+  if (!selected) return `<section class="ui-card"><div class="admin-section-heading"><h4>Участники и номера</h4><p>Выберите розыгрыш, чтобы открыть список участников.</p></div>${renderGiveawayEntriesSelector(selected)}</section>`;
   const data = adminState.giveawayEntries;
   const rows = Array.isArray(data?.items) ? data.items : [];
   const summary = data?.summary || {};
-  return `<section class="ui-card"><div class="admin-section-heading"><h4>Участники и номера</h4><p>Каждый номер показан отдельной строкой. Excel выгружает весь выбранный розыгрыш.</p></div>
+  return `<section class="ui-card"><div class="admin-section-heading"><h4>Участники и номера — ${escapeHtml(getGiveawayTitle(selected))}</h4><p>Каждый номер показан отдельной строкой. Excel выгружает весь выбранный розыгрыш.</p></div>
+    ${renderGiveawayEntriesSelector(selected)}
     <div class="admin-toolbar"><a class="ui-button ui-button--secondary" href="/api/v1/admin/giveaways/${escapeHtml(selected.id)}/entries/export.xlsx" target="_blank" rel="noopener">Выгрузить в Excel (весь розыгрыш)</a><button class="ui-button" type="button" data-admin-giveaway-recheck="${escapeHtml(selected.id)}">Перепроверить подписки</button></div>
     ${adminState.giveawayRecheckResult ? `<p class="form-message">Проверено: ${escapeHtml(adminState.giveawayRecheckResult.checked || 0)}, активных: ${escapeHtml(adminState.giveawayRecheckResult.active || 0)}, деактивировано: ${escapeHtml(adminState.giveawayRecheckResult.deactivated || 0)}, повторно активировано: ${escapeHtml(adminState.giveawayRecheckResult.reactivated || 0)}, ошибок: ${escapeHtml(adminState.giveawayRecheckResult.errors || 0)}</p>` : ''}
     <div class="stats-grid"><article><span>Всего номеров</span><strong>${escapeHtml(summary.total_numbers || 0)}</strong></article><article><span>Активных</span><strong>${escapeHtml(summary.active_numbers || 0)}</strong></article><article><span>Участников</span><strong>${escapeHtml(summary.unique_participants || 0)}</strong></article><article><span>За подписку Bloom</span><strong>${escapeHtml(summary.subscription_numbers || 0)}</strong></article><article><span>За рефералов</span><strong>${escapeHtml(summary.referral_numbers || 0)}</strong></article><article><span>Telegram</span><strong>${escapeHtml(summary.telegram_numbers || 0)}</strong></article><article><span>VK</span><strong>${escapeHtml(summary.vk_numbers || 0)}</strong></article></div>
-    ${renderTable(['Номер','Статус','Источник','ФИО','Client ID','Telegram ID','Telegram username','VK ID','Телефон','Email','Дата начисления','Причина неактивности'], rows.map((i) => [i.number, i.status, i.source_label || i.source, i.owner_name, i.client_id, i.telegram_id, i.telegram_username, i.vk_id, i.phone, i.email, formatDateTime(i.created_at), i.deactivation_reason]), true, 'admin-table--compact', adminState.giveawayEntriesLoading ? 'Загрузка…' : 'В этом розыгрыше пока нет номеров.')}
+    ${renderTable(['Номер','Статус','Источник','ФИО','Client ID','Telegram ID','Telegram username','VK ID','Телефон','Email','Дата начисления','Причина неактивности'], rows.map((i) => [i.number, i.status, i.source_label || i.source, i.owner_name, i.client_id, i.telegram_id, i.telegram_username, i.vk_id, i.phone, i.email, formatDateTime(i.created_at), i.deactivation_reason]), true, 'admin-table--compact', adminState.giveawayEntriesLoading ? 'Загрузка…' : 'В этом розыгрыше пока нет номеров')}
   </section>`;
 };
 
 const renderGiveawaysTab = () => {
   const selected = adminState.giveaways.find((item) => String(item.id) === String(adminState.selectedGiveawayIdForEdit));
+  const entriesSelection = resolveGiveawayForEntries();
   return `<div class="admin-section-heading admin-page-heading"><p class="section-eyebrow section-kicker">WEB Admin</p><h3>Розыгрыши</h3><p>Создавайте розыгрыш и места победителей для Browser Mobile App.</p></div>
   <section class="ui-card"><h4>${selected ? 'Редактировать розыгрыш' : 'Создать розыгрыш'}</h4>${renderGiveawayForm(selected || {})}</section>
   <section class="ui-card"><h4>Все розыгрыши</h4>${renderTable(
@@ -4135,7 +4194,7 @@ const renderGiveawaysTab = () => {
     true,
     'admin-table--compact',
     'Розыгрышей пока нет.',
-  )}</section>${renderGiveawayEntriesSection(selected)}`;
+  )}</section>${renderGiveawayEntriesSection(entriesSelection.giveaway)}`;
 };
 
 const buildGiveawayPayload = (form) => {
@@ -5452,6 +5511,7 @@ const loadActiveTabData = async () => {
       await loadVerifications();
     } else if (adminState.activeTab === 'giveaways') {
       await loadGiveaways();
+      await syncGiveawayEntriesSelection({ force: true });
     } else if (adminState.activeTab === 'activity') {
       adminState.activityLoading = true;
       adminState.activityError = '';
@@ -6415,10 +6475,11 @@ root.addEventListener('click', async (event) => {
     event.preventDefault();
     const giveawayId = giveawayEdit.dataset.adminGiveawayEdit;
     adminState.selectedGiveawayIdForEdit = giveawayId;
+    adminState.selectedGiveawayIdForEntriesManual = '';
     adminState.giveawayEntries = null;
     adminState.giveawayRecheckResult = null;
     renderAdminLayout();
-    loadGiveawayEntries(giveawayId).then(() => renderAdminLayout()).catch((error) => { setFormMessage('giveaway', error.message || 'Не удалось загрузить номера розыгрыша'); renderAdminLayout(); });
+    syncGiveawayEntriesSelection({ force: true }).then(() => renderAdminLayout()).catch((error) => { setFormMessage('giveaway', error.message || 'Не удалось загрузить номера розыгрыша'); renderAdminLayout(); });
     return;
   }
   const customSelectOption = event.target.closest('[data-custom-select-option]');
@@ -7208,6 +7269,7 @@ root.addEventListener('input', (event) => {
     return;
   }
 
+
   const paymentAccessDaysInput = event.target.closest('[data-admin-payment-access-days]');
   if (paymentAccessDaysInput) {
     adminState.paymentApprovalDays = Math.max(1, Number(paymentAccessDaysInput.value) || 30);
@@ -7541,6 +7603,18 @@ root.addEventListener('change', (event) => {
     return;
   }
 
+
+  const giveawayEntriesSelect = event.target.closest('[data-admin-giveaway-entries-select]');
+  if (giveawayEntriesSelect) {
+    adminState.selectedGiveawayIdForEntriesManual = giveawayEntriesSelect.value;
+    adminState.selectedGiveawayIdForEdit = '';
+    adminState.giveawayEntries = null;
+    adminState.giveawayRecheckResult = null;
+    renderAdminLayout();
+    syncGiveawayEntriesSelection({ force: true }).then(() => renderAdminLayout()).catch((error) => { setFormMessage('giveaway', error.message || 'Не удалось загрузить номера розыгрыша'); renderAdminLayout(); });
+    return;
+  }
+
   const paymentAccessDaysInput = event.target.closest('[data-admin-payment-access-days]');
   if (paymentAccessDaysInput) {
     adminState.paymentApprovalDays = Math.max(1, Number(paymentAccessDaysInput.value) || 30);
@@ -7690,7 +7764,7 @@ const handleGiveawayFormSubmit = async (form) => {
     adminState.selectedGiveawayIdForEdit = savedGiveawayId ? String(savedGiveawayId) : '';
     await loadGiveaways();
     if (savedGiveawayId) {
-      await loadGiveawayEntries(savedGiveawayId);
+      await syncGiveawayEntriesSelection({ force: true });
     }
     setFormMessage('giveaway', 'Розыгрыш сохранён.');
     setPanelMessage('Розыгрыш сохранён', 'success');
