@@ -1,5 +1,5 @@
 import { useMemo, useState } from "react";
-import { isApiError, isTimeoutError } from "../api/client";
+import { checkSocialSubscription, getGiveawayState, isApiError, isTimeoutError } from "../api/client";
 import { AppImage } from "../components/AppImage";
 import { PartnerCatalogCard } from "../components/PartnerCatalogCard";
 import type { City, ClientProfile, GiveawayState, Partner, ReferralSummary, Subscription } from "../api/types";
@@ -88,6 +88,7 @@ export function HomePage({
   const referralCode = toText(referralSummary?.referral_code || profile?.referral_code);
   const [referralCopyMessage, setReferralCopyMessage] = useState('');
   const [isGiveawayModalOpen, setGiveawayModalOpen] = useState(false);
+  const [socialStatuses, setSocialStatuses] = useState<Record<string, string>>({});
   const partnersTitle = useContentText("home.partners.title", "Партнёры клуба");
   const partnersDescription = useContentText(
     "home.partners.description",
@@ -289,6 +290,35 @@ export function HomePage({
     );
   }
 
+
+  async function handleSocialCheck(platform: "telegram" | "vk") {
+    setSocialStatuses((current) => ({ ...current, [platform]: "Проверяем…" }));
+    try {
+      const result = await checkSocialSubscription(platform);
+      setSocialStatuses((current) => ({ ...current, [platform]: String(result.message || "Проверка завершена") }));
+      await getGiveawayState().catch(() => null);
+      window.dispatchEvent(new CustomEvent("bloom:refresh"));
+    } catch {
+      setSocialStatuses((current) => ({ ...current, [platform]: "Проверка временно недоступна" }));
+    }
+  }
+
+  function renderSocialTasks() {
+    const tasks = giveawayState?.social_tasks || {};
+    const rows = (["telegram", "vk"] as const).filter((platform) => tasks[platform]?.enabled && tasks[platform]?.community_url);
+    if (giveawayState?.guest || rows.length === 0) return null;
+    return <div className="giveaway-social-tasks"><strong>Получите дополнительные номера</strong>{rows.map((platform) => {
+      const isTelegram = platform === "telegram";
+      const url = String(tasks[platform]?.community_url || "");
+      return <div className="giveaway-social-task" key={platform}>
+        <div><b>{isTelegram ? "Telegram" : "VK"}</b><p>{isTelegram ? "Подпишитесь на наш Telegram-канал и получите 1 дополнительный номер" : "Подпишитесь на наше сообщество VK и получите 1 дополнительный номер"}</p></div>
+        <a className="button button--secondary" href={url} target="_blank" rel="noopener noreferrer">{isTelegram ? "Подписаться на Telegram" : "Подписаться на VK"}</a>
+        <button className="button" type="button" onClick={() => handleSocialCheck(platform)}>{isTelegram ? "Проверить подписку" : "Проверить подписку"}</button>
+        {socialStatuses[platform] ? <small>{socialStatuses[platform]}</small> : null}
+      </div>;
+    })}</div>;
+  }
+
   function renderGiveawayBlock() {
     const giveaway = giveawayState?.giveaway;
     const prizes = Array.isArray(giveaway?.prizes) ? giveaway?.prizes ?? [] : [];
@@ -335,6 +365,7 @@ export function HomePage({
           <>
             <p>Ваших номеров в розыгрыше: {giveawayState.user_numbers_count ?? 0}</p>
             <button className="button button--secondary" type="button" onClick={() => setGiveawayModalOpen(true)}>Открыть список моих номеров</button>
+            {renderSocialTasks()}
           </>
         )}
         {isGiveawayModalOpen ? (
@@ -342,7 +373,7 @@ export function HomePage({
             <div className="giveaway-modal__card">
               <button className="giveaway-modal__close" type="button" aria-label="Закрыть" onClick={() => setGiveawayModalOpen(false)}>×</button>
               <strong>Мои номера</strong>
-              <ul>{(giveawayState.numbers ?? []).map((item) => <li key={`${toText(item.number)}-${toText(item.source)}`}>{toText(item.number)} — {toText(item.source) === 'referral' ? 'реферал' : 'подписка'}</li>)}</ul>
+              <ul>{(giveawayState.numbers ?? []).map((item) => <li key={`${toText(item.number)}-${toText(item.source)}`}>{toText(item.number)} — {toText(item.source) === 'referral' ? 'реферал' : toText(item.source) === 'telegram_subscription' ? 'Telegram' : toText(item.source) === 'vk_subscription' ? 'VK' : 'подписка'}</li>)}</ul>
             </div>
           </div>
         ) : null}

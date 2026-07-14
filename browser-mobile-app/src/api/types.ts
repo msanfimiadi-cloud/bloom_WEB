@@ -301,11 +301,14 @@ export interface LinkingConfirmResponse extends AuthResponse {
 
 
 export interface GiveawayPrize { place_number?: number; prize_title?: BackendText; }
+export interface SocialTask { enabled?: boolean; community_url?: BackendText; reward_numbers?: number; }
+export interface SocialSubscriptionCheck { platform?: BackendText; subscribed?: boolean; entry_active?: boolean; entry_number?: BackendText | null; message?: BackendText; status?: BackendText; }
 export interface GiveawayState {
   has_active_giveaway?: boolean;
   giveaway?: { id?: ApiId; title?: BackendText; description?: BackendText; prizes?: GiveawayPrize[] } | null;
   user_numbers_count?: number;
-  numbers?: { number?: BackendText; source?: BackendText }[];
+  numbers?: { number?: BackendText; source?: BackendText; status?: BackendText; is_active?: boolean }[];
+  social_tasks?: Record<string, SocialTask>;
   guest?: boolean;
   message?: BackendText;
 }

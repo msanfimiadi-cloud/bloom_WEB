@@ -27,7 +27,7 @@ from app.models.verification import PrivilegeVerificationSession, PrivilegeVerif
 from app.models.user import User
 from app.schemas.activity import ActivityFeedRead
 from app.schemas.browser_auth import BrowserLoginCodeRequest
-from app.schemas.giveaway import GiveawayStateRead, PublicGiveawayRead, GiveawayPrizeRead, GiveawayNumberRead
+from app.schemas.giveaway import GiveawayStateRead, PublicGiveawayRead, GiveawayPrizeRead, GiveawayNumberRead, SocialSubscriptionCheckRead
 from app.schemas.client import (
     ClientSiteCredentialsRead,
     ClientCityResponse,
@@ -63,6 +63,7 @@ from app.services.activity_feed import build_client_activity_feed
 from app.services.browser_login_codes import BrowserLoginCodeService
 from app.services.referrals import REWARD_ENTRIES_PER_REFERRAL, activated_referrals_count, ensure_referral_code, referral_counts, referral_link
 from app.services.giveaways import ensure_user_numbers, get_active_giveaway
+from app.services.social_subscriptions import check_and_apply, social_task_settings, is_number_active
 from app.services.offer_savings import calculate_offer_saving_snapshot
 from app.services.site_credentials import (
     decrypt_site_password,
@@ -410,16 +411,40 @@ def read_client_giveaway(
         prizes=[GiveawayPrizeRead(id=p.id, place_number=p.place_number, prize_title=p.prize_title) for p in sorted(giveaway.prizes, key=lambda item: item.place_number)],
     )
     if current_user is None:
-        return GiveawayStateRead(has_active_giveaway=True, giveaway=public, guest=True, message="login_required")
+        return GiveawayStateRead(has_active_giveaway=True, giveaway=public, guest=True, message="login_required", social_tasks=social_task_settings(giveaway))
     profile = _get_or_create_client_profile(db, current_user.id)
     numbers = ensure_user_numbers(db, giveaway.id, profile.id)
+    for platform in ("telegram", "vk"):
+        task = social_task_settings(giveaway).get(platform, {})
+        if task.get("enabled"):
+            check_and_apply(db, giveaway, profile, platform)
     db.commit()
+    numbers = db.execute(select(GiveawayNumber).where(GiveawayNumber.giveaway_id == giveaway.id, GiveawayNumber.client_id == profile.id).order_by(GiveawayNumber.id)).scalars().all()
+    numbers = [number for number in numbers if is_number_active(number)]
     return GiveawayStateRead(
         has_active_giveaway=True,
         giveaway=public,
         user_numbers_count=len(numbers),
-        numbers=[GiveawayNumberRead(number=n.number, source=n.source) for n in numbers],
+        numbers=[GiveawayNumberRead(number=n.number, source=n.source, status=n.status, is_active=n.is_active) for n in numbers],
+        social_tasks=social_task_settings(giveaway),
     )
+
+
+@router.post("/me/social-subscriptions/{platform}/check", response_model=SocialSubscriptionCheckRead)
+def check_client_social_subscription(
+    platform: str,
+    current_user: User = Depends(require_client),
+    db: Session = Depends(get_db),
+) -> SocialSubscriptionCheckRead:
+    if platform not in {"telegram", "vk"}:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Unsupported platform")
+    giveaway = get_active_giveaway(db)
+    if giveaway is None:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="No active giveaway")
+    profile = _get_or_create_client_profile(db, current_user.id)
+    result = check_and_apply(db, giveaway, profile, platform)
+    db.commit()
+    return SocialSubscriptionCheckRead(**result.__dict__)
 
 
 @router.get("/me/site-credentials", response_model=ClientSiteCredentialsRead)

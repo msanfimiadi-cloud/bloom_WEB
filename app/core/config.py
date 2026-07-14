@@ -30,6 +30,7 @@ class Settings:
     VK_BOT_GROUP_ID: str = os.getenv("VK_BOT_GROUP_ID", "")
     VK_BOT_CONFIRMATION_CODE: str = os.getenv("VK_BOT_CONFIRMATION_CODE", "")
     VK_BOT_SECRET: str = os.getenv("VK_BOT_SECRET", "")
+    VK_SERVICE_TOKEN: str = os.getenv("VK_SERVICE_TOKEN", "")
     VK_MINIAPP_AUTH_MAX_AGE_SECONDS: int = int(os.getenv("VK_MINIAPP_AUTH_MAX_AGE_SECONDS", "86400"))
     TELEGRAM_BOT_TOKEN: str = os.getenv("TELEGRAM_BOT_TOKEN", "")
     TELEGRAM_MINIAPP_AUTH_MAX_AGE_SECONDS: int = int(os.getenv("TELEGRAM_MINIAPP_AUTH_MAX_AGE_SECONDS", "86400"))

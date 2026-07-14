@@ -576,6 +576,9 @@ const adminState = {
   giveawayDrawerOpen: false,
   landingSettingsSaving: false,
   giveawaySaving: false,
+  giveawayEntries: null,
+  giveawayEntriesLoading: false,
+  giveawayRecheckResult: null,
   giveaways: [],
   selectedGiveawayIdForEdit: '',
 };
@@ -4044,10 +4047,25 @@ const renderGiveawayForm = (giveaway = {}) => `<form class="admin-form" data-adm
   <label>Начало<input name="starts_at" type="datetime-local" value="${escapeHtml(String(giveaway.starts_at || '').slice(0, 16))}" /></label>
   <label>Окончание<input name="ends_at" type="datetime-local" value="${escapeHtml(String(giveaway.ends_at || '').slice(0, 16))}" /></label>
   <label>Количество победителей<input name="winners_count" type="number" min="0" max="100" value="${escapeHtml(giveaway.winners_count || 1)}" data-admin-giveaway-winners-count /></label>
+  <fieldset><legend>Telegram</legend><label>Ссылка на канал/группу<input name="telegram_community_url" value="${escapeHtml(giveaway.telegram_community_url || '')}" /></label><label>Chat ID / identifier<input name="telegram_chat_id" value="${escapeHtml(giveaway.telegram_chat_id || '')}" /></label><label class="checkbox-row"><input name="telegram_reward_enabled" type="checkbox" ${giveaway.telegram_reward_enabled ? 'checked' : ''} /> Включить награду</label><label>Количество номеров<input name="telegram_reward_numbers" type="number" min="1" max="1" value="${escapeHtml(giveaway.telegram_reward_numbers || 1)}" /></label></fieldset>
+  <fieldset><legend>VK</legend><label>Ссылка на сообщество<input name="vk_community_url" value="${escapeHtml(giveaway.vk_community_url || '')}" /></label><label>Group ID<input name="vk_group_id" value="${escapeHtml(giveaway.vk_group_id || '')}" /></label><label class="checkbox-row"><input name="vk_reward_enabled" type="checkbox" ${giveaway.vk_reward_enabled ? 'checked' : ''} /> Включить награду</label><label>Количество номеров<input name="vk_reward_numbers" type="number" min="1" max="1" value="${escapeHtml(giveaway.vk_reward_numbers || 1)}" /></label></fieldset>
   <div data-admin-giveaway-place-list>${renderGiveawayPlaceRows(giveaway)}</div>
   <button class="ui-button" type="submit" ${adminState.giveawaySaving ? 'disabled' : ''}>${adminState.giveawaySaving ? 'Сохранение…' : 'Сохранить розыгрыш'}</button>
   <p class="form-message" data-form-message="giveaway">${escapeHtml(adminState.formMessages.giveaway || '')}</p>
 </form>`;
+
+const renderGiveawayEntriesSection = (selected) => {
+  if (!selected) return '';
+  const data = adminState.giveawayEntries;
+  const rows = Array.isArray(data?.items) ? data.items : [];
+  const summary = data?.summary || {};
+  return `<section class="ui-card"><div class="admin-section-heading"><h4>Участники и номера</h4><p>Каждый номер показан отдельной строкой. Excel выгружает весь выбранный розыгрыш.</p></div>
+    <div class="admin-toolbar"><a class="ui-button ui-button--secondary" href="/api/v1/admin/giveaways/${escapeHtml(selected.id)}/entries/export.xlsx" target="_blank" rel="noopener">Выгрузить в Excel (весь розыгрыш)</a><button class="ui-button" type="button" data-admin-giveaway-recheck="${escapeHtml(selected.id)}">Перепроверить подписки</button></div>
+    ${adminState.giveawayRecheckResult ? `<p class="form-message">Проверено: ${escapeHtml(adminState.giveawayRecheckResult.checked || 0)}, активных: ${escapeHtml(adminState.giveawayRecheckResult.active || 0)}, деактивировано: ${escapeHtml(adminState.giveawayRecheckResult.deactivated || 0)}, повторно активировано: ${escapeHtml(adminState.giveawayRecheckResult.reactivated || 0)}, ошибок: ${escapeHtml(adminState.giveawayRecheckResult.errors || 0)}</p>` : ''}
+    <div class="stats-grid"><article><span>Всего номеров</span><strong>${escapeHtml(summary.total_numbers || 0)}</strong></article><article><span>Активных</span><strong>${escapeHtml(summary.active_numbers || 0)}</strong></article><article><span>Участников</span><strong>${escapeHtml(summary.unique_participants || 0)}</strong></article><article><span>Основных</span><strong>${escapeHtml(summary.subscription_numbers || 0)}</strong></article><article><span>Реферальных</span><strong>${escapeHtml(summary.referral_numbers || 0)}</strong></article><article><span>Telegram</span><strong>${escapeHtml(summary.telegram_numbers || 0)}</strong></article><article><span>VK</span><strong>${escapeHtml(summary.vk_numbers || 0)}</strong></article></div>
+    ${renderTable(['Номер участия','ФИО владельца','Client ID','Telegram ID','Telegram username','VK ID','Телефон','Email','Источник','Дата начисления','Статус','Причина неактивности'], rows.map((i) => [i.number, i.owner_name, i.client_id, i.telegram_id, i.telegram_username, i.vk_id, i.phone, i.email, i.source_label || i.source, formatDateTime(i.created_at), i.status, i.deactivation_reason]), true, 'admin-table--compact', adminState.giveawayEntriesLoading ? 'Загрузка…' : 'Номеров пока нет.')}
+  </section>`;
+};
 
 const renderGiveawaysTab = () => {
   const selected = adminState.giveaways.find((item) => String(item.id) === String(adminState.selectedGiveawayIdForEdit));
@@ -4065,7 +4083,7 @@ const renderGiveawaysTab = () => {
     true,
     'admin-table--compact',
     'Розыгрышей пока нет.',
-  )}</section>`;
+  )}</section>${renderGiveawayEntriesSection(selected)}`;
 };
 
 const buildGiveawayPayload = (form) => {
@@ -4077,6 +4095,14 @@ const buildGiveawayPayload = (form) => {
     starts_at: fd.get('starts_at') ? new Date(String(fd.get('starts_at'))).toISOString() : null,
     ends_at: fd.get('ends_at') ? new Date(String(fd.get('ends_at'))).toISOString() : null,
     winners_count: Number(fd.get('winners_count') || 0),
+    telegram_community_url: String(fd.get('telegram_community_url') || '').trim() || null,
+    telegram_chat_id: String(fd.get('telegram_chat_id') || '').trim() || null,
+    telegram_reward_enabled: fd.get('telegram_reward_enabled') === 'on',
+    telegram_reward_numbers: Number(fd.get('telegram_reward_numbers') || 1),
+    vk_community_url: String(fd.get('vk_community_url') || '').trim() || null,
+    vk_group_id: String(fd.get('vk_group_id') || '').trim() || null,
+    vk_reward_enabled: fd.get('vk_reward_enabled') === 'on',
+    vk_reward_numbers: Number(fd.get('vk_reward_numbers') || 1),
     prizes: Array.from(form.querySelectorAll('[data-admin-giveaway-place-row]')).map((row, index) => ({
       place_number: index + 1,
       prize_title: String(row.querySelector('[name="prize_title"]')?.value || '').trim(),
@@ -6362,6 +6388,13 @@ root.addEventListener('click', async (event) => {
     return;
   }
 
+
+  const giveawayRecheck = event.target.closest('[data-admin-giveaway-recheck]');
+  if (giveawayRecheck) {
+    const id = giveawayRecheck.dataset.adminGiveawayRecheck;
+    postJson(`/api/v1/admin/giveaways/${id}/social-subscriptions/recheck`, {}).then((data) => { adminState.giveawayRecheckResult = data; return apiFetch(`/api/v1/admin/giveaways/${id}/entries`); }).then((data) => { adminState.giveawayEntries = data; render(); }).catch((error) => { setFormMessage('giveaway', error.message || 'Не удалось перепроверить подписки'); render(); });
+    return;
+  }
 
   const giveawayOpen = event.target.closest('[data-admin-giveaway-open]');
   if (giveawayOpen) {

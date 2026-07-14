@@ -6545,3 +6545,7 @@ small,
   line-height: 1.45;
   text-align: center;
 }
+.giveaway-social-tasks { display: grid; gap: 12px; margin-top: 16px; }
+.giveaway-social-task { display: grid; gap: 8px; padding: 12px; border: 1px solid rgba(125, 91, 255, 0.18); border-radius: 16px; background: rgba(255,255,255,0.72); }
+.giveaway-social-task p { margin: 4px 0 0; }
+.giveaway-social-task small { color: #5f4b8b; }
