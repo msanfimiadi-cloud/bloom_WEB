@@ -1,4 +1,5 @@
 import { useEffect, useRef, useState } from "react";
+import { createPortal } from "react-dom";
 import { isApiError, isTimeoutError } from "../api/client";
 import type { ApiId, ClientProfile, Offer, OfferPhoto, Partner, PartnerPhoto, Subscription, Verification } from "../api/types";
 import type { PartnerOffersDiagnostic } from "../App";
@@ -202,6 +203,8 @@ export function PartnerPage({
   const [message, setMessage] = useState("");
   const [isActivatingTrial, setIsActivatingTrial] = useState(false);
   const [galleryIndex, setGalleryIndex] = useState<number | null>(null);
+  const [isGalleryImageLoading, setIsGalleryImageLoading] = useState(false);
+  const [hasGalleryImageError, setHasGalleryImageError] = useState(false);
   const [copyMessage, setCopyMessage] = useState("");
   const [failedImageUrls, setFailedImageUrls] = useState<string[]>([]);
   const copyMessageTimeoutRef = useRef<number | null>(null);
@@ -256,34 +259,36 @@ export function PartnerPage({
       return;
     }
 
-    const scrollY = window.scrollY;
     const previousHtmlOverflow = document.documentElement.style.overflow;
     const previousOverflow = document.body.style.overflow;
-    const previousPosition = document.body.style.position;
-    const previousTop = document.body.style.top;
-    const previousWidth = document.body.style.width;
     document.documentElement.style.overflow = "hidden";
     document.body.style.overflow = "hidden";
-    document.body.style.position = "fixed";
-    document.body.style.top = `-${scrollY}px`;
-    document.body.style.width = "100%";
 
     return () => {
       document.documentElement.style.overflow = previousHtmlOverflow;
       document.body.style.overflow = previousOverflow;
-      document.body.style.position = previousPosition;
-      document.body.style.top = previousTop;
-      document.body.style.width = previousWidth;
-      window.scrollTo(0, scrollY);
     };
   }, [galleryIndex, selectedVerification]);
+
+  const images = partner ? getPartnerImages(partner).filter((image) => !failedImageUrls.includes(image)) : [];
+  const selectedGalleryImage = galleryIndex !== null ? images[galleryIndex] : null;
+
+  useEffect(() => {
+    if (!selectedGalleryImage) {
+      setIsGalleryImageLoading(false);
+      setHasGalleryImageError(false);
+      return;
+    }
+
+    setIsGalleryImageLoading(true);
+    setHasGalleryImageError(false);
+  }, [selectedGalleryImage]);
 
   if (!partner) {
     return <EmptyState title="Партнёр не выбран" description="Вернитесь в каталог и выберите карточку партнёра." />;
   }
 
   const currentPartner = partner;
-  const images = getPartnerImages(currentPartner).filter((image) => !failedImageUrls.includes(image));
   const mapsUrl = buildYandexMapsUrl({
     latitude: currentPartner.latitude ?? currentPartner.lat,
     longitude: currentPartner.longitude ?? currentPartner.lon,
@@ -411,8 +416,6 @@ export function PartnerPage({
   const code = getVerificationCode(selectedVerification);
   const hasGallery = images.length > 0;
   tracePartnerImageDiagnostic("partner_detail_image_mapped", currentPartner, images[0]);
-  const selectedGalleryImage = galleryIndex !== null ? images[galleryIndex] : null;
-
   function handleImageError(image: string) {
     tracePartnerImageDiagnostic("image_load_error", currentPartner, image);
     setFailedImageUrls((current) => (current.includes(image) ? current : [...current, image]));
@@ -433,6 +436,43 @@ export function PartnerPage({
       return (current + direction + images.length) % images.length;
     });
   }
+
+  const gallery = selectedGalleryImage ? (
+    <div className="lightbox" role="dialog" aria-modal="true" aria-label="Галерея фото партнёра" onTouchMove={(event) => event.preventDefault()}>
+      <div className="lightbox__frame">
+        <button className="lightbox__close" type="button" onClick={() => setGalleryIndex(null)} aria-label="Закрыть">
+          ×
+        </button>
+        <div className="lightbox__image-wrap" aria-busy={isGalleryImageLoading}>
+          {isGalleryImageLoading ? <span className="lightbox__spinner" aria-label="Загружаем изображение" /> : null}
+          {hasGalleryImageError ? (
+            <p className="lightbox__error">Не удалось загрузить изображение</p>
+          ) : (
+            <img
+              className="lightbox__image"
+              src={selectedGalleryImage}
+              alt={getPartnerName(currentPartner)}
+              onLoad={() => setIsGalleryImageLoading(false)}
+              onError={() => {
+                setIsGalleryImageLoading(false);
+                setHasGalleryImageError(true);
+              }}
+            />
+          )}
+        </div>
+      </div>
+      {images.length > 1 ? (
+        <button className="lightbox__nav lightbox__nav--prev" type="button" onClick={() => shiftGallery(-1)} aria-label="Предыдущее фото">
+          ‹
+        </button>
+      ) : null}
+      {images.length > 1 ? (
+        <button className="lightbox__nav lightbox__nav--next" type="button" onClick={() => shiftGallery(1)} aria-label="Следующее фото">
+          ›
+        </button>
+      ) : null}
+    </div>
+  ) : null;
 
   return (
     <section className="page partner-page">
@@ -619,26 +659,7 @@ export function PartnerPage({
         </div>
       ) : null}
 
-      {selectedGalleryImage ? (
-        <div className="lightbox" role="dialog" aria-modal="true" aria-label="Галерея фото партнёра" onTouchMove={(event) => event.preventDefault()}>
-          <div className="lightbox__frame">
-            <button className="lightbox__close" type="button" onClick={() => setGalleryIndex(null)} aria-label="Закрыть">
-              ×
-            </button>
-            <SmoothImage className="lightbox__image" src={selectedGalleryImage} alt={getPartnerName(currentPartner)} loading="eager" fit="contain" />
-          </div>
-          {images.length > 1 ? (
-            <button className="lightbox__nav lightbox__nav--prev" type="button" onClick={() => shiftGallery(-1)} aria-label="Предыдущее фото">
-              ‹
-            </button>
-          ) : null}
-          {images.length > 1 ? (
-            <button className="lightbox__nav lightbox__nav--next" type="button" onClick={() => shiftGallery(1)} aria-label="Следующее фото">
-              ›
-            </button>
-          ) : null}
-        </div>
-      ) : null}
+      {gallery && typeof document !== "undefined" ? createPortal(gallery, document.body) : null}
     </section>
   );
 }
