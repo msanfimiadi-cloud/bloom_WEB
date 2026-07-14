@@ -7,6 +7,7 @@ from sqlalchemy.orm import Session, selectinload
 
 from app.models.client import ClientProfile, ClientReferral
 from app.models.giveaway import Giveaway, GiveawayNumber
+from app.services.social_subscriptions import is_number_active
 from app.models.payment import Subscription, SubscriptionStatus
 
 
@@ -58,4 +59,4 @@ def ensure_user_numbers(db: Session, giveaway_id: int, client_id: int) -> list[G
             db.add(GiveawayNumber(giveaway_id=giveaway_id, client_id=client_id, number=f"{start + idx:06d}", source=sources[len(existing) + idx]))
         db.flush()
         existing = db.execute(select(GiveawayNumber).where(GiveawayNumber.giveaway_id == giveaway_id, GiveawayNumber.client_id == client_id).order_by(GiveawayNumber.id)).scalars().all()
-    return existing
+    return [n for n in existing if is_number_active(n)]

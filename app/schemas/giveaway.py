@@ -25,6 +25,14 @@ class GiveawayRead(BaseModel):
     created_at: datetime | None = None
     updated_at: datetime | None = None
     prizes: list[GiveawayPrizeRead] = Field(default_factory=list)
+    telegram_community_url: str | None = None
+    telegram_chat_id: str | None = None
+    telegram_reward_enabled: bool = False
+    telegram_reward_numbers: int = 1
+    vk_community_url: str | None = None
+    vk_group_id: str | None = None
+    vk_reward_enabled: bool = False
+    vk_reward_numbers: int = 1
 
 
 class GiveawayPrizeWrite(BaseModel):
@@ -43,11 +51,36 @@ class GiveawayWrite(BaseModel):
     ends_at: datetime | None = None
     winners_count: int = Field(default=1, ge=0, le=100)
     prizes: list[GiveawayPrizeWrite] = Field(default_factory=list)
+    telegram_community_url: str | None = None
+    telegram_chat_id: str | None = None
+    telegram_reward_enabled: bool = False
+    telegram_reward_numbers: int = Field(default=1, ge=1, le=1)
+    vk_community_url: str | None = None
+    vk_group_id: str | None = None
+    vk_reward_enabled: bool = False
+    vk_reward_numbers: int = Field(default=1, ge=1, le=1)
 
 
 class GiveawayNumberRead(BaseModel):
     number: str
     source: str
+    status: str = "active"
+    is_active: bool = True
+
+
+class SocialTaskRead(BaseModel):
+    enabled: bool = False
+    community_url: str | None = None
+    reward_numbers: int = 1
+
+
+class SocialSubscriptionCheckRead(BaseModel):
+    platform: str
+    subscribed: bool
+    entry_active: bool
+    entry_number: str | None = None
+    message: str
+    status: str = "ok"
 
 
 class PublicGiveawayRead(BaseModel):
@@ -64,3 +97,4 @@ class GiveawayStateRead(BaseModel):
     numbers: list[GiveawayNumberRead] = Field(default_factory=list)
     guest: bool = False
     message: str | None = None
+    social_tasks: dict[str, SocialTaskRead] = Field(default_factory=dict)

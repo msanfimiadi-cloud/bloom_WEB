@@ -1,9 +1,11 @@
 from __future__ import annotations
 
-from datetime import datetime, timedelta, timezone
+from datetime import date, datetime, timedelta, timezone
 from decimal import Decimal
+from io import BytesIO
 
 from fastapi import APIRouter, Depends, File, Form, HTTPException, Query, UploadFile, status
+from fastapi.responses import StreamingResponse
 from sqlalchemy import func, or_, select
 from sqlalchemy.exc import IntegrityError
 from sqlalchemy.orm import Session, selectinload
@@ -16,7 +18,7 @@ from app.db.session import get_db
 from app.models.category import Category
 from app.models.city import City
 from app.models.client import ClientProfile
-from app.models.giveaway import Giveaway, GiveawayPrize
+from app.models.giveaway import Giveaway, GiveawayNumber, GiveawayPrize
 from app.models.lead import LeadClick
 from app.models.landing import LandingSettings
 from app.models.partner import Partner, PartnerOffer, PartnerPhoto, PartnerQrLink
@@ -69,6 +71,7 @@ from app.services.privilege_verifications import (
     normalize_expired_verifications,
     ttl_seconds,
 )
+from app.services.social_subscriptions import recheck_giveaway_social_subscriptions, is_number_active
 from app.services.qr_links import (
     generate_qr_slug,
     is_valid_qr_slug,
@@ -120,6 +123,14 @@ def _giveaway_to_read(giveaway: Giveaway) -> GiveawayRead:
         created_at=giveaway.created_at,
         updated_at=giveaway.updated_at,
         prizes=[GiveawayPrizeRead(id=p.id, place_number=p.place_number, prize_title=p.prize_title, winner_provider=p.winner_provider, winner_provider_user_id=p.winner_provider_user_id, winning_number=p.winning_number) for p in sorted(giveaway.prizes, key=lambda item: item.place_number)],
+        telegram_community_url=giveaway.telegram_community_url,
+        telegram_chat_id=giveaway.telegram_chat_id,
+        telegram_reward_enabled=giveaway.telegram_reward_enabled,
+        telegram_reward_numbers=giveaway.telegram_reward_numbers,
+        vk_community_url=giveaway.vk_community_url,
+        vk_group_id=giveaway.vk_group_id,
+        vk_reward_enabled=giveaway.vk_reward_enabled,
+        vk_reward_numbers=giveaway.vk_reward_numbers,
     )
 
 def _validate_giveaway_prizes(payload: GiveawayWrite) -> list[GiveawayPrizeWrite]:
@@ -149,6 +160,14 @@ def _apply_giveaway_payload(giveaway: Giveaway, payload: GiveawayWrite) -> None:
     giveaway.starts_at = payload.starts_at
     giveaway.ends_at = payload.ends_at
     giveaway.winners_count = payload.winners_count
+    giveaway.telegram_community_url = (payload.telegram_community_url or "").strip() or None
+    giveaway.telegram_chat_id = (payload.telegram_chat_id or "").strip() or None
+    giveaway.telegram_reward_enabled = payload.telegram_reward_enabled
+    giveaway.telegram_reward_numbers = payload.telegram_reward_numbers
+    giveaway.vk_community_url = (payload.vk_community_url or "").strip() or None
+    giveaway.vk_group_id = (payload.vk_group_id or "").strip() or None
+    giveaway.vk_reward_enabled = payload.vk_reward_enabled
+    giveaway.vk_reward_numbers = payload.vk_reward_numbers
 
     requested_prizes = _validate_giveaway_prizes(payload)
     existing_by_place = {prize.place_number: prize for prize in giveaway.prizes}
@@ -203,6 +222,92 @@ def update_admin_giveaway(giveaway_id: int, payload: GiveawayWrite, admin: Admin
         raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="Giveaway could not be saved because of conflicting data") from exc
     giveaway = db.execute(select(Giveaway).options(selectinload(Giveaway.prizes)).where(Giveaway.id == giveaway_id)).scalar_one()
     return _giveaway_to_read(giveaway)
+
+
+SOURCE_LABELS = {
+    "subscription": "Основной номер за trial/подписку Bloom",
+    "referral": "Номер за реферала",
+    "telegram_subscription": "Номер за подписку на Telegram",
+    "vk_subscription": "Номер за подписку на VK",
+    "manual": "Ручное начисление администратором",
+}
+
+def _owner_name(client: ClientProfile | None) -> str | None:
+    if client is None:
+        return None
+    full = client.full_name or " ".join(part for part in [client.telegram_first_name, client.telegram_last_name] if part).strip()
+    return full or client.telegram_username or client.vk_username
+
+def _giveaway_number_payload(number: GiveawayNumber, client: ClientProfile | None) -> dict[str, object]:
+    user = client.user if client is not None else None
+    return {
+        "id": number.id, "number": number.number, "status": number.status, "is_active": is_number_active(number),
+        "source": number.source, "source_label": SOURCE_LABELS.get(number.source, number.source),
+        "created_at": number.created_at, "deactivated_at": number.deactivated_at, "deactivation_reason": number.deactivation_reason,
+        "owner_name": _owner_name(client), "client_id": number.client_id,
+        "telegram_id": client.telegram_user_id if client else None, "telegram_username": client.telegram_username if client else None,
+        "vk_id": client.vk_user_id if client else None, "phone": user.phone if user else None, "email": client.contact_email or (user.email if user else None),
+    }
+
+@router.get("/giveaways/{giveaway_id}/entries")
+def list_admin_giveaway_entries(
+    giveaway_id: int, search_number: str | None = None, search_name: str | None = None, search_telegram: str | None = None, search_vk: str | None = None,
+    source: str | None = None, active: bool | None = None, date_from: date | None = None, date_to: date | None = None,
+    sort: str = "number", direction: str = "asc", admin: AdminUser = Depends(require_admin), db: Session = Depends(get_db)
+) -> dict[str, object]:
+    _ = admin
+    if db.get(Giveaway, giveaway_id) is None:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Giveaway not found")
+    stmt = select(GiveawayNumber, ClientProfile).join(ClientProfile, ClientProfile.id == GiveawayNumber.client_id, isouter=True).where(GiveawayNumber.giveaway_id == giveaway_id)
+    if search_number: stmt = stmt.where(GiveawayNumber.number.ilike(f"%{search_number}%"))
+    if source: stmt = stmt.where(GiveawayNumber.source == source)
+    if active is not None: stmt = stmt.where(GiveawayNumber.is_active.is_(active), GiveawayNumber.status == ("active" if active else GiveawayNumber.status))
+    if date_from: stmt = stmt.where(GiveawayNumber.created_at >= datetime.combine(date_from, datetime.min.time()))
+    if date_to: stmt = stmt.where(GiveawayNumber.created_at < datetime.combine(date_to + timedelta(days=1), datetime.min.time()))
+    rows = db.execute(stmt).all()
+    items = [_giveaway_number_payload(n, c) for n, c in rows]
+    if search_name: items = [i for i in items if search_name.lower() in str(i.get("owner_name") or "").lower()]
+    if search_telegram: items = [i for i in items if search_telegram.lower() in (str(i.get("telegram_id") or "") + " " + str(i.get("telegram_username") or "")).lower()]
+    if search_vk: items = [i for i in items if search_vk.lower() in str(i.get("vk_id") or "").lower()]
+    reverse = direction == "desc"
+    key_map = {"number": "number", "date": "created_at", "owner": "owner_name", "source": "source"}
+    items.sort(key=lambda i: str(i.get(key_map.get(sort, "number")) or ""), reverse=reverse)
+    summary = {"total_numbers": len(items), "active_numbers": sum(1 for i in items if i["is_active"]), "unique_participants": len({i["client_id"] for i in items}), "subscription_numbers": sum(1 for i in items if i["source"] == "subscription"), "referral_numbers": sum(1 for i in items if i["source"] == "referral"), "telegram_numbers": sum(1 for i in items if i["source"] == "telegram_subscription"), "vk_numbers": sum(1 for i in items if i["source"] == "vk_subscription")}
+    return {"summary": summary, "items": items, "source_labels": SOURCE_LABELS}
+
+@router.get("/giveaways/{giveaway_id}/entries/export.xlsx")
+def export_admin_giveaway_entries(giveaway_id: int, admin: AdminUser = Depends(require_admin), db: Session = Depends(get_db)):
+    _ = admin
+    try:
+        from openpyxl import Workbook
+        from openpyxl.styles import Font
+    except ImportError as exc:
+        raise HTTPException(status_code=500, detail="openpyxl is required for XLSX export") from exc
+    data = list_admin_giveaway_entries(giveaway_id, admin=admin, db=db)["items"]
+    wb = Workbook(); ws = wb.active; ws.title = "Номера розыгрыша"
+    headers = ["Номер", "Статус", "Источник", "ФИО", "Client ID", "Telegram ID", "Telegram username", "VK ID", "Телефон", "Email", "Дата начисления", "Дата деактивации", "Причина деактивации"]
+    ws.append(headers)
+    for cell in ws[1]: cell.font = Font(bold=True)
+    for item in data:
+        ws.append([item["number"], item["status"], item["source_label"], item["owner_name"], item["client_id"], item["telegram_id"], item["telegram_username"], item["vk_id"], item["phone"], item["email"], item["created_at"], item["deactivated_at"], item["deactivation_reason"]])
+    ws.auto_filter.ref = ws.dimensions; ws.freeze_panes = "A2"
+    widths = [14, 14, 34, 28, 12, 18, 22, 18, 18, 28, 22, 22, 32]
+    for idx, width in enumerate(widths, 1): ws.column_dimensions[chr(64 + idx)].width = width
+    for row in ws.iter_rows(min_row=2, min_col=1, max_col=1): row[0].number_format = "@"
+    for row in ws.iter_rows(min_row=2, min_col=11, max_col=12):
+        for cell in row: cell.number_format = "yyyy-mm-dd hh:mm:ss"
+    buf = BytesIO(); wb.save(buf); buf.seek(0)
+    filename = f"bloom_giveaway_{giveaway_id}_{date.today().isoformat()}.xlsx"
+    return StreamingResponse(buf, media_type="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet", headers={"Content-Disposition": f"attachment; filename={filename}"})
+
+@router.post("/giveaways/{giveaway_id}/social-subscriptions/recheck")
+def recheck_admin_giveaway_social_subscriptions(giveaway_id: int, admin: AdminUser = Depends(require_admin), db: Session = Depends(get_db)) -> dict[str, int]:
+    _ = admin
+    giveaway = db.get(Giveaway, giveaway_id)
+    if giveaway is None: raise HTTPException(status_code=404, detail="Giveaway not found")
+    stats = recheck_giveaway_social_subscriptions(db, giveaway)
+    db.commit()
+    return stats
 
 
 @router.get("/landing-settings", response_model=LandingSettingsRead)

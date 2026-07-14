@@ -1150,6 +1150,14 @@ function requestClientApiGet<T>(
   );
 }
 
+function requestClientApiPost<T>(path: string, body: unknown): Promise<T> {
+  return request<T>(
+    getClientApiProxyPath(path),
+    { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify(body), retry: false },
+    "same-origin",
+  );
+}
+
 export function getProfile(): Promise<ClientProfile> {
   return requestClientApiGet<ClientProfile>("/clients/me");
 }
@@ -1164,6 +1172,10 @@ export function getReferralSummary(): Promise<ReferralSummary> {
 
 export function getGiveawayState() {
   return requestClientApiGet<import("./types").GiveawayState>("/clients/giveaway");
+}
+
+export function checkSocialSubscription(platform: "telegram" | "vk") {
+  return requestClientApiPost<import("./types").SocialSubscriptionCheck>(`/clients/me/social-subscriptions/${platform}/check`, {});
 }
 
 function normalizeCatalogMediaUrl(
