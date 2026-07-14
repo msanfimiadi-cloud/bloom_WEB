@@ -15,7 +15,8 @@
     "start": "node server/production-server.js",
     "start:api": "node server/production-server.js",
     "sync:content-to-tg-db": "python -m telegram_app.scripts.sync_content_to_tg_catalog",
-    "tg-catalog:backfill": "python -m telegram_app.scripts.sync_content_to_tg_catalog"
+    "tg-catalog:backfill": "python -m telegram_app.scripts.sync_content_to_tg_catalog",
+    "test:partner-gallery": "node scripts/regression-partner-gallery.mjs"
   },
   "dependencies": {
     "@vitejs/plugin-react": "6.0.2",
