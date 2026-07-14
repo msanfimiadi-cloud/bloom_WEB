@@ -4024,6 +4024,58 @@ const loadGiveaways = async () => {
   adminState.giveaways = await apiFetch('/api/v1/admin/giveaways');
 };
 
+const loadGiveawayEntries = async (giveawayId) => {
+  if (!giveawayId) {
+    adminState.giveawayEntries = null;
+    adminState.giveawayEntriesLoading = false;
+    return null;
+  }
+  const endpoint = `/api/v1/admin/giveaways/${giveawayId}/entries`;
+  console.info('[BLOOM_ADMIN_GIVEAWAY_ENTRIES] request', { giveawayId, endpoint });
+  adminState.giveawayEntriesLoading = true;
+  let responseStatus = 'error';
+  try {
+    const headers = new Headers();
+    const token = getToken();
+    if (token) {
+      headers.set('Authorization', `Bearer ${token}`);
+    }
+    const response = await fetch(endpoint, { cache: 'no-store', headers });
+    responseStatus = response.status;
+    if (response.status === 401 || response.status === 403) {
+      clearToken();
+      showLoginForm();
+      throw new Error('Сессия истекла. Войдите снова.');
+    }
+    if (!response.ok) {
+      throw new Error(await buildErrorMessage(response));
+    }
+    const data = response.status === 204 ? null : await response.json();
+    const rowsCount = Array.isArray(data?.items) ? data.items.length : 0;
+    const summary = data?.summary || {};
+    console.info('[BLOOM_ADMIN_GIVEAWAY_ENTRIES] response', {
+      status: responseStatus,
+      rowsCount,
+      total: summary.total_numbers || 0,
+      active: summary.active_numbers || 0,
+      uniqueParticipants: summary.unique_participants || 0,
+    });
+    adminState.giveawayEntries = data;
+    return data;
+  } catch (error) {
+    console.info('[BLOOM_ADMIN_GIVEAWAY_ENTRIES] response', {
+      status: responseStatus,
+      rowsCount: 0,
+      total: 0,
+      active: 0,
+      uniqueParticipants: 0,
+    });
+    throw error;
+  } finally {
+    adminState.giveawayEntriesLoading = false;
+  }
+};
+
 const renderGiveawayPlaceRows = (giveaway = {}) => {
   const count = Number(giveaway.winners_count || 1);
   const prizes = Array.isArray(giveaway.prizes) ? giveaway.prizes : [];
@@ -4055,15 +4107,15 @@ const renderGiveawayForm = (giveaway = {}) => `<form class="admin-form" data-adm
 </form>`;
 
 const renderGiveawayEntriesSection = (selected) => {
-  if (!selected) return '';
+  if (!selected) return `<section class="ui-card"><div class="admin-section-heading"><h4>Участники и номера</h4><p>Сначала сохраните розыгрыш, чтобы открыть список участников.</p></div></section>`;
   const data = adminState.giveawayEntries;
   const rows = Array.isArray(data?.items) ? data.items : [];
   const summary = data?.summary || {};
   return `<section class="ui-card"><div class="admin-section-heading"><h4>Участники и номера</h4><p>Каждый номер показан отдельной строкой. Excel выгружает весь выбранный розыгрыш.</p></div>
     <div class="admin-toolbar"><a class="ui-button ui-button--secondary" href="/api/v1/admin/giveaways/${escapeHtml(selected.id)}/entries/export.xlsx" target="_blank" rel="noopener">Выгрузить в Excel (весь розыгрыш)</a><button class="ui-button" type="button" data-admin-giveaway-recheck="${escapeHtml(selected.id)}">Перепроверить подписки</button></div>
     ${adminState.giveawayRecheckResult ? `<p class="form-message">Проверено: ${escapeHtml(adminState.giveawayRecheckResult.checked || 0)}, активных: ${escapeHtml(adminState.giveawayRecheckResult.active || 0)}, деактивировано: ${escapeHtml(adminState.giveawayRecheckResult.deactivated || 0)}, повторно активировано: ${escapeHtml(adminState.giveawayRecheckResult.reactivated || 0)}, ошибок: ${escapeHtml(adminState.giveawayRecheckResult.errors || 0)}</p>` : ''}
-    <div class="stats-grid"><article><span>Всего номеров</span><strong>${escapeHtml(summary.total_numbers || 0)}</strong></article><article><span>Активных</span><strong>${escapeHtml(summary.active_numbers || 0)}</strong></article><article><span>Участников</span><strong>${escapeHtml(summary.unique_participants || 0)}</strong></article><article><span>Основных</span><strong>${escapeHtml(summary.subscription_numbers || 0)}</strong></article><article><span>Реферальных</span><strong>${escapeHtml(summary.referral_numbers || 0)}</strong></article><article><span>Telegram</span><strong>${escapeHtml(summary.telegram_numbers || 0)}</strong></article><article><span>VK</span><strong>${escapeHtml(summary.vk_numbers || 0)}</strong></article></div>
-    ${renderTable(['Номер участия','ФИО владельца','Client ID','Telegram ID','Telegram username','VK ID','Телефон','Email','Источник','Дата начисления','Статус','Причина неактивности'], rows.map((i) => [i.number, i.owner_name, i.client_id, i.telegram_id, i.telegram_username, i.vk_id, i.phone, i.email, i.source_label || i.source, formatDateTime(i.created_at), i.status, i.deactivation_reason]), true, 'admin-table--compact', adminState.giveawayEntriesLoading ? 'Загрузка…' : 'Номеров пока нет.')}
+    <div class="stats-grid"><article><span>Всего номеров</span><strong>${escapeHtml(summary.total_numbers || 0)}</strong></article><article><span>Активных</span><strong>${escapeHtml(summary.active_numbers || 0)}</strong></article><article><span>Участников</span><strong>${escapeHtml(summary.unique_participants || 0)}</strong></article><article><span>За подписку Bloom</span><strong>${escapeHtml(summary.subscription_numbers || 0)}</strong></article><article><span>За рефералов</span><strong>${escapeHtml(summary.referral_numbers || 0)}</strong></article><article><span>Telegram</span><strong>${escapeHtml(summary.telegram_numbers || 0)}</strong></article><article><span>VK</span><strong>${escapeHtml(summary.vk_numbers || 0)}</strong></article></div>
+    ${renderTable(['Номер','Статус','Источник','ФИО','Client ID','Telegram ID','Telegram username','VK ID','Телефон','Email','Дата начисления','Причина неактивности'], rows.map((i) => [i.number, i.status, i.source_label || i.source, i.owner_name, i.client_id, i.telegram_id, i.telegram_username, i.vk_id, i.phone, i.email, formatDateTime(i.created_at), i.deactivation_reason]), true, 'admin-table--compact', adminState.giveawayEntriesLoading ? 'Загрузка…' : 'В этом розыгрыше пока нет номеров.')}
   </section>`;
 };
 
@@ -6361,8 +6413,12 @@ root.addEventListener('click', async (event) => {
   const giveawayEdit = event.target.closest('[data-admin-giveaway-edit]');
   if (giveawayEdit) {
     event.preventDefault();
-    adminState.selectedGiveawayIdForEdit = giveawayEdit.dataset.adminGiveawayEdit;
+    const giveawayId = giveawayEdit.dataset.adminGiveawayEdit;
+    adminState.selectedGiveawayIdForEdit = giveawayId;
+    adminState.giveawayEntries = null;
+    adminState.giveawayRecheckResult = null;
     renderAdminLayout();
+    loadGiveawayEntries(giveawayId).then(() => renderAdminLayout()).catch((error) => { setFormMessage('giveaway', error.message || 'Не удалось загрузить номера розыгрыша'); renderAdminLayout(); });
     return;
   }
   const customSelectOption = event.target.closest('[data-custom-select-option]');
@@ -6392,7 +6448,7 @@ root.addEventListener('click', async (event) => {
   const giveawayRecheck = event.target.closest('[data-admin-giveaway-recheck]');
   if (giveawayRecheck) {
     const id = giveawayRecheck.dataset.adminGiveawayRecheck;
-    postJson(`/api/v1/admin/giveaways/${id}/social-subscriptions/recheck`, {}).then((data) => { adminState.giveawayRecheckResult = data; return apiFetch(`/api/v1/admin/giveaways/${id}/entries`); }).then((data) => { adminState.giveawayEntries = data; render(); }).catch((error) => { setFormMessage('giveaway', error.message || 'Не удалось перепроверить подписки'); render(); });
+    postJson(`/api/v1/admin/giveaways/${id}/social-subscriptions/recheck`, {}).then((data) => { adminState.giveawayRecheckResult = data; return loadGiveawayEntries(id); }).then(() => { render(); }).catch((error) => { setFormMessage('giveaway', error.message || 'Не удалось перепроверить подписки'); render(); });
     return;
   }
 
@@ -7627,13 +7683,15 @@ const handleGiveawayFormSubmit = async (form) => {
   renderAdminLayout();
 
   try {
-    if (id) {
-      await apiFetch(`/api/v1/admin/giveaways/${id}`, { method: 'PUT', body: JSON.stringify(payload), timeoutMs: 30000 });
-    } else {
-      await postJson('/api/v1/admin/giveaways', payload);
-    }
-    adminState.selectedGiveawayIdForEdit = '';
+    const savedGiveaway = id
+      ? await apiFetch(`/api/v1/admin/giveaways/${id}`, { method: 'PUT', body: JSON.stringify(payload), timeoutMs: 30000 })
+      : await postJson('/api/v1/admin/giveaways', payload);
+    const savedGiveawayId = savedGiveaway?.id || id;
+    adminState.selectedGiveawayIdForEdit = savedGiveawayId ? String(savedGiveawayId) : '';
     await loadGiveaways();
+    if (savedGiveawayId) {
+      await loadGiveawayEntries(savedGiveawayId);
+    }
     setFormMessage('giveaway', 'Розыгрыш сохранён.');
     setPanelMessage('Розыгрыш сохранён', 'success');
   } catch (error) {
