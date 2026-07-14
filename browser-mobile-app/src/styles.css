@@ -6378,3 +6378,67 @@ small,
     min-height: 88px !important;
   }
 }
+
+/* Shared compact partner catalog cards used on Home and Partners pages. */
+.partner-catalog-card {
+  grid-template-columns: 136px minmax(0, 1fr);
+  gap: 12px;
+  align-items: stretch;
+  min-height: 148px;
+  padding: 8px;
+  overflow: hidden;
+}
+
+.partner-catalog-card .image-shell,
+.partner-catalog-card .image-shell img,
+.partner-catalog-card .home-partner-tile__placeholder {
+  width: 136px;
+  min-height: 148px;
+  height: 100%;
+  border-radius: 18px;
+  object-fit: cover;
+  object-position: center;
+}
+
+.partner-catalog-card .home-partner-tile__body {
+  min-height: 0;
+  gap: 5px;
+  align-content: center;
+  padding: 5px 4px 5px 0;
+}
+
+.partner-catalog-card strong,
+.partner-catalog-card small,
+.partner-catalog-card em {
+  display: -webkit-box;
+  overflow: hidden;
+  -webkit-box-orient: vertical;
+  text-overflow: ellipsis;
+}
+
+.partner-catalog-card strong,
+.partner-catalog-card small,
+.partner-catalog-card em {
+  -webkit-line-clamp: 2;
+}
+
+.partner-catalog-card em {
+  margin: 0;
+}
+
+.partner-catalog-card .home-partner-tile__cta {
+  align-self: start;
+}
+
+@media (max-width: 390px) {
+  .partner-catalog-card {
+    grid-template-columns: 132px minmax(0, 1fr);
+  }
+
+  .partner-catalog-card .image-shell,
+  .partner-catalog-card .image-shell img,
+  .partner-catalog-card .home-partner-tile__placeholder {
+    width: 132px;
+    min-height: 144px;
+  }
+}

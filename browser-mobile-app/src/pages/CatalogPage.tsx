@@ -2,7 +2,7 @@ import { useMemo, useState } from "react";
 import type React from "react";
 import type { CatalogErrorDiagnostic } from "../api/client";
 import type { Partner } from "../api/types";
-import { AppImage } from "../components/AppImage";
+import { PartnerCatalogCard } from "../components/PartnerCatalogCard";
 import { EmptyState } from "../components/EmptyState";
 import { useContentText } from "../content/ContentContext";
 import {
@@ -14,12 +14,7 @@ import {
   getPartnerCategories,
   getPartnerCity,
   getPartnerDescription,
-  getPartnerImage,
   getPartnerName,
-  getPartnerPrivilege,
-  hasEmbeddedOffers,
-  pickReadableValue,
-  tracePartnerImageDiagnostic,
 } from "../utils/partnerDisplay";
 
 interface CatalogPageProps {
@@ -60,38 +55,6 @@ const LIFESTYLE_CATEGORIES = [
   "Отдых",
 ];
 
-function PartnerCardImage({ src, name, partner }: { src?: string; name: string; partner: Partner }) {
-  return (
-    <AppImage
-      src={src}
-      alt=""
-      placeholder={name.slice(0, 1) || "Bloom"}
-      placeholderClassName="partner-card__placeholder image-placeholder image-placeholder--brand"
-      onError={() => tracePartnerImageDiagnostic("image_load_error", partner, src)}
-      fit="contain"
-    />
-  );
-}
-
-
-function getOfferAvailabilityText(partner: Partner): string | null {
-  const availability = hasEmbeddedOffers(partner);
-
-  if (availability === false) {
-    return "Предложения скоро появятся";
-  }
-
-  return getPartnerPrivilege(partner);
-}
-
-
-function getPartnerDistance(partner: Partner): string | undefined {
-  return pickReadableValue(
-    (partner as Partner & Record<string, unknown>).distance,
-    (partner as Partner & Record<string, unknown>).distance_text,
-    (partner as Partner & Record<string, unknown>).distance_km,
-  );
-}
 
 function getPartnerSearchText(partner: Partner): string {
   return [
@@ -267,33 +230,14 @@ export function CatalogPage({
         </div>
       ) : (
         <div className="cards-grid catalog-grid">
-          {visiblePartners.map((partner) => {
-            const image = getPartnerImage(partner);
-            const name = getPartnerName(partner);
-            tracePartnerImageDiagnostic("catalog_card_image_mapped", partner, image);
-            const categoriesText = getPartnerCategories(partner).join(" • ");
-            const city = getPartnerCity(partner);
-            const address = getPartnerAddress(partner);
-            const distance = getPartnerDistance(partner);
-            const offerText = getOfferAvailabilityText(partner);
-            const preview = getPartnerDescription(partner);
-
-            return (
-              <article className="partner-card" key={String(partner.id ?? name)}>
-                <button className="partner-card__open" type="button" onClick={() => onOpenPartner(partner)} aria-label={`Открыть ${name}`}>
-                  <span className="partner-card__media">
-                    <PartnerCardImage src={image} name={name} partner={partner} />
-                  </span>
-                  <span className="partner-card__body">
-                    <strong>{name}</strong>
-                    <small>{categoriesText || [city, distance].filter(Boolean).join(" • ") || "Партнёр Bloom Club"}</small>
-                    {address ? <span className="partner-card__address">{address}</span> : preview ? <span className="partner-card__preview">{preview}</span> : null}
-                    {offerText ? <em>{offerText}</em> : null}
-                  </span>
-                </button>
-              </article>
-            );
-          })}
+          {visiblePartners.map((partner) => (
+            <PartnerCatalogCard
+              partner={partner}
+              onOpen={onOpenPartner}
+              diagnosticContext="catalog"
+              key={String(partner.id ?? getPartnerName(partner))}
+            />
+          ))}
         </div>
       )}
     </section>

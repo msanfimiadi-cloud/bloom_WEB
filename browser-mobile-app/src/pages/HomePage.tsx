@@ -1,11 +1,12 @@
 import { useMemo, useState } from "react";
 import { isApiError, isTimeoutError } from "../api/client";
 import { AppImage } from "../components/AppImage";
+import { PartnerCatalogCard } from "../components/PartnerCatalogCard";
 import type { City, ClientProfile, GiveawayState, Partner, ReferralSummary, Subscription } from "../api/types";
 import { isSubscriptionActive, isTrialEligible } from "../utils/subscription";
 import { useContent, useContentText } from "../content/ContentContext";
 import type { HomeBlock } from "../content/clientContentApi";
-import { getPartnerAddress, getPartnerCategories, getPartnerCity, getPartnerImage, getPartnerName, tracePartnerImageDiagnostic } from "../utils/partnerDisplay";
+import { getPartnerName } from "../utils/partnerDisplay";
 import { toText } from "../utils/text";
 import { sanitizeCmsHtml } from "../utils/sanitizeCmsHtml";
 import { resolveHomeCtaAction } from "../utils/homeCta";
@@ -412,30 +413,14 @@ export function HomePage({
 
           {visiblePartners.length ? (
             <div className="home-partners-grid">
-              {visiblePartners.map((partner) => {
-                const image = getPartnerImage(partner);
-                tracePartnerImageDiagnostic("home_partner_image_mapped", partner, image);
-                const categories = getPartnerCategories(partner).join(" • ") || "Партнёр Bloom Club";
-                const place = [getPartnerCity(partner), getPartnerAddress(partner)].filter(Boolean).join(" · ");
-
-                return (
-                  <button
-                    className="home-partner-tile"
-                    type="button"
-                    onClick={onOpenCatalog}
-                    key={String(partner.id ?? getPartnerName(partner))}
-                    aria-label={`Открыть партнёра ${getPartnerName(partner)}`}
-                  >
-                    <AppImage src={image} alt="" fit="contain" placeholderClassName="home-partner-tile__placeholder image-placeholder image-placeholder--brand" onError={() => tracePartnerImageDiagnostic("image_load_error", partner, image)} />
-                    <span className="home-partner-tile__body">
-                      <strong>{getPartnerName(partner)}</strong>
-                      <small>{categories}</small>
-                      {place ? <em>{place}</em> : null}
-                      <span className="home-partner-tile__cta">Смотреть</span>
-                    </span>
-                  </button>
-                );
-              })}
+              {visiblePartners.map((partner) => (
+                <PartnerCatalogCard
+                  partner={partner}
+                  onOpen={onOpenCatalog}
+                  diagnosticContext="home"
+                  key={String(partner.id ?? getPartnerName(partner))}
+                />
+              ))}
             </div>
           ) : isPartnersLoading || !hasPartnersLoaded ? (
             <div className="home-empty-state">
