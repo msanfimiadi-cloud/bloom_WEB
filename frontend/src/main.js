@@ -2271,7 +2271,7 @@ const selectLandingModalPhoto = (index) => {
   renderLandingPartnerModal();
 };
 
-const apiFetch = async (path, options = {}) => {
+const apiFetchResponse = async (path, options = {}) => {
   const { timeoutMs: timeoutOption, ...fetchOptions } = options;
   const token = getToken();
   const headers = new Headers(fetchOptions.headers || {});
@@ -2317,6 +2317,12 @@ const apiFetch = async (path, options = {}) => {
   if (!response.ok) {
     throw new Error(await buildErrorMessage(response));
   }
+
+  return response;
+};
+
+const apiFetch = async (path, options = {}) => {
+  const response = await apiFetchResponse(path, options);
 
   if (response.status === 204) {
     return null;
@@ -4073,6 +4079,43 @@ const syncGiveawayEntriesSelection = async ({ force = false } = {}) => {
   return loadGiveawayEntries(selectedId);
 };
 
+const getGiveawayExportFilename = (giveawayId, response) => {
+  const disposition = response.headers.get('Content-Disposition') || '';
+  const utf8Match = disposition.match(/filename\*=UTF-8''([^;]+)/i);
+  const plainMatch = disposition.match(/filename=\"?([^\";]+)\"?/i);
+  const rawFilename = utf8Match?.[1] || plainMatch?.[1] || `giveaway-${giveawayId}-entries.xlsx`;
+
+  try {
+    return decodeURIComponent(rawFilename).replace(/[\\/]/g, '-');
+  } catch (error) {
+    return rawFilename.replace(/[\\/]/g, '-');
+  }
+};
+
+const downloadBlob = (blob, filename) => {
+  const blobUrl = URL.createObjectURL(blob);
+  const link = document.createElement('a');
+  link.href = blobUrl;
+  link.download = filename;
+  link.style.display = 'none';
+  document.body.appendChild(link);
+  link.click();
+  link.remove();
+  setTimeout(() => URL.revokeObjectURL(blobUrl), 0);
+};
+
+const downloadGiveawayEntriesExcel = async (giveawayId) => {
+  if (!giveawayId) return;
+  const response = await apiFetchResponse(`/api/v1/admin/giveaways/${encodeURIComponent(giveawayId)}/entries/export.xlsx`, {
+    headers: {
+      Accept: 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet',
+    },
+    timeoutMs: 60000,
+  });
+  const blob = await response.blob();
+  downloadBlob(blob, getGiveawayExportFilename(giveawayId, response));
+};
+
 const loadGiveawayEntries = async (giveawayId) => {
   if (!giveawayId) {
     adminState.giveawayEntries = null;
@@ -4201,7 +4244,7 @@ const renderGiveawayEntriesSection = (selected) => {
   const summary = data?.summary || {};
   return `<section class="ui-card giveaway-participants-section"><div class="admin-section-heading"><h4>Участники и номера — ${escapeHtml(getGiveawayTitle(selected))}</h4><p>Каждый номер показан отдельной строкой. Excel выгружает весь выбранный розыгрыш.</p></div>
     ${renderGiveawayEntriesSelector(selected)}
-    <div class="admin-toolbar"><a class="ui-button ui-button--secondary" href="/api/v1/admin/giveaways/${escapeHtml(selected.id)}/entries/export.xlsx" target="_blank" rel="noopener">Выгрузить в Excel (весь розыгрыш)</a><button class="ui-button" type="button" data-admin-giveaway-recheck="${escapeHtml(selected.id)}">Перепроверить подписки</button></div>
+    <div class="admin-toolbar"><button class="ui-button ui-button--secondary" type="button" data-admin-giveaway-export="${escapeHtml(selected.id)}">Выгрузить в Excel (весь розыгрыш)</button><button class="ui-button" type="button" data-admin-giveaway-recheck="${escapeHtml(selected.id)}">Перепроверить подписки</button></div>
     ${adminState.giveawayRecheckResult ? `<p class="form-message">Проверено: ${escapeHtml(adminState.giveawayRecheckResult.checked || 0)}, активных: ${escapeHtml(adminState.giveawayRecheckResult.active || 0)}, деактивировано: ${escapeHtml(adminState.giveawayRecheckResult.deactivated || 0)}, повторно активировано: ${escapeHtml(adminState.giveawayRecheckResult.reactivated || 0)}, ошибок: ${escapeHtml(adminState.giveawayRecheckResult.errors || 0)}</p>` : ''}
     <div class="giveaway-entry-stats"><article><span>Всего номеров</span><strong>${escapeHtml(summary.total_numbers || 0)}</strong></article><article><span>Активных</span><strong>${escapeHtml(summary.active_numbers || 0)}</strong></article><article><span>Участников</span><strong>${escapeHtml(summary.unique_participants || 0)}</strong></article><article><span>Bloom</span><strong>${escapeHtml(summary.subscription_numbers || 0)}</strong></article><article><span>Рефералы</span><strong>${escapeHtml(summary.referral_numbers || 0)}</strong></article><article><span>Telegram</span><strong>${escapeHtml(summary.telegram_numbers || 0)}</strong></article><article><span>VK</span><strong>${escapeHtml(summary.vk_numbers || 0)}</strong></article></div>
     ${renderTable(['Номер','Статус','Источник','ФИО','Client ID','Telegram ID','Telegram username','VK ID','Телефон','Email','Дата начисления','Причина неактивности'], rows.map((i) => [formatValue(i.number), renderGiveawayEntryStatusBadge(i.status), renderGiveawayEntrySourceBadge(i.source, i.source_label), formatValue(i.owner_name), formatValue(i.client_id), formatValue(i.telegram_id), formatValue(i.telegram_username), formatValue(i.vk_id), formatValue(i.phone), formatValue(i.email), formatValue(formatDateTime(i.created_at)), formatValue(i.deactivation_reason)]), true, 'admin-table--compact admin-table--giveaway-entries', adminState.giveawayEntriesLoading ? 'Загрузка…' : 'В этом розыгрыше пока нет номеров')}
@@ -6538,6 +6581,22 @@ root.addEventListener('click', async (event) => {
     return;
   }
 
+
+  const giveawayExport = event.target.closest('[data-admin-giveaway-export]');
+  if (giveawayExport) {
+    event.preventDefault();
+    const id = giveawayExport.dataset.adminGiveawayExport;
+    giveawayExport.disabled = true;
+    try {
+      await downloadGiveawayEntriesExcel(id);
+      setPartnerPanelMessage('Excel-файл розыгрыша скачан.', 'success');
+    } catch (error) {
+      setPartnerPanelMessage(error.message || 'Не удалось выгрузить Excel.', 'error');
+    } finally {
+      giveawayExport.disabled = false;
+    }
+    return;
+  }
 
   const giveawayRecheck = event.target.closest('[data-admin-giveaway-recheck]');
   if (giveawayRecheck) {
