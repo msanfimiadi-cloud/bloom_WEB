@@ -1271,6 +1271,10 @@ h2 {
 }
 
 .admin-dashboard {
+  width: 100%;
+  max-width: 100%;
+  min-width: 0;
+  box-sizing: border-box;
   margin-top: 22px;
   padding: 22px;
   border: 1px solid rgba(201, 130, 120, 0.28);
@@ -7389,16 +7393,69 @@ body.client-partner-modal-open {
   text-decoration: underline;
 }
 
+
+.giveaways-page,
+.giveaway-section,
+.giveaway-participants-section {
+  width: 100%;
+  max-width: 100%;
+  min-width: 0;
+  box-sizing: border-box;
+}
+
+.giveaways-page {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr);
+  gap: 18px;
+}
+
+.giveaways-page > *,
+.giveaway-section > *,
+.giveaway-participants-section > * {
+  min-width: 0;
+}
+
+.giveaway-participants-section .admin-toolbar {
+  width: 100%;
+  max-width: 100%;
+  min-width: 0;
+  flex-wrap: wrap;
+}
+
+.giveaway-participants-section .admin-toolbar .ui-button {
+  flex: 0 1 auto;
+  max-width: 100%;
+  white-space: normal;
+}
+
+.giveaway-participants-table-wrapper {
+  width: 100%;
+  max-width: 100%;
+  min-width: 0;
+  overflow-x: auto;
+  overflow-y: visible;
+  -webkit-overflow-scrolling: touch;
+}
+
+.giveaway-participants-table {
+  width: max-content;
+  min-width: 1700px;
+}
+
 .giveaway-entry-stats {
   display: flex;
   flex-wrap: wrap;
+  width: 100%;
+  max-width: 100%;
+  min-width: 0;
   gap: 12px;
   margin: 18px 0;
 }
 
 .giveaway-entry-stats article {
   display: grid;
-  min-width: 128px;
+  flex: 1 1 128px;
+  min-width: 0;
   min-height: 94px;
   align-content: space-between;
   gap: 10px;
@@ -7425,7 +7482,6 @@ body.client-partner-modal-open {
 }
 
 .admin-table--giveaway-entries {
-  min-width: 1820px;
   table-layout: fixed;
 }
 
