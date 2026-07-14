@@ -4161,6 +4161,37 @@ const renderGiveawayEntriesSelector = (selected) => {
   return `<label class="field admin-giveaway-entries-picker"><span>Розыгрыш для участников</span><select data-admin-giveaway-entries-select>${giveaways.map((giveaway) => `<option value="${escapeHtml(giveaway.id)}" ${String(giveaway.id) === String(selected?.id) ? 'selected' : ''}>${escapeHtml(getGiveawayTitle(giveaway))}${giveaway.is_active ? ' — активный' : ''}</option>`).join('')}</select></label>`;
 };
 
+
+const giveawayEntryStatusMeta = {
+  active: { label: '● Активен', tone: 'success' },
+  inactive: { label: '● Неактивен', tone: 'muted' },
+  revoked: { label: '● Отозван', tone: 'danger' },
+  verification_error: { label: '● Ошибка проверки', tone: 'warning' },
+};
+
+const renderGiveawayEntryStatusBadge = (status) => {
+  const normalized = String(status || '').trim().toLowerCase();
+  const meta = giveawayEntryStatusMeta[normalized] || { label: status || '—', tone: 'info' };
+  if (!status) return '—';
+  return `<span class="status-badge ui-badge ui-badge--${escapeHtml(meta.tone)} status-badge--${escapeHtml(meta.tone)}">${escapeHtml(meta.label)}</span>`;
+};
+
+const giveawayEntrySourceMeta = {
+  subscription: { label: '🟣 Bloom', tone: 'bloom' },
+  referral: { label: '🟢 Реферал', tone: 'referral' },
+  telegram_subscription: { label: '🔵 Telegram', tone: 'telegram' },
+  vk_subscription: { label: '🔷 VK', tone: 'vk' },
+  manual: { label: '🟡 Ручной', tone: 'manual' },
+};
+
+const renderGiveawayEntrySourceBadge = (source, fullLabel) => {
+  const normalized = String(source || '').trim().toLowerCase();
+  const meta = giveawayEntrySourceMeta[normalized] || { label: fullLabel || source || '—', tone: 'unknown' };
+  if (!source && !fullLabel) return '—';
+  const title = fullLabel || source || meta.label;
+  return `<span class="giveaway-source-badge giveaway-source-badge--${escapeHtml(meta.tone)}" title="${escapeHtml(title)}">${escapeHtml(meta.label)}</span>`;
+};
+
 const renderGiveawayEntriesSection = (selected) => {
   const hasGiveaways = Array.isArray(adminState.giveaways) && adminState.giveaways.length > 0;
   if (!hasGiveaways) return `<section class="ui-card"><div class="admin-section-heading"><h4>Участники и номера</h4><p>Сначала создайте и сохраните розыгрыш.</p></div></section>`;
@@ -4172,8 +4203,8 @@ const renderGiveawayEntriesSection = (selected) => {
     ${renderGiveawayEntriesSelector(selected)}
     <div class="admin-toolbar"><a class="ui-button ui-button--secondary" href="/api/v1/admin/giveaways/${escapeHtml(selected.id)}/entries/export.xlsx" target="_blank" rel="noopener">Выгрузить в Excel (весь розыгрыш)</a><button class="ui-button" type="button" data-admin-giveaway-recheck="${escapeHtml(selected.id)}">Перепроверить подписки</button></div>
     ${adminState.giveawayRecheckResult ? `<p class="form-message">Проверено: ${escapeHtml(adminState.giveawayRecheckResult.checked || 0)}, активных: ${escapeHtml(adminState.giveawayRecheckResult.active || 0)}, деактивировано: ${escapeHtml(adminState.giveawayRecheckResult.deactivated || 0)}, повторно активировано: ${escapeHtml(adminState.giveawayRecheckResult.reactivated || 0)}, ошибок: ${escapeHtml(adminState.giveawayRecheckResult.errors || 0)}</p>` : ''}
-    <div class="stats-grid"><article><span>Всего номеров</span><strong>${escapeHtml(summary.total_numbers || 0)}</strong></article><article><span>Активных</span><strong>${escapeHtml(summary.active_numbers || 0)}</strong></article><article><span>Участников</span><strong>${escapeHtml(summary.unique_participants || 0)}</strong></article><article><span>За подписку Bloom</span><strong>${escapeHtml(summary.subscription_numbers || 0)}</strong></article><article><span>За рефералов</span><strong>${escapeHtml(summary.referral_numbers || 0)}</strong></article><article><span>Telegram</span><strong>${escapeHtml(summary.telegram_numbers || 0)}</strong></article><article><span>VK</span><strong>${escapeHtml(summary.vk_numbers || 0)}</strong></article></div>
-    ${renderTable(['Номер','Статус','Источник','ФИО','Client ID','Telegram ID','Telegram username','VK ID','Телефон','Email','Дата начисления','Причина неактивности'], rows.map((i) => [i.number, i.status, i.source_label || i.source, i.owner_name, i.client_id, i.telegram_id, i.telegram_username, i.vk_id, i.phone, i.email, formatDateTime(i.created_at), i.deactivation_reason]), true, 'admin-table--compact', adminState.giveawayEntriesLoading ? 'Загрузка…' : 'В этом розыгрыше пока нет номеров')}
+    <div class="giveaway-entry-stats"><article><span>Всего номеров</span><strong>${escapeHtml(summary.total_numbers || 0)}</strong></article><article><span>Активных</span><strong>${escapeHtml(summary.active_numbers || 0)}</strong></article><article><span>Участников</span><strong>${escapeHtml(summary.unique_participants || 0)}</strong></article><article><span>Bloom</span><strong>${escapeHtml(summary.subscription_numbers || 0)}</strong></article><article><span>Рефералы</span><strong>${escapeHtml(summary.referral_numbers || 0)}</strong></article><article><span>Telegram</span><strong>${escapeHtml(summary.telegram_numbers || 0)}</strong></article><article><span>VK</span><strong>${escapeHtml(summary.vk_numbers || 0)}</strong></article></div>
+    ${renderTable(['Номер','Статус','Источник','ФИО','Client ID','Telegram ID','Telegram username','VK ID','Телефон','Email','Дата начисления','Причина неактивности'], rows.map((i) => [formatValue(i.number), renderGiveawayEntryStatusBadge(i.status), renderGiveawayEntrySourceBadge(i.source, i.source_label), formatValue(i.owner_name), formatValue(i.client_id), formatValue(i.telegram_id), formatValue(i.telegram_username), formatValue(i.vk_id), formatValue(i.phone), formatValue(i.email), formatValue(formatDateTime(i.created_at)), formatValue(i.deactivation_reason)]), true, 'admin-table--compact admin-table--giveaway-entries', adminState.giveawayEntriesLoading ? 'Загрузка…' : 'В этом розыгрыше пока нет номеров')}
   </section>`;
 };
 
