@@ -283,13 +283,11 @@ export function CatalogPage({
                 <button className="partner-card__open" type="button" onClick={() => onOpenPartner(partner)} aria-label={`Открыть ${name}`}>
                   <span className="partner-card__media">
                     <PartnerCardImage src={image} name={name} partner={partner} />
-                    {categoriesText ? <span className="partner-card__category">{categoriesText}</span> : null}
                   </span>
                   <span className="partner-card__body">
                     <strong>{name}</strong>
-                    <small>{[city, distance].filter(Boolean).join(" • ") || "Партнёр Bloom Club"}</small>
-                    {address ? <span className="partner-card__address">{address}</span> : null}
-                    <span className="partner-card__preview">{preview}</span>
+                    <small>{categoriesText || [city, distance].filter(Boolean).join(" • ") || "Партнёр Bloom Club"}</small>
+                    {address ? <span className="partner-card__address">{address}</span> : preview ? <span className="partner-card__preview">{preview}</span> : null}
                     {offerText ? <em>{offerText}</em> : null}
                   </span>
                 </button>

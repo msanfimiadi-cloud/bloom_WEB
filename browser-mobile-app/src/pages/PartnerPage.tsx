@@ -569,24 +569,20 @@ export function PartnerPage({
                     {benefit ? <p className="offer-card__meta">{benefit}</p> : null}
                     {conditions ? <p className="offer-card__meta">{conditions}</p> : null}
                   </div>
-                  <div className="price-grid offer-card__prices">
+                  <div className="offer-card__prices service-pricing">
                     {prices.hasValidMemberPrice ? (
-                      <span className="offer-card__price offer-card__price--member">
-                        <small>Цена участницы</small>
-                        <strong>{formatMoney(prices.memberPrice)}</strong>
-                      </span>
+                      <div className="service-price-row service-price-row--member">
+                        <small>Цена для участницы</small>
+                        <strong className="service-member-price">{formatMoney(prices.memberPrice)}</strong>
+                      </div>
                     ) : null}
                     {prices.basePrice !== undefined ? (
-                      <span className="offer-card__price offer-card__price--base">
-                        <small>Обычная цена</small>
-                        <s>{formatMoney(prices.basePrice)}</s>
-                      </span>
+                      <div className="service-price-row service-price-row--regular">
+                        <small className="service-regular-price">Обычная цена: <s>{formatMoney(prices.basePrice)}</s></small>
+                      </div>
                     ) : null}
                     {prices.hasValidSaving ? (
-                      <span className="offer-card__price offer-card__price--saving">
-                        <small>Экономия</small>
-                        <strong>{formatMoney(prices.saving)}</strong>
-                      </span>
+                      <span className="service-savings-badge">Вы экономите {formatMoney(prices.saving)}</span>
                     ) : null}
                   </div>
                   {!isAvailable ? <p className="offer-card__disabled-note">Предложение временно недоступно</p> : null}
