@@ -1,117 +1,99 @@
-from __future__ import annotations
-
-import logging
-from datetime import datetime, timezone
-
 import pytest
-from sqlalchemy import create_engine, select
-from sqlalchemy.orm import sessionmaker
-from sqlalchemy.pool import StaticPool
+import httpx
 
-import app.models  # noqa: F401
-from app.bots.vk_bot import OPEN_BUTTON_TEXT, USER_ERROR_TEXT, VkBotService, VkUserIdentity
-from app.db.base import Base
-from app.models.client import BrowserLoginCode
-from app.schemas.browser_auth import BrowserLoginCodeCreateResponse
+from vk_bot.client import InternalApiClient, VkApiClient
+from vk_bot.handlers import ERROR_MESSAGE, LOGIN_MESSAGE, VkBotHandler, backoff_sleep
+from vk_bot.keyboards import OPEN_APP_LABEL
+from vk_bot.settings import VkBotSettings
 
 
-@pytest.fixture()
-def session_factory():
-    engine = create_engine(
-        "sqlite:///:memory:",
-        connect_args={"check_same_thread": False},
-        poolclass=StaticPool,
-    )
-    Base.metadata.create_all(bind=engine)
-    return sessionmaker(bind=engine, autoflush=False, autocommit=False, expire_on_commit=False)
+class FakeVk:
+    def __init__(self, *, profile=None, send_error=None):
+        self.profile = profile
+        self.messages = []
+        self.send_error = send_error
+
+    async def get_profile(self, user_id):
+        return self.profile
+
+    async def send_message(self, peer_id, message, keyboard=None):
+        if self.send_error:
+            raise self.send_error
+        self.messages.append((peer_id, message, keyboard))
 
 
-def test_vk_bot_builds_browser_login_code_payload():
-    bot = VkBotService(token="vk-token", group_id="42")
+class FakeInternal:
+    def __init__(self, data=None, error=None):
+        self.data = data or {"login_code": "BC-ABC123", "expires_in": 300}
+        self.error = error
+        self.calls = []
 
-    payload = bot.build_browser_login_payload(
-        VkUserIdentity(
-            vk_user_id="123",
-            display_name="Bloom User",
-            username="bloom_user",
-            photo_url="https://example.test/photo.jpg",
-        )
-    )
-
-    assert payload == {
-        "provider": "vk",
-        "provider_user_id": "123",
-        "display_name": "Bloom User",
-        "username": "bloom_user",
-        "photo_url": "https://example.test/photo.jpg",
-        "source": "vk_bot",
-    }
+    async def create_login_code(self, profile):
+        self.calls.append(profile)
+        if self.error:
+            raise self.error
+        return self.data
 
 
-def test_vk_bot_creates_browser_login_code_response(session_factory):
-    bot = VkBotService(token="vk-token", group_id="42", session_factory=session_factory)
+@pytest.mark.asyncio
+async def test_first_message_requests_internal_api_and_sends_keyboard():
+    settings = VkBotSettings(browser_app_url="https://app.bloomclub.ru")
+    vk_client = VkApiClient(settings, http=httpx.AsyncClient(transport=httpx.MockTransport(lambda request: httpx.Response(200, json={"response": [{"id": 1, "screen_name": "bloom_user"}]}))))
+    profile = await vk_client.get_profile("1")
+    fake_vk = FakeVk(profile=profile)
+    internal = FakeInternal()
+    handler = VkBotHandler(fake_vk, internal, settings)
 
-    response = bot.create_browser_login_code(VkUserIdentity(vk_user_id="123", display_name="Bloom User"))
+    await handler.handle_update({"type": "message_new", "object": {"message": {"peer_id": 10, "from_id": 1, "text": "Начать"}}})
 
-    assert response.code.startswith("BC-")
-    assert response.app_url == "https://app.bloomclub.ru"
-    with session_factory() as db:
-        record = db.execute(select(BrowserLoginCode)).scalar_one()
-        assert record.provider == "vk"
-        assert record.provider_user_id == "123"
-        assert record.display_name == "Bloom User"
-        assert record.source == "vk_bot"
-        assert record.created_by == "vk-bot"
-        assert record.login_code == response.code
-
-
-def test_vk_bot_handles_backend_error_with_user_message(monkeypatch):
-    sent_texts = []
-    bot = VkBotService(token="vk-token", group_id="42")
-    monkeypatch.setattr(bot, "get_user_identity", lambda user_id: VkUserIdentity(vk_user_id=user_id))
-    monkeypatch.setattr(bot, "create_browser_login_code", lambda identity: (_ for _ in ()).throw(RuntimeError("backend down")))
-    monkeypatch.setattr(bot, "send_text", lambda peer_id, text: sent_texts.append((peer_id, text)))
-    monkeypatch.setattr(bot, "send_login_code", lambda peer_id, code, app_url: pytest.fail("must not send login code"))
-
-    bot.handle_update({"type": "message_new", "object": {"message": {"peer_id": 777, "from_id": 123, "text": "начать"}}})
-
-    assert sent_texts == [(777, USER_ERROR_TEXT)]
+    assert internal.calls[0].user_id == "1"
+    assert fake_vk.messages[0][1] == LOGIN_MESSAGE.format(code="BC-ABC123")
+    assert OPEN_APP_LABEL in fake_vk.messages[0][2]
+    assert "https://app.bloomclub.ru" in fake_vk.messages[0][2]
 
 
-def test_vk_bot_sends_button_with_app_url(monkeypatch):
-    calls = []
-    bot = VkBotService(token="vk-token", group_id="42")
-    monkeypatch.setattr(bot, "_vk_api", lambda method, params: calls.append((method, params)))
+@pytest.mark.asyncio
+async def test_repeat_code_uses_same_internal_flow():
+    from vk_bot.client import VkProfile
+    settings = VkBotSettings()
+    profile = VkProfile(user_id="42", username="screen")
+    fake_vk = FakeVk(profile=profile)
+    internal = FakeInternal()
+    handler = VkBotHandler(fake_vk, internal, settings)
 
-    bot.send_login_code(777, "BC-7K4P9Q", "https://app.bloomclub.ru")
+    await handler.handle_update({"type": "message_new", "object": {"message": {"peer_id": 10, "from_id": 42, "text": "Получить код повторно"}}})
 
-    assert calls[0][0] == "messages.send"
-    params = calls[0][1]
-    assert "BC-7K4P9Q" in params["message"]
-    button = params["keyboard"]["buttons"][0][0]["action"]
-    assert button["type"] == "open_link"
-    assert button["link"] == "https://app.bloomclub.ru"
-    assert button["label"] == OPEN_BUTTON_TEXT
+    assert len(internal.calls) == 1
+    assert internal.calls[0] is profile
 
 
-def test_vk_bot_does_not_log_plain_code_on_success(monkeypatch, caplog):
-    plain_code = "BC-SECRET"
-    sent_codes = []
-    bot = VkBotService(token="vk-token", group_id="42")
-    monkeypatch.setattr(bot, "get_user_identity", lambda user_id: VkUserIdentity(vk_user_id=user_id))
-    monkeypatch.setattr(
-        bot,
-        "create_browser_login_code",
-        lambda identity: BrowserLoginCodeCreateResponse(
-            code=plain_code,
-            expires_at=datetime.now(timezone.utc),
-            app_url="https://app.bloomclub.ru",
-        ),
-    )
-    monkeypatch.setattr(bot, "send_login_code", lambda peer_id, code, app_url: sent_codes.append(code))
+@pytest.mark.asyncio
+async def test_backend_unavailable_sends_clear_message():
+    from vk_bot.client import VkProfile
+    request = httpx.Request("POST", "http://test")
+    error = httpx.ConnectError("down", request=request)
+    fake_vk = FakeVk(profile=VkProfile(user_id="1", username="u"))
+    handler = VkBotHandler(fake_vk, FakeInternal(error=error), VkBotSettings())
 
-    with caplog.at_level(logging.INFO):
-        bot.handle_update({"type": "message_new", "object": {"message": {"peer_id": 777, "from_id": 123}}})
+    await handler.handle_update({"type": "message_new", "object": {"message": {"peer_id": 10, "from_id": 1, "text": "x"}}})
 
-    assert sent_codes == [plain_code]
-    assert plain_code not in caplog.text
+    assert fake_vk.messages[0][1] == ERROR_MESSAGE
+
+
+@pytest.mark.asyncio
+async def test_backoff_caps_delay(monkeypatch):
+    async def noop(delay):
+        return None
+    monkeypatch.setattr("asyncio.sleep", noop)
+    assert await backoff_sleep(40) == 60.0
+
+
+@pytest.mark.asyncio
+async def test_users_get_fallback_username():
+    async def handler(request):
+        return httpx.Response(200, json={"response": [{"id": 7, "first_name": "Ира", "last_name": "Цветкова"}]})
+    client = VkApiClient(VkBotSettings(), http=httpx.AsyncClient(transport=httpx.MockTransport(handler)))
+
+    profile = await client.get_profile("7")
+
+    assert profile.username == "Ира Цветкова"

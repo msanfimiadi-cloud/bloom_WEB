@@ -46,15 +46,18 @@ class BrowserLoginCodeService:
         normalized_provider = provider.strip().lower()
         normalized_provider_user_id = provider_user_id.strip()
         now = datetime.now(timezone.utc)
-        for active_code in self.db.execute(
-            select(BrowserLoginCode).where(
+        active_code = self.db.execute(
+            select(BrowserLoginCode)
+            .where(
                 BrowserLoginCode.provider == normalized_provider,
                 BrowserLoginCode.provider_user_id == normalized_provider_user_id,
                 BrowserLoginCode.used_at.is_(None),
                 BrowserLoginCode.expires_at > now,
             )
-        ).scalars():
-            active_code.used_at = now
+            .order_by(BrowserLoginCode.created_at.desc(), BrowserLoginCode.id.desc())
+        ).scalar_one_or_none()
+        if active_code is not None:
+            return active_code.login_code, active_code
         code = generate_login_code()
         record = BrowserLoginCode(
             provider=normalized_provider,
