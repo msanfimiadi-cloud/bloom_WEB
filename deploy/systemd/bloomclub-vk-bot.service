@@ -1,0 +1,15 @@
+[Unit]
+Description=Bloom Club VK Bot
+After=network.target womenclub.service
+Requires=womenclub.service
+
+[Service]
+WorkingDirectory=/opt/fed_women_club_WEB
+EnvironmentFile=/opt/fed_women_club_WEB/.env
+ExecStart=/opt/fed_women_club_WEB/.venv/bin/python -m vk_bot.main
+Restart=always
+RestartSec=5
+User=root
+
+[Install]
+WantedBy=multi-user.target

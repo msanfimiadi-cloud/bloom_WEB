@@ -86,17 +86,16 @@ def test_login_code_expired_and_invalid_rejected(client, db_session):
     assert client.post("/api/v1/auth/login-code", json={"code": "BC-NOPE99"}).status_code == 404
 
 
-def test_new_login_code_invalidates_previous_unused_code(db_session):
+def test_new_login_code_reuses_previous_unused_code(db_session):
     service = BrowserLoginCodeService(db_session)
     first, first_record = service.create_code(provider="vk", provider_user_id="vk-1")
     second, second_record = service.create_code(provider="vk", provider_user_id="vk-1")
     db_session.commit()
 
-    assert first != second
+    assert first == second
+    assert first_record.id == second_record.id
     db_session.refresh(first_record)
-    db_session.refresh(second_record)
-    assert first_record.used_at is not None
-    assert second_record.used_at is None
+    assert first_record.used_at is None
 
 
 def test_telegram_bot_generates_login_code(session_factory):
@@ -183,7 +182,7 @@ def test_internal_login_code_can_be_used_by_auth_login_code(client, db_session):
     assert auth_payload["client"]["id"] == profile.id
 
 
-def test_internal_login_code_second_code_invalidates_first(client):
+def test_internal_login_code_second_request_reuses_active_code(client):
     from app.core.config import settings
 
     headers = {"Authorization": f"Bearer {settings.BOT_SERVICE_TOKEN}"}
@@ -200,8 +199,8 @@ def test_internal_login_code_second_code_invalidates_first(client):
 
     assert first.status_code == 200
     assert second.status_code == 200
-    assert first.json()["login_code"] != second.json()["login_code"]
-    assert client.post("/api/v1/auth/login-code", json={"code": first.json()["login_code"]}).status_code == 403
+    assert first.json()["login_code"] == second.json()["login_code"]
+    assert client.post("/api/v1/auth/login-code", json={"code": first.json()["login_code"]}).status_code == 200
 
 
 def test_internal_login_code_supports_telegram_and_vk(client, db_session):
@@ -397,3 +396,38 @@ def test_referral_validation_rejects_same_provider_user_id_before_creation(db_se
         )
 
     assert exc_info.value.detail == "Нельзя использовать собственный реферальный код."
+
+
+def test_internal_login_code_same_numeric_id_isolated_by_provider(client, db_session):
+    from app.core.config import settings
+
+    headers = {"Authorization": f"Bearer {settings.BOT_SERVICE_TOKEN}"}
+    telegram = client.post(
+        "/api/v1/internal/login-code",
+        headers=headers,
+        json=_internal_login_code_payload(provider="telegram", provider_user_id="6140083753"),
+    )
+    vk = client.post(
+        "/api/v1/internal/login-code",
+        headers=headers,
+        json=_internal_login_code_payload(provider="vk", provider_user_id="6140083753"),
+    )
+
+    assert telegram.status_code == 200
+    assert vk.status_code == 200
+    assert telegram.json()["login_code"] != vk.json()["login_code"]
+    records = db_session.query(BrowserLoginCode).filter_by(provider_user_id="6140083753").all()
+    assert {record.provider for record in records} == {"telegram", "vk"}
+
+
+def test_internal_login_code_rejects_invalid_provider(client):
+    from app.core.config import settings
+
+    response = client.post(
+        "/api/v1/internal/login-code",
+        headers={"Authorization": f"Bearer {settings.BOT_SERVICE_TOKEN}"},
+        json=_internal_login_code_payload(provider="email", provider_user_id="user-1"),
+    )
+
+    assert response.status_code == 422
+    assert response.json()["detail"] == "unsupported_provider"
