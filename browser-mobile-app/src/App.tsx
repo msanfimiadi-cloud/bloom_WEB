@@ -2703,6 +2703,34 @@ export default function App() {
     return <SuccessfulBootstrapRecoveryScreen onReload={reloadSuccessfulBootstrapRecovery} />;
   }
 
+  const designPreviewHome = import.meta.env.DEV && new URLSearchParams(window.location.search).get("design_preview") === "home";
+
+  if (designPreviewHome) {
+    const previewProfile: ClientProfile = { id: 248, first_name: "Мария", city: "Новосибирск" };
+    const previewSubscription: Subscription = { status: "active", active: true, ends_at: "2026-12-31T23:59:59+07:00" };
+
+    return (
+      <ContentProvider>
+        <AppShell activePage="home" onNavigate={() => undefined} profile={previewProfile} subscription={previewSubscription} onOpenSubscription={() => undefined}>
+          <HomePage
+            profile={previewProfile}
+            subscription={previewSubscription}
+            cities={[{ id: 1, name: "Новосибирск" }]}
+            partners={[]}
+            isPartnersLoading={false}
+            hasPartnersLoaded={true}
+            onOpenCatalog={() => undefined}
+            onOpenSubscription={() => undefined}
+            onActivateTrial={async () => previewSubscription}
+            referralSummary={null}
+            giveawayState={{ guest: false, has_active_giveaway: false }}
+            isGiveawayLoading={false}
+          />
+        </AppShell>
+      </ContentProvider>
+    );
+  }
+
   if (browserLoginExternalOpenRequired) {
     return <BrowserLoginExternalOpenRequiredScreen />;
   }
@@ -2717,6 +2745,10 @@ export default function App() {
         <div className="welcome-auth-screen__background" aria-hidden="true" />
         <div className="welcome-auth-screen__overlay" aria-hidden="true" />
         <div className="state welcome-auth-screen__card">
+          <div className="welcome-auth-screen__brand" aria-label="Bloom Club">
+            <strong>BLOOM CLUB</strong>
+            <span>Женский клуб · НСК</span>
+          </div>
           <h1>{BROWSER_LOGIN_REQUIRED_MESSAGE}</h1>
           {isLoginCodeFormOpen ? (
             <>
