@@ -26,7 +26,7 @@ from app.models.payment import PaymentReceipt, PaymentRequest, PaymentRequestSta
 from app.models.verification import PrivilegeVerificationSession, PrivilegeVerificationStatus
 from app.models.user import User
 from app.schemas.activity import ActivityFeedRead
-from app.schemas.browser_auth import BrowserLoginCodeRequest
+from app.schemas.browser_auth import BrowserLoginCodeRequest, ProviderIdentityLinkRequest
 from app.schemas.giveaway import GiveawayStateRead, PublicGiveawayRead, GiveawayPrizeRead, GiveawayNumberRead, SocialSubscriptionCheckRead
 from app.schemas.client import (
     ClientSiteCredentialsRead,
@@ -42,6 +42,9 @@ from app.schemas.client import (
     ClientPartnerOfferRead,
     ClientPartnerPhotoRead,
     ClientProfileRead,
+    ClientProviderIdentitiesRead,
+    ProviderIdentityRead,
+    ProviderIdentityLinkResponse,
     ClientReferralSummaryItem,
     ClientReferralSummaryRead,
     ClientProfileUpdate,
@@ -98,6 +101,29 @@ LINKING_MAX_ATTEMPTS = 5
 CATEGORY_DISPLAY_BY_SLUG = {item["slug"]: item["title"] for item in get_women_club_categories()}
 
 
+def _mask_provider_user_id(value: str | None) -> str | None:
+    if not value:
+        return None
+    suffix = value[-4:] if len(value) > 4 else value
+    return "*" * max(0, len(value) - len(suffix)) + suffix
+
+
+def _provider_identities_read(db: Session, profile: ClientProfile) -> ClientProviderIdentitiesRead:
+    links = {link.provider: link for link in db.execute(select(ClientIdentityLink).where(ClientIdentityLink.client_profile_id == profile.id)).scalars().all()}
+
+    def build(provider: str) -> ProviderIdentityRead:
+        link = links.get(provider)
+        legacy_id = profile.telegram_user_id if provider == "telegram" else profile.vk_user_id
+        username = profile.telegram_username if provider == "telegram" else profile.vk_username
+        provider_user_id = link.provider_user_id if link is not None else legacy_id
+        return ProviderIdentityRead(
+            linked=bool(provider_user_id),
+            username=username,
+            provider_user_id_masked=_mask_provider_user_id(provider_user_id),
+            linked_at=link.linked_at if link is not None else None,
+        )
+
+    return ClientProviderIdentitiesRead(telegram=build("telegram"), vk=build("vk"))
 
 
 @router.get("/me/linking-status", response_model=ClientLinkingStatusRead)
@@ -252,6 +278,63 @@ def confirm_client_account_linking(
         subscription=_subscription_to_read(subscription, target_profile, now),
     )
 
+
+
+@router.post("/me/provider-identities/link", response_model=ProviderIdentityLinkResponse)
+def link_current_client_provider_identity(
+    payload: ProviderIdentityLinkRequest,
+    current_user: User = Depends(require_client),
+    db: Session = Depends(get_db),
+) -> ProviderIdentityLinkResponse:
+    current_profile = _get_or_create_client_profile(db, current_user.id)
+    provider = payload.provider.strip().lower()
+    if provider not in {"telegram", "vk"}:
+        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="unsupported_provider")
+    service = BrowserLoginCodeService(db)
+    code_record = service.get_by_code(payload.login_code)
+    if code_record is None:
+        service.mark_failed_attempt(payload.login_code); db.commit()
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="code_not_found")
+    if code_record.provider != provider:
+        service.mark_failed_attempt(payload.login_code); db.commit()
+        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="provider_mismatch")
+    if getattr(code_record, "purpose", "login") != "identity_link":
+        service.mark_failed_attempt(payload.login_code); db.commit()
+        raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="invalid_code_purpose")
+    if service.is_expired(code_record):
+        service.mark_failed_attempt(payload.login_code); db.commit()
+        raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="code_expired")
+    if code_record.used_at is not None:
+        service.mark_failed_attempt(payload.login_code); db.commit()
+        raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="code_already_used")
+
+    provider_user_id = code_record.provider_user_id
+    now = datetime.now(timezone.utc)
+    existing = db.execute(select(ClientIdentityLink).where(ClientIdentityLink.provider == provider, ClientIdentityLink.provider_user_id == provider_user_id)).scalar_one_or_none()
+    legacy_field = ClientProfile.telegram_user_id if provider == "telegram" else ClientProfile.vk_user_id
+    legacy_profile = db.execute(select(ClientProfile).where(legacy_field == provider_user_id)).scalar_one_or_none()
+    if legacy_profile is not None and legacy_profile.id != current_profile.id:
+        raise HTTPException(status_code=status.HTTP_409_CONFLICT, detail="Этот аккаунт VK/Telegram уже привязан к другому профилю Bloom Club")
+    if existing is not None:
+        if existing.client_profile_id != current_profile.id:
+            raise HTTPException(status_code=status.HTTP_409_CONFLICT, detail="Этот аккаунт VK/Telegram уже привязан к другому профилю Bloom Club")
+        service.mark_used(code_record); db.commit()
+        return ProviderIdentityLinkResponse(linked=True, provider=provider, status="already_linked", message="Аккаунт уже привязан", identity=_provider_identities_read(db, current_profile).__getattribute__(provider), provider_identities=_provider_identities_read(db, current_profile))
+
+    current_same = db.execute(select(ClientIdentityLink).where(ClientIdentityLink.provider == provider, ClientIdentityLink.client_profile_id == current_profile.id)).scalar_one_or_none()
+    legacy_current = current_profile.telegram_user_id if provider == "telegram" else current_profile.vk_user_id
+    if (current_same is not None and current_same.provider_user_id != provider_user_id) or (legacy_current and legacy_current != provider_user_id):
+        raise HTTPException(status_code=status.HTTP_409_CONFLICT, detail=f"К профилю уже привязан другой аккаунт {'Telegram' if provider == 'telegram' else 'VK'}")
+
+    db.add(ClientIdentityLink(client_profile_id=current_profile.id, provider=provider, provider_user_id=provider_user_id, linked_at=now, verified_at=now))
+    if provider == "telegram":
+        current_profile.telegram_user_id = provider_user_id; current_profile.telegram_username = code_record.username
+    else:
+        current_profile.vk_user_id = provider_user_id; current_profile.vk_username = code_record.username
+    service.mark_used(code_record)
+    db.commit(); db.refresh(current_profile)
+    identities = _provider_identities_read(db, current_profile)
+    return ProviderIdentityLinkResponse(linked=True, provider=provider, status="linked", message="Аккаунт привязан", identity=getattr(identities, provider), provider_identities=identities)
 
 
 @router.post("/me/linking/vk-login-code", response_model=ClientLinkingConfirmResponse)
@@ -1095,6 +1178,7 @@ def _client_profile_to_read(db: Session, profile: ClientProfile, user: User) -> 
             "trial_available": profile.trial_subscription_used_at is None and active_subscription is None,
             "referral_code": profile.referral_code,
             "referral_link": referral_link(profile.referral_code),
+            "provider_identities": _provider_identities_read(db, profile),
             "site_login": user.site_login,
             "site_password_masked": "*****" if user.encrypted_site_password else None,
             "site_password_available": bool(user.encrypted_site_password),

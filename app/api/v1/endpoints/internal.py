@@ -55,6 +55,7 @@ def create_browser_login_code(
         referral_code=_normalize_optional(payload.referral_code),
         source=_normalize_optional(payload.source),
         created_by="internal-api",
+        purpose=payload.purpose,
     )
     db.commit()
     return BrowserLoginCodeInternalResponse(login_code=login_code, expires_in=LOGIN_CODE_TTL_SECONDS)

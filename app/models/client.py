@@ -26,6 +26,7 @@ class BrowserLoginCode(Base):
     provider: Mapped[str] = mapped_column(String(32), nullable=False, index=True)
     provider_user_id: Mapped[str] = mapped_column(String(255), nullable=False, index=True)
     login_code: Mapped[str] = mapped_column(String(16), nullable=False, index=True)
+    purpose: Mapped[str] = mapped_column(String(32), nullable=False, default="login", server_default="login", index=True)
     display_name: Mapped[str | None] = mapped_column(String(255), nullable=True)
     username: Mapped[str | None] = mapped_column(String(255), nullable=True)
     photo_url: Mapped[str | None] = mapped_column(String(512), nullable=True)

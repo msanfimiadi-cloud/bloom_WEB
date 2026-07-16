@@ -1,4 +1,4 @@
-import { isTimeoutError } from '../api/client';
+import { isTimeoutError, linkProviderIdentity } from '../api/client';
 import { useEffect, useMemo, useState, type FormEvent } from 'react';
 import { AppImage } from '../components/AppImage';
 import { ContentText } from '../components/ContentText';
@@ -38,6 +38,7 @@ interface ProfilePageProps {
   onSaveProfile: (payload: ClientProfilePatch) => Promise<ClientProfile>;
   referralSummary?: ReferralSummary | null;
   onLogout: () => void;
+  onLinkedProvider?: () => Promise<void> | void;
 }
 
 function isValidPhone(value: string): boolean {
@@ -73,11 +74,17 @@ function getProfileDisplayName(profile: ClientProfile | null | undefined): strin
   ) || '';
 }
 
-export function ProfilePage({ profile, cities, onSaveProfile, referralSummary, onLogout }: ProfilePageProps) {
+export function ProfilePage({ profile, cities, onSaveProfile, referralSummary, onLogout, onLinkedProvider }: ProfilePageProps) {
   const safeCities = useMemo(() => (Array.isArray(cities) ? cities : []), [cities]);
   const initialName = getProfileDisplayName(profile);
   const initialCity = getCityName(profile?.city);
   const [name, setName] = useState(initialName);
+  const [linkProvider, setLinkProvider] = useState<"telegram" | "vk" | null>(null);
+  const [telegramLinkCode, setTelegramLinkCode] = useState(() => sessionStorage.getItem("bloom.telegramLinkCodeDraft") || "");
+  const [vkLinkCode, setVkLinkCode] = useState(() => sessionStorage.getItem("bloom.vkLinkCodeDraft") || "");
+  const [linkMessage, setLinkMessage] = useState("");
+  const [isLinking, setIsLinking] = useState(false);
+
   const [phone, setPhone] = useState(toText(profile?.phone));
   const [email, setEmail] = useState(toText(profile?.email));
   const [city, setCity] = useState(initialCity);
@@ -93,6 +100,26 @@ export function ProfilePage({ profile, cities, onSaveProfile, referralSummary, o
   const additionalEntries = referralSummary?.earned_giveaway_entries_count ?? referralSummary?.earned_entries_count ?? 0;
   const [copyMessage, setCopyMessage] = useState('');
   const addToHomeScreen = useAddToHomeScreen();
+
+
+  const submitProviderLink = async (provider: "telegram" | "vk") => {
+    const code = provider === "telegram" ? telegramLinkCode : vkLinkCode;
+    setLinkMessage("");
+    setIsLinking(true);
+    try {
+      await linkProviderIdentity(provider, code);
+      sessionStorage.removeItem(provider === "telegram" ? "bloom.telegramLinkCodeDraft" : "bloom.vkLinkCodeDraft");
+      if (provider === "telegram") setTelegramLinkCode(""); else setVkLinkCode("");
+      setLinkProvider(null);
+      setLinkMessage("Аккаунт привязан");
+      await onLinkedProvider?.();
+    } catch (error) {
+      const detail = typeof (error as { detail?: unknown }).detail === "string" ? String((error as { detail?: unknown }).detail) : "Не удалось привязать аккаунт";
+      setLinkMessage(detail);
+    } finally {
+      setIsLinking(false);
+    }
+  };
 
   useEffect(() => {
     setName(initialName);
@@ -263,6 +290,42 @@ export function ProfilePage({ profile, cities, onSaveProfile, referralSummary, o
           <span>Дополнительных номеров в розыгрыше: {additionalEntries}</span>
         </div>
       </div>
+
+
+      <section className="profile-section glass-card">
+        <h2>Связанные аккаунты</h2>
+        {(["telegram", "vk"] as const).map((provider) => {
+          const identity = profile?.provider_identities?.[provider];
+          const linked = Boolean(identity?.linked || (provider === "telegram" ? profile?.telegram_user_id : profile?.vk_user_id));
+          const label = provider === "telegram" ? "Telegram" : "VK";
+          const code = provider === "telegram" ? telegramLinkCode : vkLinkCode;
+          return (
+            <div className="profile-linked-account" key={provider}>
+              <strong>{label}</strong>
+              <span>{linked ? "Привязан" : "Не привязан"}</span>
+              {linked ? <span>{toText(identity?.username) || toText(identity?.provider_user_id_masked) || "Аккаунт Bloom Club"}</span> : null}
+              {identity?.linked_at ? <small>{toText(identity.linked_at)}</small> : null}
+              {!linked ? <button className="button button--secondary" type="button" onClick={() => setLinkProvider(provider)}>Привязать {label}</button> : null}
+              {linkProvider === provider ? (
+                <div>
+                  <p>Введите код, полученный у {label}-бота</p>
+                  <input
+                    className="auth-code-input"
+                    value={code}
+                    onChange={(event) => {
+                      const value = event.target.value.toUpperCase();
+                      if (provider === "telegram") { setTelegramLinkCode(value); } else { setVkLinkCode(value); }
+                      sessionStorage.setItem(provider === "telegram" ? "bloom.telegramLinkCodeDraft" : "bloom.vkLinkCodeDraft", value);
+                    }}
+                  />
+                  <button className="button button--primary" type="button" disabled={isLinking || !code.trim()} onClick={() => submitProviderLink(provider)}>Привязать</button>
+                </div>
+              ) : null}
+            </div>
+          );
+        })}
+        {linkMessage ? <p className="profile-form__message">{linkMessage}</p> : null}
+      </section>
 
       <button className="button button--ghost profile-logout-button" type="button" onClick={() => { console.info("[BLOOM_LOGOUT_TRACE] logout_button_clicked"); onLogout(); }}>
         Выйти из профиля

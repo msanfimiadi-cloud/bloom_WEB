@@ -157,12 +157,16 @@ const LOGIN_CODE_HELP_MESSAGE =
   "Введите код, который прислал Telegram или VK бот.";
 const TELEGRAM_IN_APP_BROWSER_HOST = "app.bloomclub.ru";
 
-const LOGIN_CODE_DRAFT_STORAGE_KEY = "bloom.loginCodeDraft";
+const TELEGRAM_LOGIN_CODE_DRAFT_STORAGE_KEY = "bloom.telegramLoginCodeDraft";
+const VK_LOGIN_CODE_DRAFT_STORAGE_KEY = "bloom.vkLoginCodeDraft";
 const REFERRAL_CODE_DRAFT_STORAGE_KEY = "bloom.referralCodeDraft";
+const TELEGRAM_BOT_LINK = import.meta.env.VITE_TELEGRAM_BOT_LINK || "";
+const VK_BOT_LINK = import.meta.env.VITE_VK_BOT_LINK || "";
 
 function hasStoredBrowserLoginDraft(): boolean {
   return Boolean(
-    readLoginCodeDraft(LOGIN_CODE_DRAFT_STORAGE_KEY) ||
+    readLoginCodeDraft(TELEGRAM_LOGIN_CODE_DRAFT_STORAGE_KEY) ||
+      readLoginCodeDraft(VK_LOGIN_CODE_DRAFT_STORAGE_KEY) ||
       readLoginCodeDraft(REFERRAL_CODE_DRAFT_STORAGE_KEY),
   );
 }
@@ -201,7 +205,8 @@ function writeLoginCodeDraft(key: string, value: string): void {
 }
 
 function clearLoginCodeDrafts(): void {
-  writeLoginCodeDraft(LOGIN_CODE_DRAFT_STORAGE_KEY, "");
+  writeLoginCodeDraft(TELEGRAM_LOGIN_CODE_DRAFT_STORAGE_KEY, "");
+  writeLoginCodeDraft(VK_LOGIN_CODE_DRAFT_STORAGE_KEY, "");
   writeLoginCodeDraft(REFERRAL_CODE_DRAFT_STORAGE_KEY, "");
 }
 
@@ -809,7 +814,8 @@ export default function App() {
   const [browserLoginRequired, setBrowserLoginRequired] = useState(false);
   const [browserLoginExternalOpenRequired, setBrowserLoginExternalOpenRequired] = useState(false);
   const [isLoginCodeFormOpen, setIsLoginCodeFormOpen] = useState(false);
-  const [loginCode, setLoginCode] = useState(() => readLoginCodeDraft(LOGIN_CODE_DRAFT_STORAGE_KEY));
+  const [telegramLoginCode, setTelegramLoginCode] = useState(() => readLoginCodeDraft(TELEGRAM_LOGIN_CODE_DRAFT_STORAGE_KEY));
+  const [vkLoginCode, setVkLoginCode] = useState(() => readLoginCodeDraft(VK_LOGIN_CODE_DRAFT_STORAGE_KEY));
   const [loginReferralCode, setLoginReferralCode] = useState(() => readLoginCodeDraft(REFERRAL_CODE_DRAFT_STORAGE_KEY));
   const [loginCodeError, setLoginCodeError] = useState("");
   const [isLoginCodeSubmitting, setIsLoginCodeSubmitting] = useState(false);
@@ -851,17 +857,19 @@ export default function App() {
   >(undefined);
 
   const restoreLoginCodeDrafts = useCallback(() => {
-    const storedLoginCode = readLoginCodeDraft(LOGIN_CODE_DRAFT_STORAGE_KEY);
+    const storedTelegramLoginCode = readLoginCodeDraft(TELEGRAM_LOGIN_CODE_DRAFT_STORAGE_KEY);
+    const storedVkLoginCode = readLoginCodeDraft(VK_LOGIN_CODE_DRAFT_STORAGE_KEY);
     const storedReferralCode = readLoginCodeDraft(REFERRAL_CODE_DRAFT_STORAGE_KEY);
 
-    setLoginCode((current) => current || storedLoginCode);
+    setTelegramLoginCode((current) => current || storedTelegramLoginCode);
+    setVkLoginCode((current) => current || storedVkLoginCode);
     setLoginReferralCode((current) => current || storedReferralCode);
   }, []);
 
   const hasPendingBrowserLoginDraft = useCallback(() => (
     pendingBrowserLoginRef.current ||
-    (browserLoginRequired && (Boolean(loginCode) || Boolean(loginReferralCode) || hasStoredBrowserLoginDraft()))
-  ), [browserLoginRequired, loginCode, loginReferralCode]);
+    (browserLoginRequired && (Boolean(telegramLoginCode) || Boolean(vkLoginCode) || Boolean(loginReferralCode) || hasStoredBrowserLoginDraft()))
+  ), [browserLoginRequired, telegramLoginCode, vkLoginCode, loginReferralCode]);
 
   const preservePendingBrowserLoginFlow = useCallback((eventName: string) => {
     if (!hasPendingBrowserLoginDraft()) {
@@ -888,11 +896,18 @@ export default function App() {
     return true;
   }, [hasPendingBrowserLoginDraft, restoreLoginCodeDrafts]);
 
-  const updateLoginCodeDraft = useCallback((value: string) => {
+  const updateTelegramLoginCodeDraft = useCallback((value: string) => {
     const normalizedValue = value.toUpperCase();
     pendingBrowserLoginRef.current = true;
-    setLoginCode(normalizedValue);
-    writeLoginCodeDraft(LOGIN_CODE_DRAFT_STORAGE_KEY, normalizedValue);
+    setTelegramLoginCode(normalizedValue);
+    writeLoginCodeDraft(TELEGRAM_LOGIN_CODE_DRAFT_STORAGE_KEY, normalizedValue);
+  }, []);
+
+  const updateVkLoginCodeDraft = useCallback((value: string) => {
+    const normalizedValue = value.toUpperCase();
+    pendingBrowserLoginRef.current = true;
+    setVkLoginCode(normalizedValue);
+    writeLoginCodeDraft(VK_LOGIN_CODE_DRAFT_STORAGE_KEY, normalizedValue);
   }, []);
 
   const updateReferralCodeDraft = useCallback((value: string) => {
@@ -2621,7 +2636,13 @@ export default function App() {
     setLoginCodeError("");
     setIsLoginCodeSubmitting(true);
     try {
-      const loginResponse = await loginWithCode(loginCode, loginReferralCode);
+      const tg = telegramLoginCode.trim();
+      const vk = vkLoginCode.trim();
+      if ((!tg && !vk) || (tg && vk)) {
+        setLoginCodeError(tg && vk ? "Введите код только из одной платформы: Telegram или VK" : "Введите код из Telegram или VK");
+        return;
+      }
+      const loginResponse = await loginWithCode(tg ? "telegram" : "vk", tg || vk, loginReferralCode);
       if (!storeAuthTokenFromResponse(loginResponse)) {
         throw new Error("invalid_login_code_response");
       }
@@ -2629,7 +2650,8 @@ export default function App() {
       pendingBrowserLoginRef.current = false;
       setBrowserLoginRequired(false);
       setIsLoginCodeFormOpen(false);
-      setLoginCode("");
+      setTelegramLoginCode("");
+      setVkLoginCode("");
       setLoginReferralCode("");
       clearLoginCodeDrafts();
       await loadAppData("manual", false);
@@ -2639,7 +2661,7 @@ export default function App() {
     } finally {
       setIsLoginCodeSubmitting(false);
     }
-  }, [loadAppData, loginCode, loginReferralCode]);
+  }, [loadAppData, telegramLoginCode, vkLoginCode, loginReferralCode]);
 
   const reloadSuccessfulBootstrapRecovery = useCallback(() => {
     setShowSuccessfulBootstrapRecovery(false);
@@ -2700,21 +2722,38 @@ export default function App() {
             <>
               <p>{LOGIN_CODE_HELP_MESSAGE}</p>
               <input
-                aria-label="Код входа"
+                aria-label="Код для входа из Telegram"
                 className="auth-code-input"
-                value={loginCode}
-                placeholder="BC-XXXXXX"
+                value={telegramLoginCode}
+                placeholder="Код из Telegram"
                 inputMode="text"
                 autoCapitalize="characters"
                 autoCorrect="off"
                 spellCheck={false}
-                onChange={(event) => updateLoginCodeDraft(event.target.value)}
+                onChange={(event) => updateTelegramLoginCodeDraft(event.target.value)}
               />
+              <div className="login-code-legal-text">или</div>
               <input
-                aria-label="Реферальный код"
+                aria-label="Код для входа из VK"
+                className="auth-code-input"
+                value={vkLoginCode}
+                placeholder="Код из VK"
+                inputMode="text"
+                autoCapitalize="characters"
+                autoCorrect="off"
+                spellCheck={false}
+                onChange={(event) => updateVkLoginCodeDraft(event.target.value)}
+              />
+              <p className="login-code-legal-text">Получите код у нашего бота в Telegram или VK</p>
+              <div className="auth-actions">
+                {TELEGRAM_BOT_LINK ? <a className="button button--secondary" href={TELEGRAM_BOT_LINK}>Получить код в Telegram</a> : null}
+                {VK_BOT_LINK ? <a className="button button--secondary" href={VK_BOT_LINK}>Получить код во VK</a> : null}
+              </div>
+              <input
+                aria-label="Реферальный код — необязательно"
                 className="auth-code-input"
                 value={loginReferralCode}
-                placeholder="Реферальный код"
+                placeholder="Реферальный код — необязательно"
                 inputMode="text"
                 autoCapitalize="characters"
                 autoCorrect="off"

@@ -9,6 +9,7 @@ from app.schemas.browser_auth import BrowserLoginCodeCreateResponse
 from app.services.browser_login_codes import BrowserLoginCodeService
 
 OPEN_APP_URL = "https://app.bloomclub.ru"
+LINK_CODE_MESSAGE = "Код для привязки аккаунта к Bloom Club:\n\n`{code}`\n\nВведите его в разделе “Профиль → Связанные аккаунты”."
 LOGIN_CODE_MESSAGE = "Ваш код входа для Bloom Club.\n\nСкопируйте код из следующей строки одним тапом:\n`{code}`\n\nКод действует 5 минут.\n\nОткрыть приложение:\n{app_url}"
 
 
@@ -29,7 +30,7 @@ class TelegramBotLoginCodeService:
     def __init__(self, *, session_factory=SessionLocal) -> None:
         self.session_factory = session_factory
 
-    def create_browser_login_code(self, identity: TelegramBotUserIdentity) -> BrowserLoginCodeCreateResponse:
+    def create_browser_login_code(self, identity: TelegramBotUserIdentity, *, purpose: str = "login") -> BrowserLoginCodeCreateResponse:
         with self.session_factory() as db:
             assert isinstance(db, Session)
             service = BrowserLoginCodeService(db)
@@ -41,10 +42,17 @@ class TelegramBotLoginCodeService:
                 photo_url=identity.photo_url,
                 source="telegram_bot",
                 created_by="telegram-bot",
+                purpose=purpose,
             )
             db.commit()
             db.refresh(record)
             return BrowserLoginCodeCreateResponse(code=code, expires_at=record.expires_at, app_url=service.build_app_url())
+
+    def create_browser_link_code(self, identity: TelegramBotUserIdentity) -> BrowserLoginCodeCreateResponse:
+        return self.create_browser_login_code(identity, purpose="identity_link")
+
+    def build_link_code_message(self, response: BrowserLoginCodeCreateResponse) -> str:
+        return LINK_CODE_MESSAGE.format(code=response.code)
 
     def build_login_code_message(self, response: BrowserLoginCodeCreateResponse) -> str:
         return LOGIN_CODE_MESSAGE.format(code=response.code, app_url=response.app_url or OPEN_APP_URL)

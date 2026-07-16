@@ -42,15 +42,17 @@ class BrowserLoginCodeService:
     def __init__(self, db: Session) -> None:
         self.db = db
 
-    def create_code(self, *, provider: str, provider_user_id: str, display_name: str | None = None, username: str | None = None, photo_url: str | None = None, referral_code: str | None = None, source: str | None = None, created_by: str | None = None) -> tuple[str, BrowserLoginCode]:
+    def create_code(self, *, provider: str, provider_user_id: str, display_name: str | None = None, username: str | None = None, photo_url: str | None = None, referral_code: str | None = None, source: str | None = None, created_by: str | None = None, purpose: str = "login") -> tuple[str, BrowserLoginCode]:
         normalized_provider = provider.strip().lower()
         normalized_provider_user_id = provider_user_id.strip()
+        normalized_purpose = purpose.strip().lower() or "login"
         now = datetime.now(timezone.utc)
         active_code = self.db.execute(
             select(BrowserLoginCode)
             .where(
                 BrowserLoginCode.provider == normalized_provider,
                 BrowserLoginCode.provider_user_id == normalized_provider_user_id,
+                BrowserLoginCode.purpose == normalized_purpose,
                 BrowserLoginCode.used_at.is_(None),
                 BrowserLoginCode.expires_at > now,
             )
@@ -63,6 +65,7 @@ class BrowserLoginCodeService:
             provider=normalized_provider,
             provider_user_id=normalized_provider_user_id,
             login_code=code,
+            purpose=normalized_purpose,
             display_name=display_name,
             username=username,
             photo_url=photo_url,
