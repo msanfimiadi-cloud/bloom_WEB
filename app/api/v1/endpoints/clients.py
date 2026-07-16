@@ -9,7 +9,7 @@ import secrets
 import string
 
 from fastapi import APIRouter, Depends, HTTPException, status
-from sqlalchemy import func, or_, select
+from sqlalchemy import func, or_, select, update
 from sqlalchemy.orm import Session, selectinload
 
 from app.api.deps import get_optional_current_user, require_client
@@ -19,7 +19,7 @@ from app.core.security import create_access_token
 from app.db.session import get_db
 from app.models.city import City
 from app.models.category import Category
-from app.models.client import AccountLinkingChallenge, ClientIdentityLink, ClientProfile, ClientReferral, GiveawayEntry, VkLinkCode, VkLinkCodeStatus
+from app.models.client import AccountLinkingChallenge, BrowserLoginCode, ClientIdentityLink, ClientProfile, ClientReferral, GiveawayEntry, VkLinkCode, VkLinkCodeStatus
 from app.models.giveaway import Giveaway, GiveawayNumber
 from app.models.partner import OfferPhoto, Partner, PartnerOffer, PartnerPhoto
 from app.models.payment import PaymentReceipt, PaymentRequest, PaymentRequestStatus, Subscription, SubscriptionStatus
@@ -45,6 +45,9 @@ from app.schemas.client import (
     ClientProviderIdentitiesRead,
     ProviderIdentityRead,
     ProviderIdentityLinkResponse,
+    ProviderIdentityMergePreviewResponse,
+    ProviderIdentityMergeResponse,
+    ProviderIdentityMergeSourceRead,
     ClientReferralSummaryItem,
     ClientReferralSummaryRead,
     ClientProfileUpdate,
@@ -280,6 +283,130 @@ def confirm_client_account_linking(
 
 
 
+
+def _validate_identity_link_code(payload: ProviderIdentityLinkRequest, db: Session) -> tuple[BrowserLoginCodeService, object, str, str]:
+    provider = payload.provider.strip().lower()
+    if provider not in {"telegram", "vk"}:
+        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="unsupported_provider")
+    code = payload.login_code or payload.link_code or ""
+    service = BrowserLoginCodeService(db)
+    code_record = service.get_by_code(code)
+    if code_record is None:
+        service.mark_failed_attempt(code); db.commit()
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="code_not_found")
+    if code_record.provider != provider:
+        service.mark_failed_attempt(code); db.commit()
+        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="provider_mismatch")
+    if getattr(code_record, "purpose", "login") != "identity_link":
+        service.mark_failed_attempt(code); db.commit()
+        raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="invalid_code_purpose")
+    if service.is_expired(code_record):
+        service.mark_failed_attempt(code); db.commit()
+        raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="code_expired")
+    if code_record.used_at is not None:
+        service.mark_failed_attempt(code); db.commit()
+        raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="code_already_used")
+    return service, code_record, provider, code_record.provider_user_id
+
+
+def _find_identity_owner(db: Session, provider: str, provider_user_id: str) -> ClientProfile | None:
+    link = db.execute(select(ClientIdentityLink).where(ClientIdentityLink.provider == provider, ClientIdentityLink.provider_user_id == provider_user_id)).scalar_one_or_none()
+    if link is not None:
+        return db.get(ClientProfile, link.client_profile_id)
+    legacy_field = ClientProfile.telegram_user_id if provider == "telegram" else ClientProfile.vk_user_id
+    return db.execute(select(ClientProfile).where(legacy_field == provider_user_id)).scalar_one_or_none()
+
+
+def _merge_preview_source(db: Session, source: ClientProfile, now: datetime) -> ProviderIdentityMergeSourceRead:
+    active_sub = _get_current_active_subscription(db, source.id, now)
+    providers = [row[0] for row in db.execute(select(ClientIdentityLink.provider).where(ClientIdentityLink.client_profile_id == source.id)).all()]
+    if source.telegram_user_id and "telegram" not in providers:
+        providers.append("telegram")
+    if source.vk_user_id and "vk" not in providers:
+        providers.append("vk")
+    referrals = db.execute(select(func.count(ClientReferral.id)).where(or_(ClientReferral.referrer_client_id == source.id, ClientReferral.referred_client_id == source.id))).scalar_one() or 0
+    return ProviderIdentityMergeSourceRead(
+        has_subscription=db.execute(select(func.count(Subscription.id)).where(Subscription.client_id == source.id)).scalar_one() > 0,
+        subscription_active=active_sub is not None,
+        giveaway_entries=db.execute(select(func.coalesce(func.sum(GiveawayEntry.entries_count), 0)).where(GiveawayEntry.client_id == source.id)).scalar_one() or 0,
+        referrals=referrals,
+        linked_providers=sorted(set(providers)),
+    )
+
+
+def _merge_clients(db: Session, *, target: ClientProfile, source: ClientProfile, provider: str, provider_user_id: str, now: datetime) -> dict[str, int]:
+    moved: dict[str, int] = {}
+    def count(name: str, n: int | None) -> None:
+        moved[name] = (moved.get(name, 0) + int(n or 0))
+
+    # legacy provider fields and identity rows
+    for pvd, uid, uname in (("telegram", source.telegram_user_id, source.telegram_username), ("vk", source.vk_user_id, source.vk_username)):
+        if uid:
+            field = "telegram_user_id" if pvd == "telegram" else "vk_user_id"
+            user_field = "telegram_username" if pvd == "telegram" else "vk_username"
+            if not getattr(target, field):
+                setattr(target, field, uid); setattr(target, user_field, uname); count("legacy_provider_fields", 1)
+            link = db.execute(select(ClientIdentityLink).where(ClientIdentityLink.provider == pvd, ClientIdentityLink.provider_user_id == uid)).scalar_one_or_none()
+            if link is None:
+                db.add(ClientIdentityLink(client_profile_id=target.id, provider=pvd, provider_user_id=uid, linked_at=now, verified_at=now)); count("identity_links", 1)
+            elif link.client_profile_id != target.id:
+                link.client_profile_id = target.id; link.verified_at = link.verified_at or now; count("identity_links", 1)
+    for link in db.execute(select(ClientIdentityLink).where(ClientIdentityLink.client_profile_id == source.id)).scalars().all():
+        duplicate = db.execute(select(ClientIdentityLink).where(ClientIdentityLink.client_profile_id == target.id, ClientIdentityLink.provider == link.provider, ClientIdentityLink.provider_user_id == link.provider_user_id)).scalar_one_or_none()
+        if duplicate is None:
+            link.client_profile_id = target.id; count("identity_links", 1)
+        else:
+            db.delete(link); count("identity_link_duplicates", 1)
+
+    count("subscriptions", db.execute(update(Subscription).where(Subscription.client_id == source.id).values(client_id=target.id)).rowcount)
+    count("payment_requests", db.execute(update(PaymentRequest).where(PaymentRequest.client_id == source.id).values(client_id=target.id)).rowcount)
+    count("verification_sessions", db.execute(update(PrivilegeVerificationSession).where(PrivilegeVerificationSession.client_id == source.id).values(client_id=target.id)).rowcount)
+    count("giveaway_numbers", db.execute(update(GiveawayNumber).where(GiveawayNumber.client_id == source.id).values(client_id=target.id)).rowcount)
+    count("giveaway_entries", db.execute(update(GiveawayEntry).where(GiveawayEntry.client_id == source.id).values(client_id=target.id)).rowcount)
+    # Referral relation uniqueness: target may already be referred; keep target's relation and remove source's duplicate.
+    source_joined = db.execute(select(ClientReferral).where(ClientReferral.referred_client_id == source.id)).scalar_one_or_none()
+    if source_joined is not None:
+        target_joined = db.execute(select(ClientReferral).where(ClientReferral.referred_client_id == target.id)).scalar_one_or_none()
+        if target_joined is None and source_joined.referrer_client_id != target.id:
+            source_joined.referred_client_id = target.id; target.referred_by_referral_id = source_joined.id; count("referral_relations", 1)
+        else:
+            db.delete(source_joined); count("referral_relation_duplicates", 1)
+    count("referrals_made", db.execute(update(ClientReferral).where(ClientReferral.referrer_client_id == source.id).values(referrer_client_id=target.id)).rowcount)
+    # invalidate active login/link codes for source identities
+    source_ids = [x for x in [source.telegram_user_id, source.vk_user_id, provider_user_id] if x]
+    if source_ids:
+        count("invalidated_login_codes", db.execute(update(BrowserLoginCode).where(BrowserLoginCode.provider_user_id.in_(source_ids), BrowserLoginCode.used_at.is_(None)).values(used_at=now)).rowcount)
+    source.status = "merged"; source.is_active = False; source.merged_into_client_id = target.id; source.merged_at = now
+    return moved
+
+
+@router.post("/me/provider-identities/merge-preview", response_model=ProviderIdentityMergePreviewResponse)
+def preview_current_client_provider_identity_merge(payload: ProviderIdentityLinkRequest, current_user: User = Depends(require_client), db: Session = Depends(get_db)) -> ProviderIdentityMergePreviewResponse:
+    current_profile = _get_or_create_client_profile(db, current_user.id)
+    _service, _code_record, provider, provider_user_id = _validate_identity_link_code(payload, db)
+    owner = _find_identity_owner(db, provider, provider_user_id)
+    logger.info("merge_preview", extra={"source_client_id": owner.id if owner else None, "target_client_id": current_profile.id})
+    if owner is None or owner.id == current_profile.id:
+        return ProviderIdentityMergePreviewResponse(merge_required=False)
+    return ProviderIdentityMergePreviewResponse(merge_required=True, source_client=_merge_preview_source(db, owner, datetime.now(timezone.utc)))
+
+
+@router.post("/me/provider-identities/merge", response_model=ProviderIdentityMergeResponse)
+def merge_current_client_provider_identity(payload: ProviderIdentityLinkRequest, current_user: User = Depends(require_client), db: Session = Depends(get_db)) -> ProviderIdentityMergeResponse:
+    target = _get_or_create_client_profile(db, current_user.id)
+    service, code_record, provider, provider_user_id = _validate_identity_link_code(payload, db)
+    source = _find_identity_owner(db, provider, provider_user_id)
+    if source is None or source.id == target.id:
+        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="merge_not_required")
+    now = datetime.now(timezone.utc)
+    logger.info("merge_started", extra={"source_client_id": source.id, "target_client_id": target.id})
+    moved = _merge_clients(db, target=target, source=source, provider=provider, provider_user_id=provider_user_id, now=now)
+    service.mark_used(code_record, now=now)
+    db.commit(); db.refresh(target)
+    logger.info("merge_completed", extra={"source_client_id": source.id, "target_client_id": target.id, "moved": moved})
+    return ProviderIdentityMergeResponse(merged=True, provider=provider, status="merged", message="Аккаунты объединены", provider_identities=_provider_identities_read(db, target))
+
+
 @router.post("/me/provider-identities/link", response_model=ProviderIdentityLinkResponse)
 def link_current_client_provider_identity(
     payload: ProviderIdentityLinkRequest,
@@ -290,22 +417,23 @@ def link_current_client_provider_identity(
     provider = payload.provider.strip().lower()
     if provider not in {"telegram", "vk"}:
         raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="unsupported_provider")
+    code = payload.login_code or payload.link_code or ""
     service = BrowserLoginCodeService(db)
-    code_record = service.get_by_code(payload.login_code)
+    code_record = service.get_by_code(code)
     if code_record is None:
-        service.mark_failed_attempt(payload.login_code); db.commit()
+        service.mark_failed_attempt(code); db.commit()
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="code_not_found")
     if code_record.provider != provider:
-        service.mark_failed_attempt(payload.login_code); db.commit()
+        service.mark_failed_attempt(code); db.commit()
         raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="provider_mismatch")
     if getattr(code_record, "purpose", "login") != "identity_link":
-        service.mark_failed_attempt(payload.login_code); db.commit()
+        service.mark_failed_attempt(code); db.commit()
         raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="invalid_code_purpose")
     if service.is_expired(code_record):
-        service.mark_failed_attempt(payload.login_code); db.commit()
+        service.mark_failed_attempt(code); db.commit()
         raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="code_expired")
     if code_record.used_at is not None:
-        service.mark_failed_attempt(payload.login_code); db.commit()
+        service.mark_failed_attempt(code); db.commit()
         raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="code_already_used")
 
     provider_user_id = code_record.provider_user_id

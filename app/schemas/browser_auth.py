@@ -65,4 +65,13 @@ class BrowserLoginCodeRequest(BaseModel):
 
 class ProviderIdentityLinkRequest(BaseModel):
     provider: str = Field(min_length=1, max_length=32)
-    login_code: str = Field(min_length=1, max_length=32)
+    login_code: str | None = Field(default=None, min_length=1, max_length=32)
+    link_code: str | None = Field(default=None, min_length=1, max_length=32)
+
+    @model_validator(mode="after")
+    def normalize_link_code(self) -> "ProviderIdentityLinkRequest":
+        if self.login_code is None and self.link_code is not None:
+            self.login_code = self.link_code
+        if self.link_code is None and self.login_code is not None:
+            self.link_code = self.login_code
+        return self

@@ -130,6 +130,27 @@ class ProviderIdentityLinkResponse(BaseModel):
     provider_identities: ClientProviderIdentitiesRead
 
 
+class ProviderIdentityMergeSourceRead(BaseModel):
+    has_subscription: bool = False
+    subscription_active: bool = False
+    giveaway_entries: int = 0
+    referrals: int = 0
+    linked_providers: list[str] = Field(default_factory=list)
+
+
+class ProviderIdentityMergePreviewResponse(BaseModel):
+    merge_required: bool
+    source_client: ProviderIdentityMergeSourceRead | None = None
+
+
+class ProviderIdentityMergeResponse(BaseModel):
+    merged: bool
+    provider: str
+    status: str
+    message: str | None = None
+    provider_identities: ClientProviderIdentitiesRead
+
+
 class ClientLinkingConfirmResponse(BaseModel):
     status: str
     access_token: str | None = None

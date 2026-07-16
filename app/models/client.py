@@ -99,6 +99,9 @@ class ClientProfile(Base):
     referral_code: Mapped[str | None] = mapped_column(String(32), nullable=True, unique=True, index=True)
     referred_by_referral_id: Mapped[int | None] = mapped_column(ForeignKey("client_referrals.id"), nullable=True, unique=True)
     is_active: Mapped[bool] = mapped_column(Boolean, nullable=False, default=True)
+    status: Mapped[str] = mapped_column(String(32), nullable=False, default="active", server_default="active", index=True)
+    merged_into_client_id: Mapped[int | None] = mapped_column(ForeignKey("client_profiles.id"), nullable=True, index=True)
+    merged_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
     created_at: Mapped[datetime] = mapped_column(
         DateTime(timezone=True),
         nullable=False,

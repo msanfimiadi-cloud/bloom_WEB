@@ -15,6 +15,17 @@ export interface ProviderIdentityState {
   linked_at?: BackendText;
 }
 
+export interface ProviderIdentityMergePreview {
+  merge_required: boolean;
+  source_client?: {
+    has_subscription?: boolean;
+    subscription_active?: boolean;
+    giveaway_entries?: number;
+    referrals?: number;
+    linked_providers?: string[];
+  } | null;
+}
+
 export interface ClientProfile {
   id?: ApiId;
   name?: BackendText;
