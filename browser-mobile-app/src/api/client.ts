@@ -1029,12 +1029,12 @@ export interface LoginCodeResponse extends AuthResponse {
   subscription?: Subscription | null;
 }
 
-export async function loginWithCode(code: string, referralCode?: string | null): Promise<LoginCodeResponse> {
+export async function loginWithCode(provider: "telegram" | "vk", code: string, referralCode?: string | null): Promise<LoginCodeResponse> {
   return request<LoginCodeResponse>(
     LOGIN_CODE_PATH,
     {
       method: "POST",
-      body: JSON.stringify({ code, referral_code: referralCode?.trim() || undefined }),
+      body: JSON.stringify({ provider, login_code: code, referral_code: referralCode?.trim() || undefined }),
     },
     "same-origin",
   );
@@ -1788,4 +1788,8 @@ export function markPaymentRequestPaid(
     `/clients/me/payment-requests/${id}/mark-paid`,
     { method: "POST" },
   );
+}
+
+export async function linkProviderIdentity(provider: "telegram" | "vk", loginCode: string): Promise<unknown> {
+  return request("/clients/me/provider-identities/link", { method: "POST", body: JSON.stringify({ provider, login_code: loginCode }) }, "same-origin");
 }

@@ -344,19 +344,27 @@ def browser_login_code_login(
     db: Session = Depends(get_db),
 ) -> TelegramMiniAppLoginResponse:
     service = BrowserLoginCodeService(db)
-    code_record = service.get_by_code(payload.code)
+    code_record = service.get_by_code(payload.login_code or "")
     if code_record is None:
-        service.mark_failed_attempt(payload.code)
+        service.mark_failed_attempt(payload.login_code or "")
         db.commit()
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="code_not_found")
     if service.is_expired(code_record):
-        service.mark_failed_attempt(payload.code)
+        service.mark_failed_attempt(payload.login_code or "")
         db.commit()
         raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="code_expired")
     if code_record.used_at is not None:
-        service.mark_failed_attempt(payload.code)
+        service.mark_failed_attempt(payload.login_code or "")
         db.commit()
         raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="code_already_used")
+    if payload.provider and code_record.provider != payload.provider.strip().lower():
+        service.mark_failed_attempt(payload.login_code or "")
+        db.commit()
+        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="provider_mismatch")
+    if getattr(code_record, "purpose", "login") != "login":
+        service.mark_failed_attempt(payload.login_code or "")
+        db.commit()
+        raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="invalid_code_purpose")
 
     try:
         resolved = BrowserIdentityResolver(db).resolve(

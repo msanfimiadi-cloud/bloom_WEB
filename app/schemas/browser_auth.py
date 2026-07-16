@@ -2,7 +2,7 @@ from __future__ import annotations
 
 from datetime import datetime
 
-from pydantic import BaseModel, Field
+from pydantic import BaseModel, Field, model_validator
 
 
 class BrowserLoginTokenCreateRequest(BaseModel):
@@ -24,6 +24,7 @@ class BrowserLoginCodeCreateRequest(BaseModel):
     last_name: str | None = Field(default=None, max_length=255)
     photo_url: str | None = Field(default=None, max_length=512)
     referral_code: str | None = Field(default=None, max_length=32)
+    purpose: str = Field(default="login", max_length=32)
 
 
 class BrowserLoginCodeInternalResponse(BaseModel):
@@ -48,5 +49,20 @@ class BrowserLoginCodeCreateResponse(BaseModel):
 
 
 class BrowserLoginCodeRequest(BaseModel):
-    code: str = Field(min_length=1, max_length=32)
+    code: str | None = Field(default=None, min_length=1, max_length=32)
+    login_code: str | None = Field(default=None, min_length=1, max_length=32)
+    provider: str | None = Field(default=None, max_length=32)
     referral_code: str | None = Field(default=None, max_length=32)
+
+    @model_validator(mode="after")
+    def normalize_code(self) -> "BrowserLoginCodeRequest":
+        if self.login_code is None and self.code is not None:
+            self.login_code = self.code
+        if self.code is None and self.login_code is not None:
+            self.code = self.login_code
+        return self
+
+
+class ProviderIdentityLinkRequest(BaseModel):
+    provider: str = Field(min_length=1, max_length=32)
+    login_code: str = Field(min_length=1, max_length=32)

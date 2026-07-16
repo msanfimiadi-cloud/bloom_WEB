@@ -20,6 +20,7 @@ logger = logging.getLogger(__name__)
 VK_API_URL = "https://api.vk.com/method"
 VK_API_VERSION = "5.199"
 USER_ERROR_TEXT = "Не удалось создать код входа. Попробуйте позже."
+LINK_TEXT = "Код для привязки аккаунта к Bloom Club:\n\n{code}\n\nВведите его в разделе “Профиль → Связанные аккаунты”."
 OPEN_TEXT = "Ваш код входа:\n\n{code}\n\nКод действует 5 минут.\n\nОткрыть приложение:\nhttps://app.bloomclub.ru"
 OPEN_BUTTON_TEXT = "Открыть приложение"
 
@@ -96,11 +97,12 @@ class VkBotService:
             logger.warning("Failed to create VK browser login code for user_id=%s: %s", from_id, exc)
             self.send_text(int(peer_id), USER_ERROR_TEXT)
 
-    def build_browser_login_payload(self, identity: VkUserIdentity) -> dict[str, str]:
+    def build_browser_login_payload(self, identity: VkUserIdentity, *, purpose: str = "login") -> dict[str, str]:
         payload = {
             "provider": "vk",
             "provider_user_id": identity.vk_user_id,
             "source": "vk_bot",
+            "purpose": purpose,
         }
         if identity.display_name:
             payload["display_name"] = identity.display_name
@@ -110,8 +112,8 @@ class VkBotService:
             payload["photo_url"] = identity.photo_url
         return payload
 
-    def create_browser_login_code(self, identity: VkUserIdentity) -> BrowserLoginCodeCreateResponse:
-        payload = self.build_browser_login_payload(identity)
+    def create_browser_login_code(self, identity: VkUserIdentity, *, purpose: str = "login") -> BrowserLoginCodeCreateResponse:
+        payload = self.build_browser_login_payload(identity, purpose=purpose)
         with self.session_factory() as db:
             assert isinstance(db, Session)
             service = BrowserLoginCodeService(db)
@@ -119,6 +121,9 @@ class VkBotService:
             db.commit()
             db.refresh(record)
             return BrowserLoginCodeCreateResponse(code=code, expires_at=record.expires_at, app_url=service.build_app_url())
+
+    def create_browser_link_code(self, identity: VkUserIdentity) -> BrowserLoginCodeCreateResponse:
+        return self.create_browser_login_code(identity, purpose="identity_link")
 
     def get_user_identity(self, vk_user_id: str) -> VkUserIdentity:
         try:

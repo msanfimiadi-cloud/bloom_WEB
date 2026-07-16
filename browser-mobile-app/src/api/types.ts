@@ -8,6 +8,13 @@ export interface AuthResponse {
   expires_in?: number;
 }
 
+export interface ProviderIdentityState {
+  linked?: boolean;
+  username?: BackendText;
+  provider_user_id_masked?: BackendText;
+  linked_at?: BackendText;
+}
+
 export interface ClientProfile {
   id?: ApiId;
   name?: BackendText;
@@ -20,6 +27,10 @@ export interface ClientProfile {
   city_id?: ApiId;
   avatar_url?: BackendText;
   telegram_user_id?: ApiId;
+  vk_user_id?: ApiId;
+  telegram_username?: BackendText;
+  vk_username?: BackendText;
+  provider_identities?: { telegram?: ProviderIdentityState; vk?: ProviderIdentityState } | null;
   telegram_first_name?: BackendText;
   telegram_last_name?: BackendText;
   user?: { full_name?: BackendText; name?: BackendText; first_name?: BackendText; last_name?: BackendText } | null;

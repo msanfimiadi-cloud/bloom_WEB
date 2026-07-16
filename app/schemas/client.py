@@ -6,6 +6,18 @@ from decimal import Decimal
 from pydantic import BaseModel, Field
 
 
+class ProviderIdentityRead(BaseModel):
+    linked: bool
+    username: str | None = None
+    provider_user_id_masked: str | None = None
+    linked_at: datetime | None = None
+
+
+class ClientProviderIdentitiesRead(BaseModel):
+    telegram: ProviderIdentityRead
+    vk: ProviderIdentityRead
+
+
 class ClientProfileRead(BaseModel):
     id: int
     user_id: int
@@ -32,6 +44,7 @@ class ClientProfileRead(BaseModel):
     trial_available: bool = False
     referral_code: str | None = None
     referral_link: str | None = None
+    provider_identities: ClientProviderIdentitiesRead | None = None
 
     model_config = {"from_attributes": True}
 
@@ -106,6 +119,15 @@ class ClientLinkingStartResponse(BaseModel):
 class ClientLinkingConfirmRequest(BaseModel):
     challenge_id: str
     code: str
+
+
+class ProviderIdentityLinkResponse(BaseModel):
+    linked: bool
+    provider: str
+    status: str
+    message: str | None = None
+    identity: ProviderIdentityRead
+    provider_identities: ClientProviderIdentitiesRead
 
 
 class ClientLinkingConfirmResponse(BaseModel):

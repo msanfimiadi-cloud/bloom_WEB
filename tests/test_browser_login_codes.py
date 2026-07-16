@@ -431,3 +431,65 @@ def test_internal_login_code_rejects_invalid_provider(client):
 
     assert response.status_code == 422
     assert response.json()["detail"] == "unsupported_provider"
+
+
+def test_login_code_requires_matching_provider_and_login_purpose(client, db_session):
+    code, _ = BrowserLoginCodeService(db_session).create_code(provider="telegram", provider_user_id="tg-purpose", purpose="login")
+    link_code, _ = BrowserLoginCodeService(db_session).create_code(provider="vk", provider_user_id="vk-link-purpose", purpose="identity_link")
+    db_session.commit()
+
+    mismatch = client.post("/api/v1/auth/login-code", json={"provider": "vk", "login_code": code})
+    assert mismatch.status_code == 400
+    assert mismatch.json()["detail"] == "provider_mismatch"
+
+    wrong_purpose = client.post("/api/v1/auth/login-code", json={"provider": "vk", "login_code": link_code})
+    assert wrong_purpose.status_code == 403
+    assert wrong_purpose.json()["detail"] == "invalid_code_purpose"
+
+
+def test_provider_identity_link_flow_and_future_vk_login(client, db_session):
+    telegram_code, _ = BrowserLoginCodeService(db_session).create_code(provider="telegram", provider_user_id="tg-link-flow", purpose="login")
+    db_session.commit()
+    login = client.post("/api/v1/auth/login-code", json={"provider": "telegram", "login_code": telegram_code})
+    assert login.status_code == 200
+    token = login.json()["access_token"]
+    client_id = login.json()["client"]["id"]
+
+    link_code, link_record = BrowserLoginCodeService(db_session).create_code(provider="vk", provider_user_id="same-numeric", username="vkname", purpose="identity_link")
+    db_session.commit()
+    linked = client.post(
+        "/api/v1/clients/me/provider-identities/link",
+        json={"provider": "vk", "login_code": link_code},
+        headers={"Authorization": f"Bearer {token}"},
+    )
+    assert linked.status_code == 200
+    assert linked.json()["provider_identities"]["vk"]["linked"] is True
+    db_session.refresh(link_record)
+    assert link_record.used_at is not None
+
+    vk_login_code, _ = BrowserLoginCodeService(db_session).create_code(provider="vk", provider_user_id="same-numeric", purpose="login")
+    db_session.commit()
+    vk_login = client.post("/api/v1/auth/login-code", json={"provider": "vk", "login_code": vk_login_code})
+    assert vk_login.status_code == 200
+    assert vk_login.json()["client"]["id"] == client_id
+
+
+def test_provider_identity_link_conflicts_and_wrong_purpose(client, db_session):
+    profile_a = _create_profile(db_session, telegram_user_id="tg-a")
+    profile_b = _create_profile(db_session, vk_user_id="vk-b")
+    login_code, _ = BrowserLoginCodeService(db_session).create_code(provider="telegram", provider_user_id="tg-a", purpose="login")
+    wrong_purpose_code, _ = BrowserLoginCodeService(db_session).create_code(provider="vk", provider_user_id="vk-new", purpose="login")
+    conflict_code, _ = BrowserLoginCodeService(db_session).create_code(provider="vk", provider_user_id="vk-b", purpose="identity_link")
+    db_session.commit()
+    token = client.post("/api/v1/auth/login-code", json={"provider": "telegram", "login_code": login_code}).json()["access_token"]
+
+    wrong = client.post("/api/v1/clients/me/provider-identities/link", json={"provider": "vk", "login_code": wrong_purpose_code}, headers={"Authorization": f"Bearer {token}"})
+    assert wrong.status_code == 403
+    assert wrong.json()["detail"] == "invalid_code_purpose"
+
+    conflict = client.post("/api/v1/clients/me/provider-identities/link", json={"provider": "vk", "login_code": conflict_code}, headers={"Authorization": f"Bearer {token}"})
+    assert conflict.status_code == 409
+    db_session.refresh(profile_a)
+    db_session.refresh(profile_b)
+    assert profile_a.vk_user_id is None
+    assert profile_b.vk_user_id == "vk-b"
