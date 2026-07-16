@@ -1,4 +1,4 @@
-import { isTimeoutError, linkProviderIdentity } from '../api/client';
+import { isTimeoutError, linkProviderIdentity, mergeProviderIdentity, previewProviderIdentityMerge } from '../api/client';
 import { useEffect, useMemo, useState, type FormEvent } from 'react';
 import { AppImage } from '../components/AppImage';
 import { ContentText } from '../components/ContentText';
@@ -84,6 +84,7 @@ export function ProfilePage({ profile, cities, onSaveProfile, referralSummary, o
   const [vkLinkCode, setVkLinkCode] = useState(() => sessionStorage.getItem("bloom.vkLinkCodeDraft") || "");
   const [linkMessage, setLinkMessage] = useState("");
   const [isLinking, setIsLinking] = useState(false);
+  const [mergePrompt, setMergePrompt] = useState<{ provider: "telegram" | "vk"; code: string; source?: { has_subscription?: boolean; subscription_active?: boolean; giveaway_entries?: number; referrals?: number; linked_providers?: string[] } | null } | null>(null);
 
   const [phone, setPhone] = useState(toText(profile?.phone));
   const [email, setEmail] = useState(toText(profile?.email));
@@ -107,6 +108,12 @@ export function ProfilePage({ profile, cities, onSaveProfile, referralSummary, o
     setLinkMessage("");
     setIsLinking(true);
     try {
+      const preview = await previewProviderIdentityMerge(provider, code);
+      if (preview.merge_required) {
+        setMergePrompt({ provider, code, source: preview.source_client });
+        setLinkMessage("");
+        return;
+      }
       await linkProviderIdentity(provider, code);
       sessionStorage.removeItem(provider === "telegram" ? "bloom.telegramLinkCodeDraft" : "bloom.vkLinkCodeDraft");
       if (provider === "telegram") setTelegramLinkCode(""); else setVkLinkCode("");
@@ -115,6 +122,25 @@ export function ProfilePage({ profile, cities, onSaveProfile, referralSummary, o
       await onLinkedProvider?.();
     } catch (error) {
       const detail = typeof (error as { detail?: unknown }).detail === "string" ? String((error as { detail?: unknown }).detail) : "Не удалось привязать аккаунт";
+      setLinkMessage(detail);
+    } finally {
+      setIsLinking(false);
+    }
+  };
+
+  const confirmMerge = async () => {
+    if (!mergePrompt) return;
+    setIsLinking(true);
+    try {
+      await mergeProviderIdentity(mergePrompt.provider, mergePrompt.code);
+      sessionStorage.removeItem(mergePrompt.provider === "telegram" ? "bloom.telegramLinkCodeDraft" : "bloom.vkLinkCodeDraft");
+      if (mergePrompt.provider === "telegram") setTelegramLinkCode(""); else setVkLinkCode("");
+      setMergePrompt(null);
+      setLinkProvider(null);
+      setLinkMessage("Аккаунты объединены");
+      await onLinkedProvider?.();
+    } catch (error) {
+      const detail = typeof (error as { detail?: unknown }).detail === "string" ? String((error as { detail?: unknown }).detail) : "Не удалось объединить аккаунты";
       setLinkMessage(detail);
     } finally {
       setIsLinking(false);
@@ -326,6 +352,25 @@ export function ProfilePage({ profile, cities, onSaveProfile, referralSummary, o
         })}
         {linkMessage ? <p className="profile-form__message">{linkMessage}</p> : null}
       </section>
+
+
+      {mergePrompt ? (
+        <div className="profile-merge-dialog glass-card" role="dialog" aria-modal="true">
+          <h2>Найден ещё один аккаунт Bloom Club.</h2>
+          <p>После объединения будут объединены:</p>
+          <ul>
+            <li>✅ подписка{mergePrompt.source?.subscription_active ? " (активна)" : ""}</li>
+            <li>✅ участие в розыгрышах{typeof mergePrompt.source?.giveaway_entries === "number" ? `: ${mergePrompt.source.giveaway_entries}` : ""}</li>
+            <li>✅ рефералы{typeof mergePrompt.source?.referrals === "number" ? `: ${mergePrompt.source.referrals}` : ""}</li>
+            <li>✅ связанные аккаунты{mergePrompt.source?.linked_providers?.length ? `: ${mergePrompt.source.linked_providers.join(", ")}` : ""}</li>
+          </ul>
+          <p><strong>Это действие нельзя отменить.</strong></p>
+          <div className="profile-merge-dialog__actions">
+            <button className="button button--secondary" type="button" disabled={isLinking} onClick={() => setMergePrompt(null)}>Отмена</button>
+            <button className="button button--primary" type="button" disabled={isLinking} onClick={confirmMerge}>Объединить аккаунты</button>
+          </div>
+        </div>
+      ) : null}
 
       <button className="button button--ghost profile-logout-button" type="button" onClick={() => { console.info("[BLOOM_LOGOUT_TRACE] logout_button_clicked"); onLogout(); }}>
         Выйти из профиля

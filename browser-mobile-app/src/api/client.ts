@@ -13,6 +13,7 @@ import type {
   Subscription,
   Verification,
   ReferralSummary,
+  ProviderIdentityMergePreview,
 } from "./types";
 import { traceStartup } from "../diagnostics/startupTrace";
 
@@ -1792,4 +1793,12 @@ export function markPaymentRequestPaid(
 
 export async function linkProviderIdentity(provider: "telegram" | "vk", loginCode: string): Promise<unknown> {
   return request("/clients/me/provider-identities/link", { method: "POST", body: JSON.stringify({ provider, login_code: loginCode }) }, "same-origin");
+}
+
+export async function previewProviderIdentityMerge(provider: "telegram" | "vk", loginCode: string): Promise<ProviderIdentityMergePreview> {
+  return requestClientApiPost<ProviderIdentityMergePreview>("/clients/me/provider-identities/merge-preview", { provider, link_code: loginCode });
+}
+
+export async function mergeProviderIdentity(provider: "telegram" | "vk", loginCode: string): Promise<unknown> {
+  return requestClientApiPost<unknown>("/clients/me/provider-identities/merge", { provider, link_code: loginCode });
 }
