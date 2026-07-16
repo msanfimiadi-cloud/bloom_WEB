@@ -17,7 +17,7 @@ export function AppShell({ activePage, onNavigate, children, onHiddenDiagnostics
   return (
     <div className="app-shell">
       <button className="app-shell__diagnostic-hotspot" type="button" aria-label="Открыть диагностику" onClick={onHiddenDiagnosticsGesture} tabIndex={-1}></button>
-      {onOpenSubscription ? (
+      {onOpenSubscription && activePage !== 'home' ? (
         <SubscriptionStatusWidget profile={profile} subscription={subscription} onOpenSubscription={onOpenSubscription} />
       ) : null}
       <main className="app-shell__content">

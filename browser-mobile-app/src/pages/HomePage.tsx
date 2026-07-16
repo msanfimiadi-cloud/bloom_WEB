@@ -3,13 +3,15 @@ import { checkSocialSubscription, getGiveawayState, isApiError, isTimeoutError }
 import { AppImage } from "../components/AppImage";
 import { PartnerCatalogCard } from "../components/PartnerCatalogCard";
 import type { City, ClientProfile, GiveawayState, Partner, ReferralSummary, Subscription } from "../api/types";
-import { isSubscriptionActive, isTrialEligible } from "../utils/subscription";
+import { getSubscriptionEnd, isSubscriptionActive, isTrialEligible } from "../utils/subscription";
+import { formatDate } from "../utils/format";
 import { useContent, useContentText } from "../content/ContentContext";
 import type { HomeBlock } from "../content/clientContentApi";
 import { getPartnerName } from "../utils/partnerDisplay";
 import { toText } from "../utils/text";
 import { sanitizeCmsHtml } from "../utils/sanitizeCmsHtml";
 import { resolveHomeCtaAction } from "../utils/homeCta";
+import { Coffee, Flower2, HeartPulse, Shirt } from "lucide-react";
 
 interface HomePageProps {
   profile: ClientProfile | null;
@@ -67,6 +69,8 @@ export function HomePage({
   const trialAvailable = isTrialEligible(profile, subscription);
   const selectedCity = safeCities[0] ? getCityName(safeCities[0]) : "Новосибирск";
   const firstName = profile?.first_name || profile?.name || "участница";
+  const subscriptionEnd = getSubscriptionEnd(subscription);
+  const memberNumber = String(profile?.id ?? "CLUB").padStart(6, "0").slice(-6);
   const visibleHomeBlocks = useMemo(
     () => homeBlocks.filter((block) => block.is_active !== false && hasVisibleHomeBlockContent(block)),
     [homeBlocks],
@@ -400,25 +404,6 @@ export function HomePage({
   function renderLegacyHome() {
     return (
       <>
-        <div className="hero-card home-hero">
-          <p className="eyebrow">{heroEyebrow}</p>
-          <h1>{heroTitle}</h1>
-          <p>{heroSubtitle}</p>
-          <div className="home-hero__benefits" aria-label="Преимущества Bloom Club">
-            <span>Красота</span>
-            <span>Здоровье</span>
-            <span>Стиль</span>
-          </div>
-          <div className="hero-card__actions">
-            <button className="button button--primary" type="button" onClick={onOpenCatalog}>
-              {catalogCta}
-            </button>
-            <button className="button button--ghost" type="button" onClick={onOpenSubscription}>
-              {hasAccess ? manageSubscriptionLabel : subscriptionLabel}
-            </button>
-          </div>
-        </div>
-
         {safeCities.length ? (
           <div className="info-panel">
             <strong>{cityTitle}</strong>
@@ -474,20 +459,72 @@ export function HomePage({
     );
   }
 
+  function renderMembershipHome() {
+    return (
+      <div className="club-home-header">
+        <div className="club-home-brand">
+          <strong>BLOOM CLUB</strong>
+          <span>Женский клуб · НСК</span>
+        </div>
+
+        <button className="club-membership-card" type="button" onClick={onOpenSubscription} aria-label="Открыть подписку Bloom Club">
+          <span className="club-membership-card__column club-membership-card__column--status">
+            <small>Статус подписки</small>
+            <strong>{hasAccess ? "Активна" : "Не активна"}</strong>
+            <span>{hasAccess && subscriptionEnd ? `до ${formatDate(subscriptionEnd)}` : "оформить доступ"}</span>
+          </span>
+          <span className="club-membership-card__column club-membership-card__column--member">
+            <small>Участница</small>
+            <strong>№ {memberNumber}</strong>
+            <span>Bloom Club</span>
+          </span>
+        </button>
+
+        <div className="club-home-intro">
+          <p className="eyebrow">{heroEyebrow}</p>
+          <h1>{heroTitle}</h1>
+          <p>{heroSubtitle}</p>
+        </div>
+
+        <div className="club-category-grid" aria-label="Категории привилегий">
+          {[
+            { label: "Красота", Icon: Flower2 },
+            { label: "Здоровье", Icon: HeartPulse },
+            { label: "Стиль", Icon: Shirt },
+            { label: "Отдых", Icon: Coffee },
+          ].map(({ label, Icon }) => (
+            <button type="button" onClick={onOpenCatalog} key={label}>
+              <Icon aria-hidden="true" />
+              <strong>{label}</strong>
+            </button>
+          ))}
+        </div>
+
+        <div className="club-home-actions">
+          <button className="button button--primary" type="button" onClick={onOpenCatalog}>{catalogCta}</button>
+          <button className="button button--secondary" type="button" onClick={onOpenSubscription}>
+            {hasAccess ? manageSubscriptionLabel : subscriptionLabel}
+          </button>
+        </div>
+      </div>
+    );
+  }
+
   return (
-    <section className="page">
+    <section className="page home-page home-page--membership">
+      {renderMembershipHome()}
       {visibleHomeBlocks.length ? (
         <>
-          {visibleHomeBlocks.map(renderHomeBlock)}
+          {visibleHomeBlocks.filter((block) => block.type !== "hero").map(renderHomeBlock)}
           {renderTrialCta()}
           {renderReferralBanner()}
-        {renderGiveawayBlock()}
+          {renderGiveawayBlock()}
         </>
       ) : (
         <>
           {renderTrialCta()}
+          {renderGiveawayBlock()}
           {renderReferralBanner()}
-        {renderGiveawayBlock()}
           {renderLegacyHome()}
         </>
       )}
