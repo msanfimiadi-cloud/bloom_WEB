@@ -7,13 +7,17 @@ from typing import Any
 import httpx
 
 from .client import InternalApiClient, VkApiClient
-from .keyboards import REPEAT_CODE_LABEL, login_keyboard
+from .keyboards import NEW_CODE_LABEL, REPEAT_CODE_LABEL, login_keyboard
 from .settings import VkBotSettings
 
 logger = logging.getLogger(__name__)
-LOGIN_MESSAGE = "Добро пожаловать в Bloom Club 🌸\n\nВаш код для входа:\n\n{code}\n\nОткройте приложение и введите этот код."
+LOGIN_INTRO_MESSAGE = "🌸 Добро пожаловать в Bloom Club!\n\nВаш код для входа:"
+LOGIN_INSTRUCTION_MESSAGE = "Откройте приложение Bloom Club и введите этот код."
+LINK_INTRO_MESSAGE = "🔗 Код для привязки аккаунта"
+LINK_INSTRUCTION_MESSAGE = "Введите этот код в разделе\n\nПрофиль → Связанные аккаунты"
+LOGIN_MESSAGE = f"{LOGIN_INTRO_MESSAGE}\n\n{{code}}\n\n{LOGIN_INSTRUCTION_MESSAGE}"
 ERROR_MESSAGE = "Сервис временно недоступен. Попробуйте получить код ещё раз через несколько минут."
-SUPPORTED_TEXTS = {"начать", "start", "/start", "получить код", "получить код повторно", REPEAT_CODE_LABEL.lower()}
+SUPPORTED_TEXTS = {"начать", "start", "/start", "получить код", "получить код повторно", REPEAT_CODE_LABEL.lower(), NEW_CODE_LABEL.lower()}
 
 
 class VkBotHandler:
@@ -42,11 +46,21 @@ class VkBotHandler:
             profile = await self.vk.get_profile(user_id)
             data = await self.internal.create_login_code(profile)
             code = data["login_code"]
-            await self.vk.send_message(peer_id, LOGIN_MESSAGE.format(code=code), login_keyboard(self.settings.browser_app_url))
+            await self.send_login_code_messages(peer_id, code)
         except (httpx.HTTPError, KeyError) as exc:
             status = exc.response.status_code if isinstance(exc, httpx.HTTPStatusError) else None
             logger.warning("backend_error", extra={"event": "backend_error", "vk_user_id": user_id, "status_code": status})
             await self._safe_error(peer_id)
+
+    async def send_login_code_messages(self, peer_id: int, code: str) -> None:
+        await self.vk.send_message(peer_id, LOGIN_INTRO_MESSAGE)
+        await self.vk.send_message(peer_id, code)
+        await self.vk.send_message(peer_id, LOGIN_INSTRUCTION_MESSAGE, login_keyboard(self.settings.browser_app_url))
+
+    async def send_link_code_messages(self, peer_id: int, code: str) -> None:
+        await self.vk.send_message(peer_id, LINK_INTRO_MESSAGE)
+        await self.vk.send_message(peer_id, code)
+        await self.vk.send_message(peer_id, LINK_INSTRUCTION_MESSAGE, login_keyboard(self.settings.browser_app_url, repeat_label=NEW_CODE_LABEL))
 
     async def _safe_error(self, peer_id: int) -> None:
         try:
