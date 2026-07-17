@@ -104,7 +104,7 @@ def test_admin_login_still_authenticates_admin_user(unified_auth_client: TestCli
     data = response.json()
     assert data["token_type"] == "bearer"
     assert data["access_token"]
-    assert data["user"] == {"id": 1, "email": "admin@example.com", "role": "admin"}
+    assert data["user"] == {"id": 1, "email": "admin@example.com", "role": "admin", "legacy_content_write_enabled": True}
     assert decode_access_token(data["access_token"])["sub"] == "1"
 
 

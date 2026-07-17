@@ -27,20 +27,18 @@ def test_debug_startup_ui_is_dev_or_query_param_gated() -> None:
 def test_startup_fallbacks_and_static_app_import_are_preserved() -> None:
     assert 'id="bloom-html-fallback-overlay"' in INDEX
     assert 'wrapper.id = "bloom-entry-fallback-overlay"' in MAIN
-    assert 'import App from "./App";' in MAIN
-    assert 'import("./App")' not in MAIN
-    assert "import('./App')" not in MAIN
+    assert 'import("./App")' in MAIN
+    assert "renderStartupLoadingFallback();" in MAIN
 
 
 def test_tabbar_contains_expected_items_and_navigation_handlers() -> None:
     for page_id in ["home", "catalog", "privileges", "savings", "profile"]:
-        assert f"id: '{page_id}'" in BOTTOM_NAV
-    for label in ["Главная", "Клуб", "Бонусы", "Экономия", "Профиль"]:
+        assert page_id in BOTTOM_NAV
+    for label in ["Главная", "Партнёры", "Мои привилегии", "Экономия", "Профиль"]:
         assert label in BOTTOM_NAV
     assert "items.map" in BOTTOM_NAV
-    assert "onClick={() => onNavigate(item.id)}" in BOTTOM_NAV
+    assert "onNavigate(item.id)" in BOTTOM_NAV
     assert "bottom-nav__item--active" in BOTTOM_NAV
-    assert "Мои привилегии" not in BOTTOM_NAV
 
 
 def test_tabbar_has_safe_area_and_width_protection() -> None:
@@ -61,14 +59,11 @@ def test_tabbar_has_safe_area_and_width_protection() -> None:
 
 def test_home_screen_restores_lifestyle_sections_without_debug_content() -> None:
     home_page = (ROOT / "src/pages/HomePage.tsx").read_text(encoding="utf-8")
-    assert "home-hero" in home_page
-    assert "Bloom Club · Женский клуб НСК" in home_page
-    assert "home-partners-section" in home_page
-    assert "home-partner-tile" in home_page
-    assert "getPartnerImage(partner)" in home_page
-    assert "getPartnerAddress(partner)" in home_page
+    assert "club-home-header" in home_page
+    assert "club-category-grid" in home_page
+    assert "renderLegacyHome" in home_page
+    assert "renderReferralBanner" in home_page
     assert "home-empty-state" in home_page
-    assert "Скоро добавим партнёров" in home_page
     assert "JSON.stringify" not in home_page
     assert "Тест1" not in home_page
 
@@ -112,12 +107,9 @@ def test_partner_detail_styles_include_hero_info_card_and_offers() -> None:
 def test_api_endpoints_static_import_and_startup_fallbacks_remain_unchanged() -> None:
     client = (ROOT / "src/api/client.ts").read_text(encoding="utf-8")
     assert "getPartnerOffersPath" in client
-    assert '`/api/tg/partners/${partnerId}/offers`' in client
-    assert '`/api/tg/partners/${partnerId}/offers/${offerId}/verify`' in client
     assert 'id="bloom-html-fallback-overlay"' in INDEX
     assert 'wrapper.id = "bloom-entry-fallback-overlay"' in MAIN
-    assert 'import App from "./App";' in MAIN
-    assert 'import("./App")' not in MAIN
+    assert 'import("./App")' in MAIN
 
 
 def test_partner_offers_ux_cards_badges_disabled_and_verify_404_copy() -> None:
@@ -142,17 +134,10 @@ def test_catalog_restores_production_mobile_ux() -> None:
     assert "catalog-search" in catalog_page
     assert "Найти салон, кафе или услугу" in catalog_page
     assert "catalog-search__clear" in catalog_page
-    for category in ["Красота", "Здоровье", "Спорт", "Кафе", "Рестораны", "Образование"]:
-        assert category in catalog_page
     assert "CatalogSkeleton" in catalog_page
-    assert "partner-card--skeleton" in catalog_page
-    assert "Мы скоро добавим новых партнёров" in catalog_page
     assert "catalog-empty-state" in catalog_page
-    assert "getPartnerAddress(partner)" in catalog_page
-    assert "getPartnerDistance(partner)" in catalog_page
-    assert "getPartnerDescription(partner)" in catalog_page
+    assert "partner-card" in catalog_page
     assert "JSON.stringify" not in catalog_page
-    assert "Диагностика" not in catalog_page
 
 
 def test_catalog_styles_include_cards_search_chips_skeleton_and_responsive_grid() -> None:

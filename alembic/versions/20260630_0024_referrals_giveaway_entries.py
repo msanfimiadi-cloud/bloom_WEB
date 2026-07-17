@@ -72,29 +72,52 @@ def upgrade() -> None:
             if name not in indexes:
                 op.create_index(name, table, cols, unique=False)
     cols = _columns("client_profiles")
-    if "referral_code" not in cols:
-        op.add_column("client_profiles", sa.Column("referral_code", sa.String(length=32), nullable=True))
-    if "referred_by_referral_id" not in cols:
-        op.add_column("client_profiles", sa.Column("referred_by_referral_id", sa.Integer(), nullable=True))
-        op.create_foreign_key("fk_client_profiles_referred_by_referral_id", "client_profiles", "client_referrals", ["referred_by_referral_id"], ["id"])
+    bind = op.get_bind()
+    needs_referral_code = "referral_code" not in cols
+    needs_referred_by = "referred_by_referral_id" not in cols
+    needs_referred_unique = "uq_client_profiles_referred_by_referral_id" not in _uniques("client_profiles")
+    if bind.dialect.name == "sqlite" and (needs_referral_code or needs_referred_by or needs_referred_unique):
+        with op.batch_alter_table("client_profiles") as batch_op:
+            if needs_referral_code:
+                batch_op.add_column(sa.Column("referral_code", sa.String(length=32), nullable=True))
+            if needs_referred_by:
+                batch_op.add_column(sa.Column("referred_by_referral_id", sa.Integer(), nullable=True))
+                batch_op.create_foreign_key("fk_client_profiles_referred_by_referral_id", "client_referrals", ["referred_by_referral_id"], ["id"])
+            if needs_referred_unique:
+                batch_op.create_unique_constraint("uq_client_profiles_referred_by_referral_id", ["referred_by_referral_id"])
+    else:
+        if needs_referral_code:
+            op.add_column("client_profiles", sa.Column("referral_code", sa.String(length=32), nullable=True))
+        if needs_referred_by:
+            op.add_column("client_profiles", sa.Column("referred_by_referral_id", sa.Integer(), nullable=True))
+            op.create_foreign_key("fk_client_profiles_referred_by_referral_id", "client_profiles", "client_referrals", ["referred_by_referral_id"], ["id"])
+        if needs_referred_unique:
+            op.create_unique_constraint("uq_client_profiles_referred_by_referral_id", "client_profiles", ["referred_by_referral_id"])
     indexes = _indexes("client_profiles")
     if "ix_client_profiles_referral_code" not in indexes:
         op.create_index("ix_client_profiles_referral_code", "client_profiles", ["referral_code"], unique=True)
-    uniques = _uniques("client_profiles")
-    if "uq_client_profiles_referred_by_referral_id" not in uniques:
-        op.create_unique_constraint("uq_client_profiles_referred_by_referral_id", "client_profiles", ["referred_by_referral_id"])
 
 
 def downgrade() -> None:
     cols = _columns("client_profiles")
-    if "referred_by_referral_id" in cols:
-        op.drop_constraint("uq_client_profiles_referred_by_referral_id", "client_profiles", type_="unique")
-        op.drop_constraint("fk_client_profiles_referred_by_referral_id", "client_profiles", type_="foreignkey")
-        op.drop_column("client_profiles", "referred_by_referral_id")
-    if "referral_code" in cols:
-        if "ix_client_profiles_referral_code" in _indexes("client_profiles"):
-            op.drop_index("ix_client_profiles_referral_code", table_name="client_profiles")
-        op.drop_column("client_profiles", "referral_code")
+    if "referral_code" in cols and "ix_client_profiles_referral_code" in _indexes("client_profiles"):
+        op.drop_index("ix_client_profiles_referral_code", table_name="client_profiles")
+    bind = op.get_bind()
+    if bind.dialect.name == "sqlite" and ("referred_by_referral_id" in cols or "referral_code" in cols):
+        with op.batch_alter_table("client_profiles") as batch_op:
+            if "referred_by_referral_id" in cols:
+                batch_op.drop_constraint("uq_client_profiles_referred_by_referral_id", type_="unique")
+                batch_op.drop_constraint("fk_client_profiles_referred_by_referral_id", type_="foreignkey")
+                batch_op.drop_column("referred_by_referral_id")
+            if "referral_code" in cols:
+                batch_op.drop_column("referral_code")
+    else:
+        if "referred_by_referral_id" in cols:
+            op.drop_constraint("uq_client_profiles_referred_by_referral_id", "client_profiles", type_="unique")
+            op.drop_constraint("fk_client_profiles_referred_by_referral_id", "client_profiles", type_="foreignkey")
+            op.drop_column("client_profiles", "referred_by_referral_id")
+        if "referral_code" in cols:
+            op.drop_column("client_profiles", "referral_code")
     if "giveaway_entries" in _table_names():
         op.drop_table("giveaway_entries")
     if "client_referrals" in _table_names():

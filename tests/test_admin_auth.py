@@ -93,7 +93,7 @@ def test_admin_login_succeeds_with_correct_password(client_with_admin_db: TestCl
     data = response.json()
     assert data["token_type"] == "bearer"
     assert data["access_token"]
-    assert data["user"] == {"id": 1, "email": "admin@example.com", "role": "admin"}
+    assert data["user"] == {"id": 1, "email": "admin@example.com", "role": "admin", "legacy_content_write_enabled": True}
 
 
 def test_admin_login_returns_401_with_wrong_password(client_with_admin_db: TestClient) -> None:
@@ -118,7 +118,7 @@ def test_admin_me_works_with_valid_bearer_token(client_with_admin_db: TestClient
     )
 
     assert response.status_code == 200
-    assert response.json() == {"id": 1, "email": "admin@example.com", "role": "admin"}
+    assert response.json() == {"id": 1, "email": "admin@example.com", "role": "admin", "legacy_content_write_enabled": True}
 
 
 def test_admin_me_returns_401_without_token(client_with_admin_db: TestClient) -> None:

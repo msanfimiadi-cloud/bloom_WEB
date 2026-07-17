@@ -115,6 +115,7 @@ const UPLOADS_DIR = path.join(PROJECT_ROOT, 'uploads');
 const WEB_CONTENT_API_BASE_URL = (process.env.WEB_CONTENT_API_BASE_URL || 'https://bloomclub.ru/api/content').replace(/\/+$/, '');
 const WEB_CONTENT_BLOCKS_URL = `${WEB_CONTENT_API_BASE_URL}/blocks`;
 const WEB_CONTENT_GIVEAWAYS_URL = `${WEB_CONTENT_API_BASE_URL}/giveaways`;
+const CLIENT_CATALOG_SOURCE = (process.env.CLIENT_CATALOG_SOURCE || 'web-client-api').trim();
 const WEB_CLIENTS_API_BASE_URL = (process.env.WEB_CLIENTS_API_BASE_URL || 'https://bloomclub.ru/api/v1').replace(/\/+$/, '');
 const WEB_TELEGRAM_LOGIN_URL = `${WEB_CLIENTS_API_BASE_URL}/auth/telegram-miniapp-login`;
 const TELEGRAM_BOT_USERNAME = (process.env.TELEGRAM_BOT_USERNAME || '').replace(/^@/, '').trim();
@@ -1225,8 +1226,28 @@ async function handleTelegramLoginProxy(request, response) {
   }
 }
 
+const CLIENT_API_PROXY_ROUTES = [
+  { pattern: /^\/api\/v1\/clients\/catalog\/partners$/, methods: new Set(['GET', 'HEAD']) },
+  { pattern: /^\/api\/v1\/clients\/partners\/[^/]+$/, methods: new Set(['GET', 'HEAD']) },
+  { pattern: /^\/api\/v1\/clients\/partners\/[^/]+\/offers$/, methods: new Set(['GET', 'HEAD']) },
+  { pattern: /^\/api\/v1\/clients\/partners\/[^/]+\/verify$/, methods: new Set(['POST']) },
+  { pattern: /^\/api\/v1\/clients\/me$/, methods: new Set(['GET', 'HEAD', 'PATCH']) },
+  { pattern: /^\/api\/v1\/clients\/me\/subscription$/, methods: new Set(['GET', 'HEAD']) },
+  { pattern: /^\/api\/v1\/clients\/me\/trial-subscription$/, methods: new Set(['POST']) },
+  { pattern: /^\/api\/v1\/clients\/me\/verifications$/, methods: new Set(['GET', 'HEAD']) },
+  { pattern: /^\/api\/v1\/clients\/me\/savings$/, methods: new Set(['GET', 'HEAD']) },
+  { pattern: /^\/api\/v1\/clients\/cities$/, methods: new Set(['GET', 'HEAD']) },
+];
+
+function findClientApiProxyRoute(pathname) {
+  if (CLIENT_CATALOG_SOURCE !== 'web-client-api') {
+    return null;
+  }
+  return CLIENT_API_PROXY_ROUTES.find((route) => route.pattern.test(pathname)) || null;
+}
+
 function isClientApiProxyPath(pathname) {
-  return pathname === '/api/v1/clients/cities' || pathname === '/api/v1/clients/me' || pathname.startsWith('/api/v1/clients/me/');
+  return Boolean(findClientApiProxyRoute(pathname));
 }
 
 function createClientApiProxyHeaders(request) {
@@ -1236,12 +1257,24 @@ function createClientApiProxyHeaders(request) {
   };
   const authorization = firstHeaderValue(request.headers.authorization);
   const contentType = firstHeaderValue(request.headers['content-type']);
+  const accept = firstHeaderValue(request.headers.accept);
+  const requestId = firstHeaderValue(request.headers['x-request-id']);
+  const correlationId = firstHeaderValue(request.headers['x-correlation-id']);
 
   if (authorization) {
     headers.Authorization = authorization;
   }
   if (contentType) {
     headers['Content-Type'] = contentType;
+  }
+  if (accept) {
+    headers.Accept = accept;
+  }
+  if (requestId) {
+    headers['X-Request-ID'] = requestId;
+  }
+  if (correlationId) {
+    headers['X-Correlation-ID'] = correlationId;
   }
 
   return headers;
@@ -1260,18 +1293,17 @@ function writeClientApiProxyResponse(response, webResponse, responseBody, isHead
 }
 
 async function handleClientApiProxy(request, response, requestUrl, pathname) {
+  const route = findClientApiProxyRoute(pathname);
+  const allowedMethods = route?.methods || new Set();
   if (request.method === 'OPTIONS') {
     sendHead(response, 204, {
-      allow: 'GET, POST, HEAD, OPTIONS',
+      allow: [...allowedMethods, 'OPTIONS'].join(', '),
     });
     return;
   }
 
-  if (request.method !== 'GET' && request.method !== 'HEAD' && request.method !== 'POST') {
-    sendMethodNotAllowed(response);
-    return;
-  }
-  if (request.method === 'POST' && pathname !== '/api/v1/clients/me/trial-subscription') {
+  const isUnsupportedNonTrialClientPost = request.method === 'POST' && pathname !== '/api/v1/clients/me/trial-subscription';
+  if (isUnsupportedNonTrialClientPost || !allowedMethods.has(request.method)) {
     sendMethodNotAllowed(response);
     return;
   }
@@ -1293,14 +1325,14 @@ async function handleClientApiProxy(request, response, requestUrl, pathname) {
   });
 
   try {
-    body = method === 'POST'
+    body = method === 'POST' || method === 'PATCH'
       ? await collectRequestBody(request, MAX_TELEGRAM_LOGIN_BODY_BYTES, 'client_api_body_too_large')
       : Buffer.alloc(0);
 
     const webResponse = await fetch(targetUrl, {
       method,
       headers: createClientApiProxyHeaders(request),
-      ...(method === 'POST' ? { body } : {}),
+      ...(method === 'POST' || method === 'PATCH' ? { body } : {}),
       signal: controller.signal,
     });
     const responseBody = await webResponse.text();
@@ -1520,7 +1552,38 @@ function contentTypeFor(filePath) {
   if (extension === '.jpg' || extension === '.jpeg') return 'image/jpeg';
   if (extension === '.webp') return 'image/webp';
   if (extension === '.ico') return 'image/x-icon';
+  if (extension === '.docx') return 'application/vnd.openxmlformats-officedocument.wordprocessingml.document';
   return 'application/octet-stream';
+}
+
+async function serveDocument(request, response, pathname) {
+  if (request.method !== 'GET' && request.method !== 'HEAD') {
+    sendMethodNotAllowed(response);
+    return;
+  }
+
+  const relativeDocumentPath = decodeURIComponent(pathname.replace(/^\/docs\//, ''));
+  const filePath = path.resolve(DIST_DIR, 'docs', relativeDocumentPath);
+  const docsDir = path.resolve(DIST_DIR, 'docs');
+  if (!filePath.startsWith(`${docsDir}${path.sep}`)) {
+    sendText(response, 404, 'Not found');
+    return;
+  }
+
+  try {
+    await access(filePath);
+    response.writeHead(200, {
+      'content-type': contentTypeFor(filePath),
+      'cache-control': HTML_NO_STORE_CACHE_CONTROL,
+    });
+    if (request.method === 'HEAD') {
+      response.end();
+      return;
+    }
+    createReadStream(filePath).pipe(response);
+  } catch {
+    sendText(response, 404, 'Not found');
+  }
 }
 
 async function serveAsset(request, response, pathname) {
@@ -1636,7 +1699,7 @@ async function serveFrontend(request, response, options = {}) {
 
   try {
     const indexHtml = await readFile(INDEX_HTML, 'utf8');
-    const body = injectRuntimeConfig(indexHtml);
+    const body = injectRuntimeConfig(injectCatalogBootstrap(indexHtml, { items: [] }));
     const bodyBytes = Buffer.from(body);
     logFrontendRoute('frontend_index_served', request, {
       contentLength: bodyBytes.length,
@@ -1752,6 +1815,10 @@ async function handleRequest(request, response) {
   }
   if (pathname.startsWith('/api/')) {
     sendJson(response, 404, { detail: 'not_found' });
+    return;
+  }
+  if (pathname.startsWith('/docs/')) {
+    await serveDocument(request, response, pathname);
     return;
   }
   if (pathname.startsWith('/assets/')) {

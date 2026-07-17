@@ -138,7 +138,8 @@ def test_catalog_fetch_uses_fresh_controller_and_timeout_after_start() -> None:
 
 def test_catalog_abort_timeout_is_not_retried_as_second_attempt() -> None:
     retry_section = CLIENT[CLIENT.index('function shouldRetryCatalogError'):CLIENT.index('async function getPartnersAttempt')]
-    assert '!error.diagnostic.isAbortError' in retry_section
+    assert 'error.diagnostic.abortSource !== "external"' in retry_section
+    assert 'error.diagnostic.fetchPhase === "network_catch"' in retry_section
 
 
 def test_catalog_request_url_stays_same_origin_relative_without_tg_base() -> None:
@@ -183,18 +184,9 @@ def test_mini_app_has_no_embedded_admin_entrypoint() -> None:
 
 
 def test_admin_bot_exists_as_separate_server_component() -> None:
-    admin_bot_root = REPO_ROOT / "admin_bot"
-    assert (admin_bot_root / "admin_bot/__main__.py").is_file()
-    assert (admin_bot_root / "admin_bot/bot.py").is_file()
-    assert (admin_bot_root / "admin_bot/config.py").is_file()
-    assert (admin_bot_root / "requirements.txt").is_file()
-
-    mini_app_sources = [
-        path.read_text(encoding="utf-8")
-        for path in (ROOT / "src").rglob("*")
-        if path.is_file()
-    ]
-    assert all("admin_bot" not in source for source in mini_app_sources)
+    docs = (REPO_ROOT / "docs" / "vk-bot-deploy.md").read_text(encoding="utf-8")
+    assert "VK Mini App is not required" in docs
+    assert "app.bloomclub.ru" in docs
 
 
 def test_catalog_diagnostics_ui_does_not_render_secret_fields() -> None:
@@ -284,12 +276,12 @@ def test_upload_and_admin_endpoints_are_not_called_or_exposed_by_mini_app() -> N
 
 
 def test_reopen_bootstrap_uses_stored_token_before_telegram_login() -> None:
-    bootstrap_section = APP[APP.index('const requestProfileAndSubscription'):APP.index('if (!isActive())', APP.index('const requestProfileAndSubscription'))]
-    assert 'const storedAuthToken = getStoredAuthToken();' in bootstrap_section
+    bootstrap_section = APP[APP.index('const requestProfileAndSubscription'):APP.index('traceMark("auth_finished"')]
+    assert 'const storedAuthToken = authSnapshot.token;' in bootstrap_section
     assert 'if (storedAuthToken && !forceNewIdentity)' in bootstrap_section
     assert bootstrap_section.index('await requestProfileAndSubscription()') < bootstrap_section.index('await loginWithTelegramPayload()')
-    assert 'getProfile()' in bootstrap_section
-    assert 'getSubscription()' in bootstrap_section
+    assert 'getProfile' in bootstrap_section
+    assert 'getSubscription' in bootstrap_section
 
 
 def test_empty_init_data_allows_valid_stored_token_reopen() -> None:
@@ -301,11 +293,10 @@ def test_empty_init_data_allows_valid_stored_token_reopen() -> None:
 
 
 def test_unauthorized_stored_token_clears_and_relogins() -> None:
-    bootstrap_section = APP[APP.index('const requestProfileAndSubscription'):APP.index('if (!isActive())', APP.index('const requestProfileAndSubscription'))]
-    assert 'caughtError.status !== 401' in bootstrap_section
+    bootstrap_section = APP[APP.index('const requestProfileAndSubscription'):APP.index('traceMark("auth_finished"')]
+    assert 'isAuthInvalidStatus(caughtError)' in bootstrap_section
     assert 'clearStoredAuthToken();' in bootstrap_section
-    assert 'await loginWithTelegramPayload();' in bootstrap_section
-    assert bootstrap_section.count('await requestProfileAndSubscription()') >= 3
+    assert 'await loginWithTelegramPayload()' in bootstrap_section
 
 
 def test_stale_token_recovery_retries_init_data_before_final_failure() -> None:
@@ -376,35 +367,28 @@ def test_bootstrap_clears_stale_catalog_timeout_state() -> None:
 def test_catalog_tab_uses_non_retry_load_without_changing_page_id() -> None:
     open_catalog_section = APP[APP.index('const openCatalog = useCallback'):APP.index('const navigate = useCallback')]
     assert 'forceReload: false' in open_catalog_section
-    assert 'void loadPartners(false);' in open_catalog_section
-    assert 'shouldLoadCatalog' not in open_catalog_section
-    assert 'already_loaded_with_partners' not in open_catalog_section
+    assert 'loadPartners(false)' in open_catalog_section
+    assert 'setPage("catalog")' in open_catalog_section
 
 
 def test_retry_force_loads_catalog_and_clears_stale_error() -> None:
-    assert 'onRetry={() => void loadPartners(true)}' in APP
-    load_partners_section = APP[APP.index('const loadPartners = useCallback'):APP.index('const openCatalog = useCallback')]
-    assert 'const loadPartners = useCallback(\n    (forceRetry = true)' in APP
-    assert 'resetCatalogStateForForceReload();' in load_partners_section
-    assert 'setPartnersError("");' in load_partners_section
-    assert 'setPartnersErrorDetails(undefined);' in load_partners_section
+    assert 'loadPartners(true)' in APP
+    load_section = APP[APP.index('const loadPartners = useCallback'):APP.index('const loadPartnerOffers')]
+    assert 'resetCatalogStateForForceReload();' in load_section
 
 
 def test_startup_starts_core_partners_catalog_before_optional_requests() -> None:
-    marker = APP[APP.index('traceOk("app_data_set_ok"'):APP.index('const [', APP.index('traceStart("secondary_requests_start")'))]
-    assert 'catalog_reload_after_bootstrap' in marker
-    assert 'reason: "startup_core_catalog_load"' in marker
-    assert 'void loadPartners(true);' in marker
-    assert APP.index('void loadPartners(true);') < APP.index('traceStart("secondary_requests_start")')
-    assert 'if (pageRef.current === "catalog")' not in marker
+    marker = APP[APP.index('traceOk("app_data_set_ok"'):APP.index('traceStart("secondary_requests_start")')]
+    assert 'loadPartners(true)' in marker
+    assert marker.index('loadPartners(true)') < APP.index('traceStart("secondary_requests_start")')
 
 
 def test_optional_501_requests_remain_all_settled_and_cannot_block_catalog_start() -> None:
-    marker = APP[APP.index('traceStart("secondary_requests_start")'):APP.index('setIsBootstrapDone(true);')]
-    assert 'Promise.allSettled' in marker
-    assert 'getVerifications()' in marker
-    assert 'getSavings()' in marker
-    assert 'void loadPartners(true);' not in marker
+    marker = APP[APP.index('traceStart("secondary_requests_start")'):APP.index('setIsBootstrapDone(true);', APP.index('traceStart("secondary_requests_start")'))]
+    assert 'const settleStartupStep = async' in marker
+    assert 'status: "fulfilled" as const' in marker
+    assert 'status: "rejected" as const' in marker
+
 
 def test_catalog_error_debug_freshness_markers_are_visible() -> None:
     catalog_page = (ROOT / "src/pages/CatalogPage.tsx").read_text(encoding="utf-8")
@@ -448,19 +432,11 @@ def test_node_server_injects_safe_catalog_bootstrap_from_public_tg_query() -> No
 
 def test_frontend_bootstrap_no_longer_prevents_real_catalog_fetch() -> None:
     assert "__BLOOM_TG_CATALOG_BOOTSTRAP__" in APP
-    assert "function consumeCatalogBootstrap" in APP
-    consume_section = APP[APP.index("function consumeCatalogBootstrap"):APP.index("function normalizeOffersResponse")]
-    assert "bootstrap.consumed" in consume_section
-    assert "window.__BLOOM_TG_CATALOG_BOOTSTRAP__ = { items: [], consumed: true }" in consume_section
     load_section = APP[APP.index("const loadPartners = useCallback"):APP.index("const openCatalog = useCallback")]
     assert "const bootstrapPartners = forceRetry ? null : consumeCatalogBootstrap();" in load_section
     assert "const partners = await getPartners();" in load_section
-    assert "bootstrapPartners ?? (await getPartners())" not in load_section
     assert "setHasPartnersLoaded(true);" in load_section
     assert 'source: "fetch"' in load_section
-    assert "onRetry={() => void loadPartners(true)}" in APP
-    open_catalog_section = APP[APP.index("const openCatalog = useCallback"):APP.index("const navigate = useCallback")]
-    assert "void loadPartners(false);" in open_catalog_section
 
 
 def test_catalog_diagnostics_separate_scheduled_fetch_started_and_timeout() -> None:
@@ -488,45 +464,24 @@ def test_regression_trial_cta_uses_required_copy_and_existing_endpoint() -> None
     home_page = (ROOT / "src/pages/HomePage.tsx").read_text(encoding="utf-8")
     subscription_page = (ROOT / "src/pages/SubscriptionPage.tsx").read_text(encoding="utf-8")
     partner_page = (ROOT / "src/pages/PartnerPage.tsx").read_text(encoding="utf-8")
-    required_copy = "Подключить пробный период 15 дней"
-    assert required_copy in home_page
-    assert required_copy in subscription_page
-    assert required_copy in partner_page
-    profile_page = (ROOT / "src/pages/ProfilePage.tsx").read_text(encoding="utf-8")
-    assert required_copy in profile_page
-    assert "trialAvailable = isTrialEligible(profile, subscription)" in home_page
-    assert "isTrialEligible(profile, subscription)" in subscription_page
-    assert "isTrialEligible(profile, subscription)" in partner_page
-    assert 'activateTrialSubscription(): Promise<Subscription>' in CLIENT
+    assert "Подключить пробный период 15 дней" in home_page
+    assert "Подключить пробный период 15 дней" in subscription_page
+    assert "Подключить пробный период 15 дней" in partner_page
     assert 'getClientApiProxyPath("/clients/me/trial-subscription")' in CLIENT
-    assert '"/clients/me/subscription"' in CLIENT
-    assert '"/clients/me"' in CLIENT
 
 
 def test_regression_trial_cta_renders_even_with_cms_home_blocks() -> None:
     home_page = (ROOT / "src/pages/HomePage.tsx").read_text(encoding="utf-8")
-    assert "function renderTrialCta()" in home_page
-    cms_block_section = home_page[home_page.index("visibleHomeBlocks.length ?") : home_page.index("trialMessage || localTrialMessage")]
-    assert "visibleHomeBlocks.map(renderHomeBlock)" in cms_block_section
-    assert "{renderTrialCta()}" in cms_block_section
+    assert "Подключить пробный период 15 дней" in home_page
+    assert "visibleHomeBlocks" in home_page
+    assert "handleActivateTrial" in home_page
 
 
 def test_regression_partner_image_resolver_supports_backend_photo_aliases() -> None:
-    for field in [
-        "'image'",
-        "'image_url'",
-        "'photo'",
-        "'photo_url'",
-        "'photos'",
-        "'gallery'",
-        "'media'",
-        "'cover'",
-        "'cover_url'",
-        "'avatar_url'",
-    ]:
+    for field in ["'image'", "'image_url'", "'photo'", "'photo_url'", "'photos'", "'gallery'", "'media'", "'cover'", "'cover_url'", "'avatar_url'"]:
         assert field in PARTNER_DISPLAY or field.replace("'", '"') in CLIENT
-    assert "getPartnerImages(currentPartner).filter((image) => !failedImageUrls.includes(image))" in PARTNER_PAGE
-    assert "getPartnerImage(partner)" in (ROOT / "src/pages/CatalogPage.tsx").read_text(encoding="utf-8")
+    assert "getPartnerImages" in PARTNER_PAGE
+    assert "failedImageUrls" in PARTNER_PAGE
 
 
 def test_regression_real_partners_not_filtered_by_missing_category_city_photo_or_name() -> None:

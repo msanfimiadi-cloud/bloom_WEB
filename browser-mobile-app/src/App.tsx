@@ -160,6 +160,7 @@ const TELEGRAM_IN_APP_BROWSER_HOST = "app.bloomclub.ru";
 const TELEGRAM_LOGIN_CODE_DRAFT_STORAGE_KEY = "bloom.telegramLoginCodeDraft";
 const VK_LOGIN_CODE_DRAFT_STORAGE_KEY = "bloom.vkLoginCodeDraft";
 const REFERRAL_CODE_DRAFT_STORAGE_KEY = "bloom.referralCodeDraft";
+const GUEST_MODE_STORAGE_KEY = "bloom.browserGuestMode";
 const TELEGRAM_BOT_LINK = import.meta.env.VITE_TELEGRAM_BOT_LINK || "";
 const VK_BOT_LINK = import.meta.env.VITE_VK_BOT_LINK || "";
 
@@ -208,6 +209,28 @@ function clearLoginCodeDrafts(): void {
   writeLoginCodeDraft(TELEGRAM_LOGIN_CODE_DRAFT_STORAGE_KEY, "");
   writeLoginCodeDraft(VK_LOGIN_CODE_DRAFT_STORAGE_KEY, "");
   writeLoginCodeDraft(REFERRAL_CODE_DRAFT_STORAGE_KEY, "");
+}
+
+function readBrowserGuestMode(): boolean {
+  try {
+    return getLoginDraftStorage()?.getItem(GUEST_MODE_STORAGE_KEY) === "1";
+  } catch {
+    return false;
+  }
+}
+
+function writeBrowserGuestMode(enabled: boolean): void {
+  try {
+    const storage = getLoginDraftStorage();
+    if (!storage) return;
+    if (enabled) {
+      storage.setItem(GUEST_MODE_STORAGE_KEY, "1");
+    } else {
+      storage.removeItem(GUEST_MODE_STORAGE_KEY);
+    }
+  } catch {
+    // Storage can be unavailable in private mode or restricted embedded browsers.
+  }
 }
 
 
@@ -812,6 +835,7 @@ export default function App() {
   const lastPageshowAtRef = useRef<string | null>(null);
   const lastBootstrapAbortReasonRef = useRef<string | null>(null);
   const [browserLoginRequired, setBrowserLoginRequired] = useState(false);
+  const [browserGuestMode, setBrowserGuestMode] = useState(() => readBrowserGuestMode());
   const [browserLoginExternalOpenRequired, setBrowserLoginExternalOpenRequired] = useState(false);
   const [isLoginCodeFormOpen, setIsLoginCodeFormOpen] = useState(false);
   const [telegramLoginCode, setTelegramLoginCode] = useState(() => readLoginCodeDraft(TELEGRAM_LOGIN_CODE_DRAFT_STORAGE_KEY));
@@ -1291,7 +1315,9 @@ export default function App() {
         setIsLoading(true);
         setError(null);
         manualLogoutInProgressRef.current = false;
-        setBrowserLoginRequired(false);
+        if (!browserGuestMode) {
+          setBrowserLoginRequired(false);
+        }
         setBrowserLoginExternalOpenRequired(false);
       }
 
@@ -1526,9 +1552,11 @@ export default function App() {
               if (!(await loginWithTelegramPayload())) {
                 setAuthRestoreStatus("unauthenticated");
                 setLastAuthDecisionReason("no_valid_token_no_telegram_payload_after_401");
-                pendingBrowserLoginRef.current = true;
-                setBrowserLoginRequired(true);
+                pendingBrowserLoginRef.current = !browserGuestMode;
+                setBrowserLoginRequired(!browserGuestMode);
                 setIsBootstrapDone(true);
+                setData(emptyData);
+                resetPartnerFlowState(getStartupPage() === "catalog" ? "catalog" : "home");
                 await loadPartners(true).catch(() => undefined);
                 traceStartupRecovery("loadAppData:exit", { reason, forceNew, sequenceId, returnValue: "unauthenticated_after_invalid_stored_token" });
                 return;
@@ -1546,9 +1574,11 @@ export default function App() {
             if (!(await loginWithTelegramPayload())) {
               setAuthRestoreStatus("unauthenticated");
               setLastAuthDecisionReason("no_token_no_telegram_payload_restore_complete");
-              pendingBrowserLoginRef.current = true;
-              setBrowserLoginRequired(true);
+              pendingBrowserLoginRef.current = !browserGuestMode;
+              setBrowserLoginRequired(!browserGuestMode);
               setIsBootstrapDone(true);
+              setData(emptyData);
+              resetPartnerFlowState(getStartupPage() === "catalog" ? "catalog" : "home");
               await loadPartners(true).catch(() => undefined);
               traceStartupRecovery("loadAppData:exit", { reason, forceNew, sequenceId, returnValue: "unauthenticated_no_token_or_payload" });
               return;
@@ -1822,7 +1852,7 @@ export default function App() {
       });
       return bootstrapPromise;
     },
-    [logBootstrapDeadlockDiagnostic, preservePendingBrowserLoginFlow, resetCatalogStateForForceReload, resetPartnerFlowState],
+    [browserGuestMode, logBootstrapDeadlockDiagnostic, preservePendingBrowserLoginFlow, resetCatalogStateForForceReload, resetPartnerFlowState],
   );
 
   useEffect(() => {
@@ -2648,6 +2678,8 @@ export default function App() {
       }
       manualLogoutInProgressRef.current = false;
       pendingBrowserLoginRef.current = false;
+      writeBrowserGuestMode(false);
+      setBrowserGuestMode(false);
       setBrowserLoginRequired(false);
       setIsLoginCodeFormOpen(false);
       setTelegramLoginCode("");
@@ -2807,8 +2839,8 @@ export default function App() {
             </>
           ) : (
             <>
-              <button className="button button--primary" type="button" onClick={() => { pendingBrowserLoginRef.current = true; setIsLoginCodeFormOpen(true); }}>Войти по коду</button>
-              <button className="button button--secondary" type="button" onClick={() => { pendingBrowserLoginRef.current = false; setBrowserLoginRequired(false); }}>Продолжить без регистрации</button>
+              <button className="button button--primary" type="button" onClick={() => { writeBrowserGuestMode(false); setBrowserGuestMode(false); pendingBrowserLoginRef.current = true; setIsLoginCodeFormOpen(true); }}>Войти по коду</button>
+              <button className="button button--secondary" type="button" onClick={() => { pendingBrowserLoginRef.current = false; writeBrowserGuestMode(true); setBrowserGuestMode(true); setBrowserLoginRequired(false); setAuthRestoreStatus("unauthenticated"); setLastAuthDecisionReason("guest_mode_selected"); setIsBootstrapDone(true); setIsLoading(false); resetPartnerFlowState("home"); loadPartners(true).catch(() => undefined); }}>Продолжить без регистрации</button>
             </>
           )}
         </div>
@@ -3040,7 +3072,7 @@ export default function App() {
             <div className="modal-card">
               <h2>Требуется регистрация</h2>
               <p>Чтобы воспользоваться возможностями Bloom Club, войдите по коду, который прислал Telegram или VK бот.</p>
-              <button className="button button--primary" type="button" onClick={() => { setGuestRestrictionMessage(false); setBrowserLoginRequired(true); setIsLoginCodeFormOpen(true); }}>Ввести код</button>
+              <button className="button button--primary" type="button" onClick={() => { setGuestRestrictionMessage(false); writeBrowserGuestMode(false); setBrowserGuestMode(false); setBrowserLoginRequired(true); setIsLoginCodeFormOpen(true); }}>Ввести код</button>
               <button className="button button--secondary" type="button" onClick={() => setGuestRestrictionMessage(false)}>Позже</button>
             </div>
           </div>
