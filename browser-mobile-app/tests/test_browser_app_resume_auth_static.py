@@ -20,10 +20,10 @@ def test_resume_lifecycle_events_do_not_clear_jwt() -> None:
 
 
 def test_app_startup_with_stored_jwt_loads_authenticated_app_before_login_code() -> None:
-    startup_section = APP[APP.index('const storedAuthToken = getStoredAuthToken();'):APP.index('traceMark("auth_finished"')]
+    startup_section = APP[APP.index('const storedAuthToken = authSnapshot.token;'):APP.index('traceMark("auth_finished"')]
     assert 'if (storedAuthToken && !forceNewIdentity)' in startup_section
     assert 'await requestProfileAndSubscription()' in startup_section
-    assert startup_section.index('await requestProfileAndSubscription()') < startup_section.index('setBrowserLoginRequired(true);')
+    assert startup_section.index('await requestProfileAndSubscription()') < startup_section.index('setBrowserLoginRequired(!browserGuestMode);')
 
 
 def test_missing_telegram_init_data_on_resume_does_not_clear_jwt() -> None:
@@ -58,7 +58,7 @@ def test_pageshow_interrupted_startup_resume_preserves_stored_token_auth() -> No
     assert 'detectInterruptedStartup()' in pageshow_section
     assert 'void loadAppData("resume", false);' in pageshow_section
     assert 'void loadAppData("resume", true);' not in pageshow_section
-    startup_section = APP[APP.index('const storedAuthToken = getStoredAuthToken();'):APP.index('traceMark("auth_finished"')]
+    startup_section = APP[APP.index('const storedAuthToken = authSnapshot.token;'):APP.index('traceMark("auth_finished"')]
     assert 'const forceNewIdentity = typeof options === "boolean" ? false : Boolean(options.forceNewIdentity);' in APP
     assert 'if (storedAuthToken && !forceNewIdentity)' in startup_section
     assert startup_section.index('if (storedAuthToken && !forceNewIdentity)') < startup_section.index('if (!(await loginWithTelegramPayload()))')
@@ -74,7 +74,7 @@ def test_force_refresh_with_stored_token_does_not_mark_unauthenticated() -> None
 
 
 def test_browser_pwa_without_telegram_payload_keeps_valid_stored_token_restoring_or_authenticated() -> None:
-    startup_section = APP[APP.index('const storedAuthToken = getStoredAuthToken();'):APP.index('traceMark("auth_finished"')]
+    startup_section = APP[APP.index('const storedAuthToken = authSnapshot.token;'):APP.index('traceMark("auth_finished"')]
     stored_token_branch = startup_section[startup_section.index('if (storedAuthToken && !forceNewIdentity)'):startup_section.index('} else {', startup_section.index('if (storedAuthToken && !forceNewIdentity)'))]
     assert 'await loginWithTelegramPayload()' not in stored_token_branch.split('} catch (caughtError)')[0]
     assert 'setAuthRestoreStatus("authenticated")' in APP
@@ -86,7 +86,7 @@ def test_unauthenticated_requires_no_stored_token_or_confirmed_auth_clear() -> N
     invalid_token_clear = APP.index('clearStoredAuthToken();')
     no_token_else = APP.index('} else {', APP.index('if (storedAuthToken && !forceNewIdentity)'))
     preserve_start = APP.index('const preservePendingBrowserLoginFlow = useCallback')
-    preserve_end = APP.index('const updateLoginCodeDraft')
+    preserve_end = APP.index('const updateTelegramLoginCodeDraft')
     for marker in [i for i in range(len(APP)) if APP.startswith('setAuthRestoreStatus("unauthenticated")', i)]:
         assert (preserve_start < marker < preserve_end) or marker > invalid_token_clear or marker > no_token_else
     assert 'authClearedReason: "auth_check_401_403"' in APP
@@ -164,7 +164,7 @@ def test_pending_browser_login_draft_resume_does_not_bootstrap_or_show_loader() 
     assert 'const hasPendingBrowserLoginDraft = useCallback' in APP
     assert 'const preservePendingBrowserLoginFlow = useCallback' in APP
 
-    preserve_section = APP[APP.index('const preservePendingBrowserLoginFlow = useCallback'):APP.index('const updateLoginCodeDraft')]
+    preserve_section = APP[APP.index('const preservePendingBrowserLoginFlow = useCallback'):APP.index('const updateTelegramLoginCodeDraft')]
     assert 'pendingBrowserLoginRef.current = true;' in preserve_section
     assert 'restoreLoginCodeDrafts();' in preserve_section
     assert 'setIsLoading(false);' in preserve_section

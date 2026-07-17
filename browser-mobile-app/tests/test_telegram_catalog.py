@@ -577,3 +577,17 @@ def test_admin_published_partner_reaches_public_api_with_media_without_manual_sy
         status, public_partners = call_app("/api/tg/partners")
         assert len(public_partners["items"]) == 1
         assert public_partners["items"][0]["title"] == "Тест2 updated"
+
+
+def test_sqlite_temp_database_can_be_removed_after_catalog_calls() -> None:
+    with tempfile.TemporaryDirectory() as temp_dir:
+        db_path = Path(temp_dir) / "telegram_app.db"
+        os.environ["TELEGRAM_APP_DATABASE_URL"] = f"sqlite:///{db_path}"
+        os.environ["TELEGRAM_ADMIN_API_TOKEN"] = ADMIN_TOKEN
+        init_db()
+        create_partner("Lock check")
+        status, payload = call_app("/api/tg/partners")
+        assert status.startswith("200")
+        assert payload["items"]
+        db_path.unlink()
+        assert not db_path.exists()

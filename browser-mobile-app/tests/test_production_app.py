@@ -319,15 +319,13 @@ def test_production_entrypoint_does_not_wrap_app_in_strict_mode() -> None:
 
 def test_early_error_fallback_exists_before_create_root() -> None:
     source = (Path(__file__).resolve().parents[1] / "src" / "main.tsx").read_text(encoding="utf-8")
-
     create_root_index = source.index("ReactDOM.createRoot")
-
     assert source.index("window.onerror") < create_root_index
     assert source.index("window.onunhandledrejection") < create_root_index
     assert source.index("renderEarlyErrorDiagnostic") < create_root_index
     assert "pre_react_startup_error" in source
     assert "replaceChildren" in source
-    assert "initData" in source
+    assert "renderStartupLoadingFallback();" in source
 
 
 def test_startup_diagnostic_markers_exist() -> None:

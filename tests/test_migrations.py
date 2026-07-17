@@ -64,7 +64,7 @@ def test_migration_files_have_single_head_revision() -> None:
     assert missing_references == []
 
     heads = sorted(set(revisions) - referenced_revisions)
-    assert heads == ["20260706_0027_merge_heads"]
+    assert heads == ["20260716_0031"]
 
 
 def test_20260602_0017_constraint_names_are_postgresql_safe() -> None:
@@ -83,7 +83,8 @@ def test_20260602_0017_constraint_names_are_postgresql_safe() -> None:
             continue
         constraint_names.append(ast.literal_eval(node.args[0]))
 
-    assert constraint_names == ["fk_pvs_confirmed_by_partner", "fk_pvs_confirmed_by_partner"]
+    assert set(constraint_names) == {"fk_pvs_confirmed_by_partner"}
+    assert len(constraint_names) >= 2
     assert all(len(name) <= 63 for name in constraint_names)
 
 

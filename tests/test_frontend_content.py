@@ -668,8 +668,8 @@ def test_frontend_contains_human_readable_admin_labels() -> None:
         "Название партнёра",
         "Ссылка на соцсеть / сайт",
         "Название предложения",
-        "Базовая цена",
-        "Скидка, %",
+        "Обычная цена",
+        "Цена участницы",
         "Целевая ссылка",
         "Подтверждено",
         "Email",
@@ -1023,7 +1023,7 @@ def test_frontend_contains_admin_offer_edit_ui() -> None:
         "PATCH",
         "Название",
         "Описание",
-        "Скидка / выгода",
+        "Краткая выгода",
         "Условия",
         "Активно",
         "Отмена",
@@ -1189,7 +1189,7 @@ def test_partner_cabinet_uses_human_readable_copy_statuses_and_empty_states() ->
         "Краткая выгода",
         "Описание",
         "Условия",
-        "Базовая цена",
+        "Обычная цена",
         "Код ссылки",
         "Целевая ссылка",
         "Подтвердить привилегию",
@@ -1570,8 +1570,8 @@ def test_frontend_contains_offer_marketplace_cards() -> None:
         "Preview для клиента",
         "Добавьте первое предложение",
         "URL изображения",
-        "Базовая цена",
-        "Скидка, %",
+        "Обычная цена",
+        "Цена участницы",
         "Получить привилегию",
         "Карточка привилегии партнёра",
         "Фото услуги",
@@ -2423,8 +2423,8 @@ def test_offer_pricing_helpers_and_copy_present() -> None:
         'const getOfferPricingView = (offer = {}) =>',
         'const renderOfferPricingBlock = (offer, options = {}) =>',
         'Обычная цена',
-        'Для участниц клуба',
-        'Выгода',
+        'Цена участницы',
+        'Экономия',
         'renderOfferPricingBlock(offer)',
         'offer_id',
         'saving_amount',
@@ -2495,7 +2495,7 @@ def test_admin_partner_save_updates_table_from_patch_response_then_uncached_refe
     assert "adminState.partners = adminState.partners.map" in submit_edit_body
     assert "? updatedPartner : partner" in submit_edit_body
     assert "await loadPartners();" in submit_edit_body
-    assert "cache: options.cache || 'no-store'" in source
+    assert "cache: fetchOptions.cache || 'no-store'" in source
 
 
 def test_admin_partner_reopening_drawer_uses_updated_partner_category_ids() -> None:

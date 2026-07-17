@@ -35,12 +35,11 @@ def test_repeated_prepare_telegram_viewport_cleans_previous_listeners_first() ->
 
 
 def test_fallback_removed_after_successful_mount_and_cannot_cover_ready_app() -> None:
-    assert 'entryFallback?.remove();' in MAIN
-    assert 'htmlFallback?.remove();' in MAIN
-    assert 'window.__BLOOM_ENTRY_FALLBACK_OVERLAY_REMOVED__ = true;' in MAIN
-    mount_index = APP.index('lifecycleTrace("app_mount"')
-    remove_index = APP.index('removeEntryFallbackOverlay();')
-    assert mount_index < remove_index
+    assert 'export function removeEntryFallbackOverlay()' in MAIN
+    assert 'fadeAndRemove(entryFallback);' in MAIN
+    assert 'fadeAndRemove(htmlFallback);' in MAIN
+    assert 'removeEntryFallbackOverlay();' in APP
+    assert APP.index('lifecycleTrace("app_mount"') < APP.index('removeEntryFallbackOverlay();')
 
 
 def test_startup_errors_are_visible_without_backend_endpoint() -> None:

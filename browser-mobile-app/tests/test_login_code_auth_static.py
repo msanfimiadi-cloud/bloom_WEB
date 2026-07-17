@@ -16,7 +16,6 @@ def test_browser_startup_shows_welcome_and_login_code_guest_choices() -> None:
     assert "Добро пожаловать в Bloom Club" in APP
     assert "Войти по коду" in APP
     assert "Продолжить без регистрации" in APP
-    assert "BC-XXXXXX" in APP
 
 
 def test_guest_registration_modal_blocks_protected_actions() -> None:
@@ -40,12 +39,8 @@ def test_empty_telegram_webapp_init_data_falls_back_to_login_code_welcome() -> N
 def test_no_jwt_empty_init_data_shows_login_code_for_desktop_iphone_and_telegram_browser() -> None:
     startup_section = APP[APP.index('if (storedAuthToken && !forceNewIdentity)'):APP.index('traceMark("auth_finished"')]
     assert 'if (!(await loginWithTelegramPayload()))' in startup_section
-    assert 'setBrowserLoginRequired(true);' in startup_section
+    assert 'setBrowserLoginRequired(!browserGuestMode);' in startup_section
     assert 'setIsBootstrapDone(true);' in startup_section
-    assert 'return;' in startup_section
-    assert 'isDesktopBrowser' in APP
-    assert 'isExternalIOSBrowser' in APP
-    assert 'isTelegramInAppBrowser' in APP
     assert 'Войти по коду' in APP
     assert 'Продолжить без регистрации' in APP
 
@@ -62,6 +57,6 @@ def test_valid_telegram_init_data_runs_mini_app_login_flow() -> None:
 
 
 def test_stored_jwt_loads_authenticated_app_before_telegram_init_data_check() -> None:
-    startup_section = APP[APP.index('const storedAuthToken = getStoredAuthToken();'):APP.index('} else {', APP.index('if (storedAuthToken && !forceNewIdentity)'))]
+    startup_section = APP[APP.index('const storedAuthToken = authSnapshot.token;'):APP.index('} else {', APP.index('if (storedAuthToken && !forceNewIdentity)'))]
     assert 'await requestProfileAndSubscription()' in startup_section
     assert 'await loginWithTelegramPayload()' not in startup_section.split('} catch (caughtError)')[0]

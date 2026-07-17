@@ -72,3 +72,14 @@ See `docs/production-stability.md` for outage diagnostics, systemd checks, nginx
 ## 8. Legacy WEB content admin read-only rollout
 
 Before setting `WEB_ADMIN_LEGACY_CONTENT_WRITE_ENABLED=false` on staging or production, follow `docs/legacy-content-admin-readonly.md`. The short version is: verify `/api/content/health`, confirm `/api/v1/admin/me` returns `legacy_content_write_enabled=false`, confirm a legacy WEB content write returns `403`, and confirm `/api/content/admin/cities` returns `200` with `TELEGRAM_ADMIN_API_TOKEN`, `401` without a token, and `403` with a wrong token.
+
+### Browser Mobile App Playwright smoke scenarios
+
+Run these scenarios in CI/staging with Playwright (for example through `npx playwright` in an environment that allows npm registry access and has browser binaries):
+
+- guest login from the welcome screen and no welcome-loop after rerender/reload;
+- public catalog search/filtering and opening a partner card with offers;
+- protected action as guest opens the login form without losing the current screen;
+- legal docs links under `/docs/*` return DOCX, not SPA HTML;
+- versioned SPA paths such as `/app-v<release>` render the app while `/api/*` remains JSON;
+- collect console errors and failed network responses for `bloomclub.ru`, `app.bloomclub.ru`, and `tg.bloomclub.ru`.

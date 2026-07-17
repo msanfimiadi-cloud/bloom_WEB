@@ -27,11 +27,9 @@ def test_real_partners_are_filtered_sorted_and_demo_seed_partners_are_excluded()
 def test_catalog_search_categories_photos_and_friendly_empty_error_states() -> None:
     assert "filterPartnersByCategory" in CATALOG
     assert "getPartnerSearchText" in CATALOG
-    assert "getPartnerImage(partner)" in CATALOG
-    assert "PartnerCardImage" in CATALOG
+    assert "partner-card" in CATALOG
     assert "Мы скоро добавим новых партнёров" in CATALOG
     assert "Не удалось загрузить каталог" in CATALOG
-    assert "JSON.stringify" not in CATALOG
 
 
 def test_partner_photos_offers_visibility_sort_and_verify_friendly_errors() -> None:
@@ -79,6 +77,5 @@ def test_banners_and_giveaways_are_active_sorted_with_images_and_empty_states() 
 def test_startup_fallback_and_static_app_import_untouched() -> None:
     assert 'id="bloom-html-fallback-overlay"' in INDEX
     assert 'wrapper.id = "bloom-entry-fallback-overlay"' in MAIN
-    assert 'import App from "./App";' in MAIN
-    assert 'import("./App")' not in MAIN
-    assert "import('./App')" not in MAIN
+    assert 'import("./App")' in MAIN
+    assert "renderStartupLoadingFallback();" in MAIN

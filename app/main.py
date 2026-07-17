@@ -49,7 +49,7 @@ app.add_middleware(
     allow_origins=settings.backend_cors_origins_list,
     allow_origin_regex=r"https://([a-z0-9-]+\.)*(vk\.ru|vk\.com|bloomclub\.ru)$",
     allow_credentials=True,
-    allow_methods=["GET", "POST", "PATCH", "DELETE", "OPTIONS"],
+    allow_methods=["GET", "POST", "PUT", "PATCH", "DELETE", "OPTIONS"],
     allow_headers=["Authorization", "Content-Type", "Accept", "X-Request-ID"],
 )
 

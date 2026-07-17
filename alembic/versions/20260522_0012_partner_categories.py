@@ -32,7 +32,7 @@ def upgrade() -> None:
             SELECT p.id, c.id
             FROM partners p
             JOIN categories c ON c.slug = p.category_slug
-            WHERE p.category_slug IS NOT NULL AND btrim(p.category_slug) <> ''
+            WHERE p.category_slug IS NOT NULL AND trim(p.category_slug) <> ''
             ON CONFLICT (partner_id, category_id) DO NOTHING
             """
         )

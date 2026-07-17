@@ -18,29 +18,46 @@ depends_on = None
 
 
 def upgrade() -> None:
-    op.add_column("privilege_verification_sessions", sa.Column("confirmed_by_partner_id", sa.Integer(), nullable=True))
+    bind = op.get_bind()
+    if bind.dialect.name == "sqlite":
+        with op.batch_alter_table("privilege_verification_sessions") as batch_op:
+            batch_op.add_column(sa.Column("confirmed_by_partner_id", sa.Integer(), nullable=True))
+            batch_op.create_foreign_key(
+                "fk_pvs_confirmed_by_partner",
+                "partners",
+                ["confirmed_by_partner_id"],
+                ["id"],
+            )
+    else:
+        op.add_column("privilege_verification_sessions", sa.Column("confirmed_by_partner_id", sa.Integer(), nullable=True))
+        op.create_foreign_key(
+            "fk_pvs_confirmed_by_partner",
+            "privilege_verification_sessions",
+            "partners",
+            ["confirmed_by_partner_id"],
+            ["id"],
+        )
     op.create_index(
         "ix_privilege_verification_sessions_confirmed_by_partner_id",
         "privilege_verification_sessions",
         ["confirmed_by_partner_id"],
     )
-    op.create_foreign_key(
-        "fk_pvs_confirmed_by_partner",
-        "privilege_verification_sessions",
-        "partners",
-        ["confirmed_by_partner_id"],
-        ["id"],
-    )
 
 
 def downgrade() -> None:
-    op.drop_constraint(
-        "fk_pvs_confirmed_by_partner",
-        "privilege_verification_sessions",
-        type_="foreignkey",
-    )
     op.drop_index(
         "ix_privilege_verification_sessions_confirmed_by_partner_id",
         table_name="privilege_verification_sessions",
     )
-    op.drop_column("privilege_verification_sessions", "confirmed_by_partner_id")
+    bind = op.get_bind()
+    if bind.dialect.name == "sqlite":
+        with op.batch_alter_table("privilege_verification_sessions") as batch_op:
+            batch_op.drop_constraint("fk_pvs_confirmed_by_partner", type_="foreignkey")
+            batch_op.drop_column("confirmed_by_partner_id")
+    else:
+        op.drop_constraint(
+            "fk_pvs_confirmed_by_partner",
+            "privilege_verification_sessions",
+            type_="foreignkey",
+        )
+        op.drop_column("privilege_verification_sessions", "confirmed_by_partner_id")

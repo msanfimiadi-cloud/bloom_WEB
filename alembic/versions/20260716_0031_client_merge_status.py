@@ -16,18 +16,34 @@ depends_on = None
 
 
 def upgrade() -> None:
-    op.add_column("client_profiles", sa.Column("status", sa.String(length=32), server_default="active", nullable=False))
-    op.add_column("client_profiles", sa.Column("merged_into_client_id", sa.Integer(), nullable=True))
-    op.add_column("client_profiles", sa.Column("merged_at", sa.DateTime(timezone=True), nullable=True))
+    bind = op.get_bind()
+    if bind.dialect.name == "sqlite":
+        with op.batch_alter_table("client_profiles") as batch_op:
+            batch_op.add_column(sa.Column("status", sa.String(length=32), server_default="active", nullable=False))
+            batch_op.add_column(sa.Column("merged_into_client_id", sa.Integer(), nullable=True))
+            batch_op.add_column(sa.Column("merged_at", sa.DateTime(timezone=True), nullable=True))
+            batch_op.create_foreign_key("fk_client_profiles_merged_into_client_id", "client_profiles", ["merged_into_client_id"], ["id"])
+    else:
+        op.add_column("client_profiles", sa.Column("status", sa.String(length=32), server_default="active", nullable=False))
+        op.add_column("client_profiles", sa.Column("merged_into_client_id", sa.Integer(), nullable=True))
+        op.add_column("client_profiles", sa.Column("merged_at", sa.DateTime(timezone=True), nullable=True))
+        op.create_foreign_key("fk_client_profiles_merged_into_client_id", "client_profiles", "client_profiles", ["merged_into_client_id"], ["id"])
     op.create_index(op.f("ix_client_profiles_status"), "client_profiles", ["status"], unique=False)
     op.create_index(op.f("ix_client_profiles_merged_into_client_id"), "client_profiles", ["merged_into_client_id"], unique=False)
-    op.create_foreign_key("fk_client_profiles_merged_into_client_id", "client_profiles", "client_profiles", ["merged_into_client_id"], ["id"])
 
 
 def downgrade() -> None:
-    op.drop_constraint("fk_client_profiles_merged_into_client_id", "client_profiles", type_="foreignkey")
     op.drop_index(op.f("ix_client_profiles_merged_into_client_id"), table_name="client_profiles")
     op.drop_index(op.f("ix_client_profiles_status"), table_name="client_profiles")
-    op.drop_column("client_profiles", "merged_at")
-    op.drop_column("client_profiles", "merged_into_client_id")
-    op.drop_column("client_profiles", "status")
+    bind = op.get_bind()
+    if bind.dialect.name == "sqlite":
+        with op.batch_alter_table("client_profiles") as batch_op:
+            batch_op.drop_constraint("fk_client_profiles_merged_into_client_id", type_="foreignkey")
+            batch_op.drop_column("merged_at")
+            batch_op.drop_column("merged_into_client_id")
+            batch_op.drop_column("status")
+    else:
+        op.drop_constraint("fk_client_profiles_merged_into_client_id", "client_profiles", type_="foreignkey")
+        op.drop_column("client_profiles", "merged_at")
+        op.drop_column("client_profiles", "merged_into_client_id")
+        op.drop_column("client_profiles", "status")
