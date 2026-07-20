@@ -968,6 +968,10 @@ h2 {
   backdrop-filter: blur(10px) saturate(1.05);
 }
 
+.business-info {
+  grid-template-columns: 1fr;
+}
+
 .subscription-offer__content > p:not(.section-kicker),
 .business-info > div > p:not(.section-kicker) {
   max-width: 68ch;
@@ -1045,36 +1049,6 @@ h2 {
   flex-wrap: wrap;
   gap: 10px 18px;
   margin-top: 18px;
-}
-
-.business-info__details {
-  display: grid;
-  gap: 12px;
-  margin: 0;
-  padding: 22px;
-  border: 1px solid var(--color-border);
-  border-radius: 22px;
-  background: rgba(255, 255, 255, 0.72);
-}
-
-.business-info__details div {
-  display: grid;
-  gap: 3px;
-}
-
-.business-info__details dt {
-  color: var(--color-muted);
-  font-size: 0.78rem;
-  font-weight: 800;
-  letter-spacing: 0.08em;
-  text-transform: uppercase;
-}
-
-.business-info__details dd {
-  margin: 0;
-  color: var(--color-text);
-  font-weight: 650;
-  line-height: 1.45;
 }
 
 .how-it-works-card {

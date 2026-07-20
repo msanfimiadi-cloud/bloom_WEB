@@ -47,6 +47,10 @@ def test_public_landing_discloses_operator_and_support_contacts() -> None:
     ):
         assert marker in source
 
+    assert "Поддержка и контакты" in source
+    assert 'class="business-info__details"' not in source
+    assert "Юридический адрес" not in source
+
 
 def test_legal_pages_are_readable_html_with_cross_links() -> None:
     for page_name, path in LEGAL_PAGES.items():
