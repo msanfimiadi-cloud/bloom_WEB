@@ -8,6 +8,7 @@ const dist = join(root, 'dist');
 
 const rewriteHtmlForDist = (html) => html
   .replace(/href=["']\/src\/styles\.css["']/g, 'href="/assets/styles.css"')
+  .replace(/href=["']\/src\/landing-editorial\.css["']/g, 'href="/assets/landing-editorial.css"')
   .replace(/src=["']\/src\/main\.js["']/g, 'src="/assets/main.js"');
 
 await rm(dist, { recursive: true, force: true });
@@ -22,13 +23,14 @@ await cp(join(root, 'public'), dist, { recursive: true });
 await rm(join(dist, 'docs'), { recursive: true, force: true });
 await cp(join(root, 'src', 'main.js'), join(dist, 'assets', 'main.js'));
 await cp(join(root, 'src', 'styles.css'), join(dist, 'assets', 'styles.css'));
+await cp(join(root, 'src', 'landing-editorial.css'), join(dist, 'assets', 'landing-editorial.css'));
 
 const indexHtml = await readFile(join(root, 'index.html'), 'utf-8');
 await writeFile(join(dist, 'index.html'), rewriteHtmlForDist(indexHtml));
 await writeFile(join(dist, 'build-info.json'), JSON.stringify({ builtAt: new Date().toISOString() }, null, 2));
 
 const distIndex = await readFile(join(dist, 'index.html'), 'utf-8');
-if (distIndex.includes('/src/main.js') || distIndex.includes('/src/styles.css')) {
+if (distIndex.includes('/src/main.js') || distIndex.includes('/src/styles.css') || distIndex.includes('/src/landing-editorial.css')) {
   throw new Error('Build verification failed: dist/index.html still contains /src references');
 }
 
