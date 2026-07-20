@@ -27,14 +27,24 @@ const categories = categoryDirections.map((category) => category.title);
 
 const landingMenuLinks = [
   { href: '#landing-about', label: 'О клубе' },
-  { href: '#landing-benefits', label: 'Привилегии' },
+  { href: '#landing-how', label: 'Как это работает' },
   { href: '#landing-partners', label: 'Партнёры' },
-  { href: '#landing-directions', label: 'Направления' },
   { href: '#landing-subscription', label: 'Подписка' },
-  { href: 'https://app.bloomclub.ru/', label: 'Стать участницей' },
-  { href: '#landing-cities', label: 'Города' },
   { href: '#landing-contacts', label: 'Контакты' },
 ];
+
+const editorialFeaturedCategories = [
+  { slug: 'krasota', title: 'Красота', text: 'Салоны и уход', image: '/assets/editorial/category-beauty.webp' },
+  { slug: 'manikyur-pedikyur', title: 'Маникюр', text: 'Студии и мастера', image: '/assets/editorial/category-manicure.webp' },
+  { slug: 'massazh-spa', title: 'Массаж & SPA', text: 'Отдых и восстановление', image: '/assets/editorial/category-spa.webp' },
+  { slug: 'fitnes-yoga', title: 'Фитнес & йога', text: 'Движение и баланс', image: '/assets/editorial/category-yoga.webp' },
+  { slug: 'kafe-restorany', title: 'Кафе', text: 'Встречи и впечатления', image: '/assets/editorial/category-cafe.webp' },
+  { slug: 'cvety-podarki', title: 'Цветы & подарки', text: 'Особенные поводы', image: '/assets/editorial/category-flowers.webp' },
+];
+
+// The previous sakura wallpaper and animated petals are deliberately preserved.
+// Switch this flag to true to restore the former public landing treatment.
+const publicLandingLegacyEffectsEnabled = false;
 
 const landingStatsFallback = {
   members_count: 125,
@@ -150,6 +160,13 @@ const sakuraCenterPetalMarkup = Array.from({ length: 20 }, (_, index) => (
 
 const sakuraPetalMarkup = `${sakuraEdgePetalMarkup}${sakuraCenterPetalMarkup}`;
 
+const renderLegacyPublicLandingEffects = () => (publicLandingLegacyEffectsEnabled ? `
+  <div class="sakura-layer sakura-layer--landing" aria-hidden="true">
+    <div class="sakura-landing-backdrop"></div>
+    ${sakuraPetalMarkup}
+  </div>
+` : '');
+
 const cabinetPetalMarkup = Array.from({ length: 18 }, (_, index) => {
   const depthClass = index % 3 === 0 ? 'cabinet-petal--near' : 'cabinet-petal--far';
 
@@ -203,6 +220,7 @@ const applyClientLoginPrefill = () => {
 const renderPasswordSetupApp = () => {
   const { login } = getPasswordSetupParams();
   document.body.classList.remove('is-dashboard');
+  document.body.classList.remove('is-editorial-landing');
   root.innerHTML = `
     <div class="sakura-layer" aria-hidden="true">
       ${sakuraPetalMarkup}
@@ -282,246 +300,157 @@ const loadLandingStats = async () => {
 const renderPublicApp = () => {
   const landingStats = getLandingStats();
   document.body.classList.remove('is-dashboard');
+  document.body.classList.add('is-editorial-landing');
   root.innerHTML = `
-  <div class="sakura-layer sakura-layer--landing" aria-hidden="true">
-    <div class="sakura-landing-backdrop"></div>
-    ${sakuraPetalMarkup}
-  </div>
-  <main class="app-shell">
-    <header class="hero" id="landing-about" aria-labelledby="hero-title">
-      <nav class="topbar" aria-label="Основная навигация">
-        <div class="brand" aria-label="Женский клуб">
-          <span class="brand-mark" aria-hidden="true">
-            <img class="brand-mark__image" src="${clubAvatarSrc}" alt="" loading="lazy" onerror="this.hidden=true;this.nextElementSibling.hidden=false;" />
-            <span class="brand-mark__fallback" hidden>ЖК</span>
-          </span>
-          <span>
-            <span class="brand-name">Женский клуб</span>
-            <span class="brand-caption">Федеральный клуб привилегий для девушек</span>
-          </span>
-        </div>
-        <div class="topbar-actions" aria-label="Разделы лендинга">
-          <div class="landing-menu">
-            <button class="landing-menu-toggle" type="button" data-landing-menu-toggle aria-expanded="false" aria-controls="landing-menu-panel">Меню</button>
+  ${renderLegacyPublicLandingEffects()}
+  <main class="editorial-landing">
+    <header class="editorial-header" id="landing-about">
+      <a class="editorial-brand" href="#landing-about" aria-label="Bloom Club — на главную">
+        <span class="editorial-brand__name">Bloom Club</span>
+        <span class="editorial-brand__caption">Клуб привилегий для девушек</span>
+      </a>
+      <nav class="editorial-nav" aria-label="Основная навигация">
+        ${landingMenuLinks.map((link) => `<a href="${link.href}" data-landing-menu-link>${link.label}</a>`).join('')}
+      </nav>
+      <div class="editorial-header__actions">
+        <a class="editorial-login-link" href="#login">Войти</a>
+        <a class="editorial-button editorial-button--small" href="https://app.bloomclub.ru/">Стать участницей</a>
+        <div class="landing-menu editorial-mobile-menu">
+          <button class="landing-menu-toggle" type="button" data-landing-menu-toggle aria-expanded="false" aria-controls="landing-menu-panel">Меню</button>
           <div class="landing-menu-panel" id="landing-menu-panel" data-landing-menu-panel hidden>
             ${landingMenuLinks.map((link) => `<a href="${link.href}" data-landing-menu-link>${link.label}</a>`).join('')}
-          </div>
-          </div>
-          <a href="#login">Вход</a>
-        </div>
-      </nav>
-
-      <div class="hero-grid">
-        <section class="hero-copy">
-          <p class="eyebrow">Premium beauty / lifestyle</p>
-          <p class="pill">для себя</p>
-          <h1 id="hero-title">Женский клуб привилегий</h1>
-          <p class="subtitle">Красота, забота и вдохновение</p>
-          <p class="hero-description">
-            Скидки, подарки и специальные предложения у партнёров клуба.
-          </p>
-          <div class="hero-actions">
-            <a class="primary-button" href="https://app.bloomclub.ru/">Стать участницей</a>
-            <a class="secondary-button" href="#landing-partners">Смотреть привилегии</a>
-          </div>
-          <div class="hero-proof-grid" aria-label="Показатели клуба">
-            <article class="hero-proof-card"><strong>${escapeHtml(landingStats.members_count)}</strong><span>девушек внутри</span></article>
-            <article class="hero-proof-card"><strong>${escapeHtml(landingStats.partners_count)}</strong><span>партнёров</span></article>
-            <article class="hero-proof-card"><strong>${escapeHtml(formatMoneyLabel(Number(landingStats.savings_total)))}</strong><span>экономии</span></article>
-            <article class="hero-proof-card"><strong title="${escapeHtml(landingStats.giveaway_current)}" aria-label="${escapeHtml(landingStats.giveaway_current)}">${escapeHtml(landingStats.giveaway_current)}</strong><span>розыгрыш месяца</span></article>
-          </div>
-          <div class="hero-lifestyle-chips" aria-label="Первые партнёры клуба">
-            <span class="hero-lifestyle-chip">первые партнёры клуба</span>
-            <span class="hero-lifestyle-chip">beauty</span>
-            <span class="hero-lifestyle-chip">spa</span>
-            <span class="hero-lifestyle-chip">café</span>
-            <span class="hero-lifestyle-chip">fitness</span>
-          </div>
-        </section>
-
-        <div class="hero-card">
-          <span class="pill">для участниц</span>
-          <h2>Внутри клуба</h2>
-          <p>Розыгрыши, подарки, закрытые предложения и бонусы от партнёров.</p>
-          <ul class="hero-card-list">
-            <li>🎁 розыгрыш месяца</li>
-            <li>🌸 beauty-партнёры</li>
-            <li>💌 закрытые предложения</li>
-          </ul>
-          <div class="hero-draw-highlight" aria-label="${escapeHtml(`${landingStats.giveaway_title}: ${landingStats.giveaway_current}, ${landingStats.giveaway_subtitle}`)}">
-            <p class="hero-draw-highlight__title">${escapeHtml(landingStats.giveaway_title)}</p>
-            <p class="hero-draw-highlight__name">${escapeHtml(landingStats.giveaway_current)}</p>
-            <p class="hero-draw-highlight__meta">${escapeHtml(landingStats.giveaway_subtitle)}</p>
+            <a href="#login" data-landing-menu-link>Войти</a>
           </div>
         </div>
       </div>
     </header>
 
-    <section class="feature-grid" id="landing-benefits" aria-label="Возможности клуба">
-      ${featureCards
-        .map(
-          (card) => `
-            <article class="feature-card feature-card--${escapeHtml(card.title.toLowerCase().replace(/[^a-zа-я0-9]+/gi, '-').replace(/^-+|-+$/g, ''))}">
-              <span aria-hidden="true"></span>
-              <h2>${card.title}</h2>
-              <p>${card.text}</p>
-            </article>
-          `,
-        )
-        .join('')}
-    </section>
-
-    <section class="how-it-works" aria-labelledby="landing-how-title">
-      <article class="how-it-works-card">
-        <p class="section-kicker">Как это работает</p>
-        <h2 id="landing-how-title">Три шага к привилегиям</h2>
-        <ol class="how-it-works-steps">
-          <li><span>1</span>Выберите город</li>
-          <li><span>2</span>Вступите в клуб</li>
-          <li><span>3</span>Получайте привилегии у партнёров</li>
-        </ol>
-      </article>
-    </section>
-
-    <section class="subscription-offer" id="landing-subscription" aria-labelledby="subscription-offer-title">
-      <div class="subscription-offer__content">
-        <p class="section-kicker">Подписка Bloom Club</p>
-        <h2 id="subscription-offer-title">349 ₽ на 30 дней</h2>
-        <p>Доступ к клубным привилегиям, предложениям партнёров и розыгрышам во всех доступных городах.</p>
-        <ul class="subscription-offer__terms">
-          <li>Пробный период — 15 дней, если он доступен для аккаунта</li>
-          <li>Доступ активируется после подтверждения оплаты</li>
-          <li>Автоматического продления и повторных списаний нет</li>
-          <li>Продление выполняется пользователем вручную</li>
-        </ul>
+    <section class="editorial-hero" aria-labelledby="hero-title">
+      <div class="editorial-hero__copy">
+        <p class="editorial-kicker">Твой мир привилегий</p>
+        <h1 id="hero-title">Выгодные<br><em>привилегии</em></h1>
+        <p class="editorial-hero__lead">Красота, забота, отдых и вдохновение — специальные предложения у лучших партнёров города.</p>
+        <div class="editorial-hero__actions">
+          <a class="editorial-button" href="https://app.bloomclub.ru/">Стать участницей <span aria-hidden="true">→</span></a>
+          <a class="editorial-text-link" href="#landing-partners">Смотреть партнёров</a>
+        </div>
+        <dl class="editorial-stats hero-proof-grid" aria-label="Показатели клуба">
+          <div><dt>${escapeHtml(landingStats.members_count)}+</dt><dd>участниц</dd></div>
+          <div><dt>${escapeHtml(landingStats.partners_count)}+</dt><dd>партнёров</dd></div>
+          <div><dt>${escapeHtml(formatMoneyLabel(Number(landingStats.savings_total)))}</dt><dd>общая экономия</dd></div>
+        </dl>
       </div>
-      <div class="subscription-offer__action">
-        <strong>349 ₽</strong>
-        <span>за 30 дней доступа</span>
-        <a class="primary-button" href="https://app.bloomclub.ru/">Открыть приложение</a>
-        <a class="subscription-offer__bot-link" href="https://t.me/app_bloom_club_bot" target="_blank" rel="noopener noreferrer">Получить код через Telegram-бота</a>
-        <a class="subscription-offer__legal-link" href="/offer/">Условия оплаты и возврата</a>
+      <div class="editorial-hero__visual">
+        <img src="/assets/editorial/hero-blossoms.webp" alt="Цветущая ветка в мягком весеннем свете" fetchpriority="high" />
+        <article class="editorial-testimonial">
+          <img src="/assets/editorial/member-anna.webp" alt="Анна, участница Bloom Club" />
+          <div>
+            <p>«Открыла для себя любимые места и уже сэкономила больше стоимости подписки»</p>
+            <span>Анна · участница клуба</span>
+          </div>
+        </article>
       </div>
     </section>
 
-    <section class="content-grid" id="landing-partners">
-      <section class="panel city-panel" id="landing-cities" aria-labelledby="city-selector-title">
-        <p class="section-kicker">География клуба</p>
-        <h2 id="city-selector-title">Выберите город</h2>
-        <p>Выберите город и откройте доступ к предложениям рядом.</p>
-        <div class="city-select-card">
-          <div class="city-select-shell">
-            <span class="city-select-label" id="city-select-label">Город для каталога партнёров</span>
-            <div class="city-choice-grid" role="radiogroup" aria-labelledby="city-select-label">
-              ${cities
-                .map(
-                  (city, index) => {
-                    const cityMeta = city === 'Новосибирск'
-                      ? `${escapeHtml(landingStats.partners_count)} партнёров · первые участницы внутри`
-                      : 'скоро открытие · набор партнёров';
-                    return `
-                    <button
-                      class="city-choice${index === 0 ? ' is-active' : ''}"
-                      type="button"
-                      role="radio"
-                      aria-checked="${index === 0 ? 'true' : 'false'}"
-                      data-city-choice
-                    >
-                      <span class="city-choice-title">${city}</span>
-                      <span class="city-choice-meta">${cityMeta}</span>
-                    </button>
-                  `;
-                  },
-                )
-                .join('')}
-            </div>
-          </div>
-          <p class="city-select-note">Чем больше мы растём, тем больше городов подключаем. Скоро появятся новые города.</p>
-        </div>
-      </section>
-
-      <section class="panel" aria-labelledby="login-title" id="login">
-        <span class="landing-anchor" id="landing-join" aria-hidden="true"></span>
-        <p class="section-kicker">Личный доступ</p>
-        <h2 id="login-title">Вход в кабинет клуба</h2>
-        <div class="login-quick-access" aria-label="Быстрый вход" data-login-quick-card>
-          <p class="login-quick-access__title">Уже есть доступ?</p>
-          <p class="login-quick-access__text">Войдите в кабинет участницы, партнёра или администратора.</p>
-          <div class="login-quick-access__actions">
-            <button class="login-quick-access__button" type="button" data-login-expand-mode="client">Войти</button>
-            <button class="login-quick-access__button" type="button" data-login-expand-mode="partner">Я партнёр</button>
-          </div>
-        </div>
-        <div class="login-details" data-login-details hidden>
-        <div class="login-mode-switch" role="tablist" aria-label="Тип входа">
-          <button class="login-mode-button is-active" type="button" data-login-mode="admin" role="tab" aria-selected="true">Администратор</button>
-          <button class="login-mode-button" type="button" data-login-mode="partner" role="tab" aria-selected="false">Партнёр</button>
-          <button class="login-mode-button" type="button" data-login-mode="client" role="tab" aria-selected="false">Клиент</button>
-        </div>
-        <form class="login-form" data-login-form>
-          <label>
-            Логин
-            <input type="text" name="email" autocomplete="username" placeholder="Введите логин" required />
-            <small class="muted-text">Email, телефон или логин, выданный клубом</small>
-          </label>
-          <label>
-            Пароль
-            <input type="password" name="password" autocomplete="current-password" placeholder="••••••••" required />
-          </label>
-          <button type="submit">Войти</button>
-          <p class="login-message" data-login-message role="status" aria-live="polite"></p>
-        </form>
-        </div>
-        <div class="admin-dashboard" data-admin-dashboard hidden>
-          <h3>Админ-панель</h3>
-          <p>Вы вошли как: <strong data-admin-email></strong></p>
-          <button type="button" data-logout-button>Выйти</button>
-        </div>
-        <div class="admin-dashboard partner-dashboard" data-partner-dashboard hidden></div>
-        <div class="admin-dashboard client-dashboard" data-client-dashboard hidden></div>
-      </section>
+    <section class="editorial-how" id="landing-how" aria-labelledby="landing-how-title">
+      <div class="editorial-section-heading">
+        <p class="editorial-kicker">Всё очень просто</p>
+        <h2 id="landing-how-title">Как это работает</h2>
+      </div>
+      <ol class="editorial-steps">
+        <li><span class="editorial-step__number">01</span><img src="/assets/icons/user-plus.svg" alt="" /><h3>Вступи в клуб</h3><p>Оформи доступ за пару минут в приложении.</p></li>
+        <li><span class="editorial-step__number">02</span><img src="/assets/icons/storefront.svg" alt="" /><h3>Выбери партнёра</h3><p>Найди место и предложение, которое тебе подходит.</p></li>
+        <li><span class="editorial-step__number">03</span><img src="/assets/icons/gift.svg" alt="" /><h3>Получи привилегию</h3><p>Покажи клубный QR-код и пользуйся выгодой.</p></li>
+      </ol>
     </section>
 
-    <section class="panel categories-panel" id="landing-directions" aria-labelledby="categories-title">
-      <p class="section-kicker">Направления</p>
-      <h2 id="categories-title">Категории партнёров</h2>
-      <ul class="category-list">
-        ${categoryDirections.map((category) => `
-          <li>
-            <button
-              class="landing-direction-button direction-card"
-              type="button"
-              data-landing-category-slug="${category.slug}"
-            >
-              ${category.title}
-            </button>
-          </li>
+    <section class="editorial-partners" id="landing-partners" aria-labelledby="categories-title">
+      <div class="editorial-section-heading editorial-section-heading--row">
+        <div><p class="editorial-kicker">Выбирай своё</p><h2 id="categories-title">Партнёры клуба</h2></div>
+        <p>Нажми на категорию, чтобы посмотреть актуальных партнёров и их предложения.</p>
+      </div>
+      <div class="editorial-category-grid">
+        ${editorialFeaturedCategories.map((category) => `
+          <button class="editorial-category-card" type="button" data-landing-category-slug="${category.slug}">
+            <img src="${category.image}" alt="${category.title}" loading="lazy" />
+            <span class="editorial-category-card__overlay"><strong>${category.title}</strong><small>${category.text}</small></span>
+          </button>
         `).join('')}
-      </ul>
+      </div>
+      <div class="editorial-directions" id="landing-directions" aria-label="Категории партнёров">
+        ${categoryDirections.map((category) => `<button type="button" data-landing-category-slug="${category.slug}">${category.title}</button>`).join('')}
+      </div>
     </section>
 
     <section class="landing-partner-modal" data-landing-partner-modal aria-live="polite" hidden></section>
 
-    <section class="business-info" id="landing-contacts" aria-labelledby="business-info-title">
-      <div>
-        <p class="section-kicker">Поддержка и контакты</p>
-        <h2 id="business-info-title">Связаться с Bloom Club</h2>
-        <p>Обращения принимаются по электронной почте. Время обработки обращений: 09:00–18:00 по новосибирскому времени (UTC+7).</p>
-        <div class="business-info__links">
-          <a href="mailto:danka1948@mail.ru">danka1948@mail.ru</a>
-          <a href="https://t.me/Wo_ClubNSK" target="_blank" rel="noopener noreferrer">Telegram-канал</a>
-          <a href="https://t.me/app_bloom_club_bot" target="_blank" rel="noopener noreferrer">Telegram-бот</a>
-          <a href="https://vk.ru/club238169934" target="_blank" rel="noopener noreferrer">Сообщество ВКонтакте</a>
+    <section class="editorial-subscription" id="landing-subscription" aria-labelledby="subscription-offer-title">
+      <img class="editorial-subscription__image" src="/assets/editorial/subscription-still-life.webp" alt="Подарочная коробка и цветы Bloom Club" loading="lazy" />
+      <div class="editorial-subscription__content">
+        <p class="editorial-kicker">Одна подписка — много возможностей</p>
+        <h2 id="subscription-offer-title">Всё лучшее<br><em>для тебя</em></h2>
+        <p>Доступ к скидкам, подаркам, закрытым предложениям и розыгрышам у партнёров клуба.</p>
+        <div class="editorial-price" aria-label="349 ₽ на 30 дней"><strong>349 ₽</strong><span>на 30 дней</span></div>
+        <ul>
+          <li>Пробный период 15 дней, если он доступен для аккаунта</li>
+          <li>Автоматического продления и повторных списаний нет</li>
+          <li>Продление выполняется вручную</li>
+        </ul>
+        <div class="editorial-subscription__actions">
+          <a class="editorial-button" href="https://app.bloomclub.ru/">Оформить подписку <span aria-hidden="true">→</span></a>
+          <a class="editorial-text-link" href="/offer/">Условия оплаты и возврата</a>
         </div>
       </div>
     </section>
 
-    <footer class="legal-footer" aria-labelledby="legal-footer-title">
-      <h2 id="legal-footer-title">Документы</h2>
-      ${renderLegalDocumentLinks('legal-links legal-footer__links')}
-      <p class="legal-footer__operator">© Bloom Club · ИП Глущенко Анастасия Дмитриевна · ИНН 541007956565 · ОГРНИП 323547600049744</p>
-    </footer>
+    <section class="editorial-access" id="login" aria-labelledby="login-title">
+      <span class="landing-anchor" id="landing-join" aria-hidden="true"></span>
+      <div>
+        <p class="editorial-kicker">Уже с нами?</p>
+        <h2 id="login-title">Личный кабинет</h2>
+        <p>Войдите как участница или партнёр клуба — все привычные функции остаются на месте.</p>
+      </div>
+      <div class="editorial-login-card">
+        <div class="login-quick-access" aria-label="Быстрый вход" data-login-quick-card>
+          <p class="login-quick-access__title">Выберите кабинет</p>
+          <div class="login-quick-access__actions">
+            <button class="login-quick-access__button" type="button" data-login-expand-mode="client">Я участница</button>
+            <button class="login-quick-access__button" type="button" data-login-expand-mode="partner">Я партнёр</button>
+          </div>
+        </div>
+        <div class="login-details" data-login-details hidden>
+          <div class="login-mode-switch" role="tablist" aria-label="Тип входа">
+            <button class="login-mode-button is-active" type="button" data-login-mode="admin" role="tab" aria-selected="true">Администратор</button>
+            <button class="login-mode-button" type="button" data-login-mode="partner" role="tab" aria-selected="false">Партнёр</button>
+            <button class="login-mode-button" type="button" data-login-mode="client" role="tab" aria-selected="false">Клиент</button>
+          </div>
+          <form class="login-form" data-login-form>
+            <label>Логин<input type="text" name="email" autocomplete="username" placeholder="Email, телефон или логин" required /></label>
+            <label>Пароль<input type="password" name="password" autocomplete="current-password" placeholder="Введите пароль" required /></label>
+            <button type="submit">Войти</button>
+            <p class="login-message" data-login-message role="status" aria-live="polite"></p>
+          </form>
+        </div>
+        <div class="admin-dashboard" data-admin-dashboard hidden><h3>Админ-панель</h3><p>Вы вошли как: <strong data-admin-email></strong></p><button type="button" data-logout-button>Выйти</button></div>
+        <div class="admin-dashboard partner-dashboard" data-partner-dashboard hidden></div>
+        <div class="admin-dashboard client-dashboard" data-client-dashboard hidden></div>
+      </div>
+    </section>
 
+    <section class="editorial-cities" id="landing-cities" aria-labelledby="city-selector-title">
+      <div><p class="editorial-kicker">География клуба</p><h2 id="city-selector-title">Выберите город</h2><p class="editorial-cities__note">Чем больше мы растём, тем больше городов подключаем. Скоро появятся новые города.</p></div>
+      <div class="city-choice-grid" role="radiogroup" aria-labelledby="city-selector-title">
+        ${cities.map((city, index) => `<button class="city-choice${index === 0 ? ' is-active' : ''}" type="button" role="radio" aria-checked="${index === 0 ? 'true' : 'false'}" data-city-choice><span class="city-choice-title">${city}</span><span class="city-choice-meta">${city === 'Новосибирск' ? `${escapeHtml(landingStats.partners_count)} партнёров` : 'скоро открытие'}</span></button>`).join('')}
+      </div>
+    </section>
+
+    <footer class="editorial-footer" id="landing-contacts" aria-labelledby="business-info-title">
+      <div class="editorial-footer__brand"><span class="editorial-brand__name">Bloom Club</span><p>Федеральный клуб привилегий для девушек.</p></div>
+      <div><h2 id="business-info-title">Поддержка и контакты</h2><p>Ежедневно 09:00–18:00<br>по новосибирскому времени (UTC+7)</p><a href="mailto:danka1948@mail.ru">danka1948@mail.ru</a></div>
+      <div><h2>Мы на связи</h2><a href="https://t.me/Wo_ClubNSK" target="_blank" rel="noopener noreferrer">Telegram-канал</a><a href="https://t.me/app_bloom_club_bot" target="_blank" rel="noopener noreferrer">Telegram-бот</a><a href="https://vk.ru/club238169934" target="_blank" rel="noopener noreferrer">ВКонтакте</a></div>
+      <div><h2>Документы</h2>${renderLegalDocumentLinks('legal-links editorial-footer__links')}</div>
+      <p class="editorial-footer__operator">© Bloom Club · ИП Глущенко Анастасия Дмитриевна · ИНН 541007956565 · ОГРНИП 323547600049744</p>
+    </footer>
   </main>
 `;
   bindPublicElements();
@@ -1676,6 +1605,7 @@ const renderDashboardApp = (role) => {
   const activeTab = getActiveTab(role);
 
   document.body.classList.add('is-dashboard');
+  document.body.classList.remove('is-editorial-landing');
   root.innerHTML = `
     <div class="dashboard-shell" data-dashboard-role="${role}">
       ${renderCabinetAmbientLayer()}

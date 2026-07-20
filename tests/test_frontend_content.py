@@ -381,18 +381,16 @@ def test_brand_copy_targets_girls() -> None:
     assert "Федеральный клуб привилегий для женщин" not in source
 
 
-def test_public_brand_block_is_static_not_clickable() -> None:
+def test_public_brand_block_links_back_to_landing_top() -> None:
     source = _frontend_main()
 
-    assert '<div class="brand" aria-label="Женский клуб">' in source
-    assert not re.search(r'<a[^>]*class="brand"', source)
-    assert not re.search(r'<button[^>]*class="brand"', source)
-    assert not re.search(r'class="brand"[^>]*(href|type)=', source)
+    assert 'class="editorial-brand" href="#landing-about"' in source
+    assert 'aria-label="Bloom Club — на главную"' in source
 
 
 def test_public_header_does_not_render_admin_panel_action() -> None:
     source = _frontend_main()
-    topbar_match = re.search(r'<div class="topbar-actions".*?</div>', source, re.S)
+    topbar_match = re.search(r'<header class="editorial-header".*?</header>', source, re.S)
 
     assert topbar_match is not None
     assert "Панель" not in topbar_match.group(0)
@@ -400,7 +398,7 @@ def test_public_header_does_not_render_admin_panel_action() -> None:
 
 def test_city_selector_uses_static_choice_chips() -> None:
     source = _frontend_main()
-    city_selector_block = source.split('<section class="panel" aria-labelledby="login-title" id="login">')[0]
+    city_selector_block = source.split('<footer class="editorial-footer"')[0]
 
     for forbidden_tag in ("<select", "<option", "<details", "<summary"):
         assert forbidden_tag not in city_selector_block
@@ -1358,33 +1356,31 @@ def test_public_landing_contains_smm_hero_menu_directions_and_partner_modal() ->
     styles = _frontend_styles()
 
     for expected in (
-        "hero-card",
-        "для себя",
-        "Красота, забота и вдохновение",
-        "Скидки, подарки и специальные предложения у партнёров клуба.",
+        "editorial-hero",
+        "Твой мир привилегий",
+        "Красота, забота, отдых и вдохновение",
+        "специальные предложения у лучших партнёров города",
         "formatPartnerBenefit",
         "Специальное предложение",
         "landing-menu",
         "landing-menu-toggle",
         "landing-menu-panel",
         "О клубе",
-        "Привилегии",
+        "Как это работает",
         "Партнёры",
-        "Направления",
         "Подписка",
         "Стать участницей",
         "Контакты",
-        "Города",
         "landing-about",
-        "landing-benefits",
+        "landing-how",
         "landing-partners",
         "landing-directions",
         "landing-join",
         "landing-cities",
         "landing-subscription",
         "landing-contacts",
-        "landing-direction-button",
-        "direction-card",
+        "editorial-category-card",
+        "editorial-directions",
         "data-landing-category-slug",
         "selectedLandingDirection",
         "landingPartnerModalState",
@@ -2456,8 +2452,8 @@ def test_landing_partner_filter_uses_categories_array_and_keeps_direction_marker
         "selectedLandingDirection",
         "landingPartnerModalState",
         "data-landing-category-slug",
-        "direction-card",
-        "landing-direction-button",
+        "editorial-category-card",
+        "editorial-directions",
         "/api/v1/public/landing/partners",
     ):
         assert marker in source
