@@ -58,3 +58,17 @@ def test_public_domain_does_not_expose_browser_login_code_endpoint() -> None:
     assert "location = /api/v1/auth/login-code" in public_block
     assert "return 404;" in public_block
     assert "location = /api/v1/auth/login-code" not in app_block
+
+
+def test_public_domain_sets_baseline_security_headers() -> None:
+    block = _server_block_for("bloomclub.ru www.bloomclub.ru")
+
+    for header in (
+        "Strict-Transport-Security",
+        "X-Content-Type-Options",
+        "X-Frame-Options",
+        "Referrer-Policy",
+        "Permissions-Policy",
+        "Content-Security-Policy",
+    ):
+        assert f"add_header {header}" in block

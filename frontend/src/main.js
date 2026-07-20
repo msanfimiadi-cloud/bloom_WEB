@@ -30,8 +30,10 @@ const landingMenuLinks = [
   { href: '#landing-benefits', label: 'Привилегии' },
   { href: '#landing-partners', label: 'Партнёры' },
   { href: '#landing-directions', label: 'Направления' },
-  { href: '#landing-join', label: 'Как вступить' },
+  { href: '#landing-subscription', label: 'Подписка' },
+  { href: 'https://app.bloomclub.ru/', label: 'Стать участницей' },
   { href: '#landing-cities', label: 'Города' },
+  { href: '#landing-contacts', label: 'Контакты' },
 ];
 
 const landingStatsFallback = {
@@ -112,16 +114,20 @@ const clubAvatarSrc = '/assets/club-avatar.png';
 
 const legalDocuments = [
   {
+    label: 'Публичная оферта',
+    href: '/offer/',
+  },
+  {
     label: 'Политика конфиденциальности',
-    href: '/docs/Политика%20Конфиденциальности.docx',
+    href: '/privacy/',
   },
   {
     label: 'Пользовательское соглашение',
-    href: '/docs/Пользовательское%20соглашение.docx',
+    href: '/terms/',
   },
   {
     label: 'Согласие на обработку персональных данных',
-    href: '/docs/Согласие%20на%20обработку%20персональных%20данных.docx',
+    href: '/personal-data-consent/',
   },
 ];
 
@@ -315,7 +321,7 @@ const renderPublicApp = () => {
             Скидки, подарки и специальные предложения у партнёров клуба.
           </p>
           <div class="hero-actions">
-            <a class="primary-button" href="#landing-join">Стать участницей</a>
+            <a class="primary-button" href="https://app.bloomclub.ru/">Стать участницей</a>
             <a class="secondary-button" href="#landing-partners">Смотреть привилегии</a>
           </div>
           <div class="hero-proof-grid" aria-label="Показатели клуба">
@@ -375,6 +381,27 @@ const renderPublicApp = () => {
           <li><span>3</span>Получайте привилегии у партнёров</li>
         </ol>
       </article>
+    </section>
+
+    <section class="subscription-offer" id="landing-subscription" aria-labelledby="subscription-offer-title">
+      <div class="subscription-offer__content">
+        <p class="section-kicker">Подписка Bloom Club</p>
+        <h2 id="subscription-offer-title">349 ₽ на 30 дней</h2>
+        <p>Доступ к клубным привилегиям, предложениям партнёров и розыгрышам во всех доступных городах.</p>
+        <ul class="subscription-offer__terms">
+          <li>Пробный период — 15 дней, если он доступен для аккаунта</li>
+          <li>Доступ активируется после подтверждения оплаты</li>
+          <li>Автоматического продления и повторных списаний нет</li>
+          <li>Продление выполняется пользователем вручную</li>
+        </ul>
+      </div>
+      <div class="subscription-offer__action">
+        <strong>349 ₽</strong>
+        <span>за 30 дней доступа</span>
+        <a class="primary-button" href="https://app.bloomclub.ru/">Открыть приложение</a>
+        <a class="subscription-offer__bot-link" href="https://t.me/app_bloom_club_bot" target="_blank" rel="noopener noreferrer">Получить код через Telegram-бота</a>
+        <a class="subscription-offer__legal-link" href="/offer/">Условия оплаты и возврата</a>
+      </div>
     </section>
 
     <section class="content-grid" id="landing-partners">
@@ -475,9 +502,30 @@ const renderPublicApp = () => {
 
     <section class="landing-partner-modal" data-landing-partner-modal aria-live="polite" hidden></section>
 
+    <section class="business-info" id="landing-contacts" aria-labelledby="business-info-title">
+      <div>
+        <p class="section-kicker">Поддержка и реквизиты</p>
+        <h2 id="business-info-title">Связаться с Bloom Club</h2>
+        <p>Обращения принимаются по электронной почте. Время обработки обращений: 09:00–18:00 по новосибирскому времени (UTC+7).</p>
+        <div class="business-info__links">
+          <a href="mailto:danka1948@mail.ru">danka1948@mail.ru</a>
+          <a href="https://t.me/Wo_ClubNSK" target="_blank" rel="noopener noreferrer">Telegram-канал</a>
+          <a href="https://t.me/app_bloom_club_bot" target="_blank" rel="noopener noreferrer">Telegram-бот</a>
+          <a href="https://vk.ru/club238169934" target="_blank" rel="noopener noreferrer">Сообщество ВКонтакте</a>
+        </div>
+      </div>
+      <dl class="business-info__details">
+        <div><dt>Исполнитель</dt><dd>ИП Глущенко Анастасия Дмитриевна</dd></div>
+        <div><dt>ИНН</dt><dd>541007956565</dd></div>
+        <div><dt>ОГРНИП</dt><dd>323547600049744</dd></div>
+        <div><dt>Юридический адрес</dt><dd>630129, г. Новосибирск, ул. Курчатова, д. 17, кв. 169</dd></div>
+      </dl>
+    </section>
+
     <footer class="legal-footer" aria-labelledby="legal-footer-title">
       <h2 id="legal-footer-title">Документы</h2>
       ${renderLegalDocumentLinks('legal-links legal-footer__links')}
+      <p class="legal-footer__operator">© Bloom Club · ИП Глущенко Анастасия Дмитриевна · ИНН 541007956565 · ОГРНИП 323547600049744</p>
     </footer>
 
   </main>
@@ -2182,7 +2230,7 @@ const renderLandingPartnerModal = () => {
           <span>Партнёр ${hasPartners ? safePartnerIndex + 1 : 0} / ${hasPartners ? partners.length : 0}</span>
           <button class="landing-carousel-button" type="button" data-landing-carousel-next ${partners.length > 1 ? '' : 'disabled'}>→</button>
         </div>
-        <a class="primary-button" href="#landing-join" data-landing-modal-cta>${hasPartners ? 'Получить привилегию' : 'Вступить в клуб'}</a>
+        <a class="primary-button" href="https://app.bloomclub.ru/" data-landing-modal-cta>${hasPartners ? 'Получить привилегию' : 'Вступить в клуб'}</a>
       </div>
     </div>
   `;
