@@ -63,6 +63,8 @@ def test_legal_pages_are_readable_html_with_cross_links() -> None:
         assert "danka1948@mail.ru" in source
         assert "давай дальше" not in source.lower()
         assert "конец части" not in source.lower()
+        assert "630129" not in source
+        assert "Курчатова" not in source
 
 
 def test_offer_contains_complete_payment_and_bank_details() -> None:
