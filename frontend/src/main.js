@@ -504,7 +504,7 @@ const renderPublicApp = () => {
 
     <section class="business-info" id="landing-contacts" aria-labelledby="business-info-title">
       <div>
-        <p class="section-kicker">Поддержка и реквизиты</p>
+        <p class="section-kicker">Поддержка и контакты</p>
         <h2 id="business-info-title">Связаться с Bloom Club</h2>
         <p>Обращения принимаются по электронной почте. Время обработки обращений: 09:00–18:00 по новосибирскому времени (UTC+7).</p>
         <div class="business-info__links">
@@ -514,12 +514,6 @@ const renderPublicApp = () => {
           <a href="https://vk.ru/club238169934" target="_blank" rel="noopener noreferrer">Сообщество ВКонтакте</a>
         </div>
       </div>
-      <dl class="business-info__details">
-        <div><dt>Исполнитель</dt><dd>ИП Глущенко Анастасия Дмитриевна</dd></div>
-        <div><dt>ИНН</dt><dd>541007956565</dd></div>
-        <div><dt>ОГРНИП</dt><dd>323547600049744</dd></div>
-        <div><dt>Юридический адрес</dt><dd>630129, г. Новосибирск, ул. Курчатова, д. 17, кв. 169</dd></div>
-      </dl>
     </section>
 
     <footer class="legal-footer" aria-labelledby="legal-footer-title">
