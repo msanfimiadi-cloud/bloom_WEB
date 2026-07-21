@@ -823,13 +823,12 @@ def test_admin_partners_phase2_form_toggle_and_sections_markers() -> None:
         "+ Добавить партнёра",
         "data-admin-partner-edit",
         "data-admin-partner-edit-cancel",
-        "admin-partner-form-panel",
-        "<h5 class=\"admin-form-section__title\">Основное</h5>",
-        "<h5 class=\"admin-form-section__title\">Статусы</h5>",
-        "<h5 class=\"admin-form-section__title\">Категории</h5>",
-        "<h5 class=\"admin-form-section__title\">Контакты</h5>",
-        "<h5 class=\"admin-form-section__title\">Описание</h5>",
-        "<h5 class=\"admin-form-section__title\">Медиа</h5>",
+        "admin-partner-create-page",
+        "Основная информация",
+        "Категории",
+        "Контакты",
+        "Сайт и соцсети",
+        "Доступ и публикация",
         "admin-partners-layout",
         "admin-partners-table",
         "partnerFilters",
@@ -845,7 +844,7 @@ def test_admin_partners_phase2_form_toggle_and_sections_markers() -> None:
     ):
         assert marker in source
 
-    assert "adminState.partnerFormOpen ? '' : 'hidden'" in source
+    assert "if (adminState.partnerFormOpen)" in source
     assert 'class="admin-partner-form-panel is-open"' not in source
 
 
@@ -2298,57 +2297,51 @@ def test_frontend_dist_build_points_to_assets_bundle() -> None:
     assert any(path.suffix == ".js" for path in dist_assets.iterdir())
     assert any(path.suffix == ".css" for path in dist_assets.iterdir())
 
-def test_admin_partner_wizard_markers_present() -> None:
+def test_admin_partner_create_page_markers_present() -> None:
     source = _frontend_main()
 
     for marker in (
-        "partnerFormStep",
-        "basic",
-        "status",
-        "contacts",
-        "description",
-        "media",
-                "Основное",
+        "admin-partner-create-page",
+        "Основная информация",
         "Категории",
         "Контакты",
-        "Описание",
-        "Медиа",
-                        "Назад",
-        "Сохранить",
-                        "adminState.partnerFormOpen",
+        "Сайт и соцсети",
+        "Доступ и публикация",
+        "Назад к партнёрам",
+        "Сохранить партнёра",
+        "adminState.partnerFormOpen",
         "category_ids",
-        "Партнёр может отображаться сразу в нескольких категориях.",
-                "type=\"button\"",
+        "Можно выбрать несколько.",
+        "type=\"button\"",
         "data-admin-partner-wizard-form",
-        "data-admin-partner-save-button",
-        "partnerWizardFormId",
+        "admin-partner-create-form",
     ):
         assert marker in source
 
 
-def test_admin_partner_wizard_uses_single_save_action_markers() -> None:
+def test_admin_partner_create_page_uses_single_save_action_markers() -> None:
     source = _frontend_main()
 
     for marker in (
-        'data-admin-partner-save-button',
-        'form="${escapeHtml(partnerWizardFormId)}"',
-        'data-admin-partner-step-jump',
+        'data-admin-form="partner"',
+        'type="submit">Сохранить партнёра</button>',
+        'data-admin-partner-edit-cancel',
         'adminState.partnerFormOpen = true;',
     ):
         assert marker in source
 
-    assert 'data-admin-partner-step-next' not in source
+    form_block = source.split('const renderPartnerForm = () => {', 1)[1].split('const defaultPartnerFilters = () => ({', 1)[0]
+    assert 'data-admin-partner-step-jump' not in form_block
 
 
 
-def test_admin_partner_wizard_save_button_targets_edit_form_and_is_not_disabled() -> None:
+def test_admin_partner_create_save_button_is_native_and_not_disabled() -> None:
     source = _frontend_main()
     form_block = source.split('const renderPartnerForm = () => {', 1)[1].split('const defaultPartnerFilters = () => ({', 1)[0]
 
-    assert 'id="${escapeHtml(partnerWizardFormId)}"' in form_block
-    assert 'data-admin-partner-wizard-form novalidate' in form_block
-    assert 'type="submit" form="${escapeHtml(partnerWizardFormId)}" data-admin-partner-save-button' in form_block
-    save_button_line = 'type="submit" form="${escapeHtml(partnerWizardFormId)}" data-admin-partner-save-button>Сохранить</button>'
+    assert 'id="admin-partner-create-form"' in form_block
+    assert 'data-admin-partner-wizard-form' in form_block
+    save_button_line = 'type="submit">Сохранить партнёра</button>'
     assert save_button_line in form_block
     assert 'disabled' not in save_button_line
 
@@ -2375,11 +2368,10 @@ def test_admin_partner_validation_block_shows_visible_message() -> None:
     assert 'messageNode.textContent = message;' in validation_block
     assert 'inlineErrorNode.textContent = message;' in validation_block
 
-def test_admin_partner_wizard_reset_and_category_review_normalization_markers() -> None:
+def test_admin_partner_create_reset_and_category_edit_markers() -> None:
     source = _frontend_main()
 
     for marker in (
-        "adminState.partnerFormStep = 'basic';",
         "adminState.partnerFormInlineError = '';",
         "adminState.selectedPartnerIdForEdit = '';",
         "name=\"category_ids\"",
@@ -2401,7 +2393,7 @@ def test_admin_partner_category_payload_uses_current_checkbox_state_and_refreshe
     assert "await loadPartners();" in edit_block
 
 
-def test_admin_partner_category_uncheck_state_survives_wizard_rerender() -> None:
+def test_admin_partner_category_state_is_captured_on_submit_and_edit() -> None:
     source = _frontend_main()
 
     for marker in (
@@ -2409,8 +2401,6 @@ def test_admin_partner_category_uncheck_state_survives_wizard_rerender() -> None
         "captureAdminPartnerCategoryDraft",
         "getAdminPartnerSelectedCategoryIds",
         "input[name=\"category_ids\"]:checked",
-        "[data-admin-partner-wizard-form] input[name=\"category_ids\"]",
-        "captureAdminPartnerCategoryDraft(partnerStepJump.closest('[data-admin-partner-wizard-form]'))",
         "selectedCategoryIds.has(String(category.id)) ? 'checked' : ''",
     ):
         assert marker in source
