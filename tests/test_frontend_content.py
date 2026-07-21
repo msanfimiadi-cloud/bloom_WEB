@@ -1361,7 +1361,7 @@ def test_public_landing_contains_smm_hero_menu_directions_and_partner_modal() ->
         "Красота, забота, отдых и вдохновение",
         "специальные предложения у лучших партнёров города",
         "formatPartnerBenefit",
-        "Специальное предложение",
+        "Клубная привилегия",
         "landing-menu",
         "landing-menu-toggle",
         "landing-menu-panel",
@@ -1575,7 +1575,7 @@ def test_frontend_contains_offer_marketplace_cards() -> None:
         "Получить привилегию",
         "Карточка привилегии партнёра",
         "Фото услуги",
-        "Специальное предложение",
+        "Клубная привилегия",
         "/uploads/offer.webp",
         "/assets/offer.webp",
     ):
@@ -2429,6 +2429,10 @@ def test_offer_pricing_helpers_and_copy_present() -> None:
         'offer_id',
         'saving_amount',
         'discount_percent',
+        'Экономия ${formatMoneyLabel(pricing.savingAmount)}',
+        'Привилегии у партнёров',
+        'Доступ к привилегиям, подаркам',
+        'Обычная цена:',
     ):
         assert marker in source
 
@@ -2441,6 +2445,9 @@ def test_offer_pricing_helpers_and_copy_present() -> None:
         '.offer-pricing__value--member',
         '.offer-pricing__saving',
         '.offer-pricing__fallback',
+        '.landing-partner-gallery-backdrop',
+        '.landing-partner-gallery-image',
+        'object-fit: contain',
     ):
         assert css_marker in styles
 

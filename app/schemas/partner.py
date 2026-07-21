@@ -190,9 +190,13 @@ class LeadStatsRead(BaseModel):
 
 class PublicLandingPartnerOffer(BaseModel):
     title: str
+    benefit_text: str | None = None
     discount_text: str | None
     description: str | None
     terms: str | None
+    regular_price: Decimal | None = None
+    club_price: Decimal | None = None
+    saving_amount: Decimal = Decimal("0.00")
 
 
 class PublicLandingPartnerPhoto(BaseModel):

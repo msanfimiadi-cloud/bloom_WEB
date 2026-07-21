@@ -83,10 +83,12 @@ def public_client() -> Generator[TestClient, None, None]:
                 ),
                 PartnerOffer(
                     partner_id=partners[0].id,
-                    title="Скидка на первый визит",
+                    title="Привилегия на первый визит",
                     benefit_text="-15%",
                     description="На первую процедуру для участниц клуба",
                     conditions="По предварительной записи",
+                    base_price=Decimal("2000.00"),
+                    discount_percent=Decimal("15.00"),
                     is_active=True,
                     sort_order=10,
                 ),
@@ -102,6 +104,7 @@ def public_client() -> Generator[TestClient, None, None]:
                     title="Пробная тренировка",
                     benefit_text="-1E+1%",
                     discount_percent=Decimal("10"),
+                    base_price=Decimal("1000.00"),
                     is_active=True,
                     sort_order=10,
                 ),
@@ -159,10 +162,14 @@ def test_public_landing_partners_returns_only_safe_active_public_data(public_cli
         "cover_url": "/assets/partners/sakura-cover.jpg",
         "offers": [
             {
-                "title": "Скидка на первый визит",
-                "discount_text": "-15%",
+                "title": "Привилегия на первый визит",
+                "benefit_text": "Клубная привилегия",
+                "discount_text": "Клубная привилегия",
                 "description": "На первую процедуру для участниц клуба",
                 "terms": "По предварительной записи",
+                "regular_price": "2000.00",
+                "club_price": "1700.00",
+                "saving_amount": "300.00",
             }
         ],
         "photos": [
@@ -179,7 +186,7 @@ def test_public_landing_partners_returns_only_safe_active_public_data(public_cli
         assert forbidden_key not in serialized
 
 
-def test_public_landing_partners_formats_offer_benefits_without_scientific_notation(public_client: TestClient) -> None:
+def test_public_landing_partners_formats_privileges_without_visible_percentages(public_client: TestClient) -> None:
     response = public_client.get("/api/v1/public/landing/partners?category_slug=fitnes-yoga&city_slug=cherepovets")
 
     assert response.status_code == 200
@@ -190,26 +197,39 @@ def test_public_landing_partners_formats_offer_benefits_without_scientific_notat
     assert offers == [
         {
             "title": "Пробная тренировка",
-            "discount_text": "-10%",
+            "benefit_text": "Клубная привилегия",
+            "discount_text": "Клубная привилегия",
             "description": None,
             "terms": None,
+            "regular_price": "1000.00",
+            "club_price": "900.00",
+            "saving_amount": "100.00",
         },
         {
             "title": "Подарок клуба",
+            "benefit_text": "Подарок",
             "discount_text": "Подарок",
             "description": None,
             "terms": None,
+            "regular_price": None,
+            "club_price": None,
+            "saving_amount": "0.00",
         },
         {
             "title": "Особые условия",
-            "discount_text": "Специальное предложение",
+            "benefit_text": "Клубная привилегия",
+            "discount_text": "Клубная привилегия",
             "description": None,
             "terms": None,
+            "regular_price": None,
+            "club_price": None,
+            "saving_amount": "0.00",
         },
     ]
     serialized = str(data)
     assert "1E+1" not in serialized
     assert "-1E+1%" not in serialized
+    assert "%" not in serialized
 
 
 def test_public_landing_partners_excludes_inactive_unverified_and_inactive_relations(public_client: TestClient) -> None:
@@ -223,7 +243,7 @@ def test_public_landing_partners_excludes_inactive_unverified_and_inactive_relat
     assert "Hidden City" not in names
     assert "Hidden Category" not in names
     sakura = next(item for item in response.json()["items"] if item["name"] == "Beauty Studio Sakura")
-    assert [offer["title"] for offer in sakura["offers"]] == ["Скидка на первый визит"]
+    assert [offer["title"] for offer in sakura["offers"]] == ["Привилегия на первый визит"]
     assert [photo["url"] for photo in sakura["photos"]] == ["/uploads/partners/1/photos/photo-visible.webp"]
 
 

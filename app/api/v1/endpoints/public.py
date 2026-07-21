@@ -26,6 +26,7 @@ from app.schemas.partner import (
 )
 
 from app.services.landing_settings import build_public_landing_stats
+from app.services.offer_savings import calculate_offer_saving_snapshot
 
 router = APIRouter(tags=["public"])
 
@@ -52,36 +53,36 @@ def _normalize_slug_query_value(value: str | None) -> str | None:
 
 
 _SCIENTIFIC_NOTATION_PATTERN = re.compile(r"[+-]?\d+(?:[.,]\d+)?e[+-]?\d+%?", re.IGNORECASE)
-PUBLIC_OFFER_BENEFIT_FALLBACK = "Специальное предложение"
+PUBLIC_OFFER_BENEFIT_FALLBACK = "Клубная привилегия"
 
 
 def _has_scientific_notation(value: str | None) -> bool:
     return bool(value and _SCIENTIFIC_NOTATION_PATTERN.search(value.strip()))
 
 
-def _format_discount_percent(value: Decimal | None) -> str | None:
-    if value is None:
-        return None
-    normalized = value.copy_abs().normalize()
-    formatted = format(normalized, "f")
-    if "." in formatted:
-        formatted = formatted.rstrip("0").rstrip(".")
-    return f"-{formatted}%" if formatted else None
-
-
-def format_public_offer_benefit(benefit_text: str | None, discount_percent: Decimal | None) -> str:
+def format_public_offer_benefit(
+    benefit_text: str | None,
+    _discount_percent: Decimal | None = None,
+) -> str:
     normalized_benefit = (benefit_text or "").strip()
-    if normalized_benefit and not _has_scientific_notation(normalized_benefit):
+    looks_like_discount = bool(re.search(r"%|скидк", normalized_benefit, re.IGNORECASE))
+    if normalized_benefit and not _has_scientific_notation(normalized_benefit) and not looks_like_discount:
         return normalized_benefit
-    return _format_discount_percent(discount_percent) or PUBLIC_OFFER_BENEFIT_FALLBACK
+    return PUBLIC_OFFER_BENEFIT_FALLBACK
 
 
 def _public_landing_offer_to_read(offer: PartnerOffer) -> PublicLandingPartnerOffer:
+    saving_snapshot = calculate_offer_saving_snapshot(offer)
+    benefit_label = format_public_offer_benefit(offer.benefit_text, offer.discount_percent)
     return PublicLandingPartnerOffer(
         title=offer.title,
-        discount_text=format_public_offer_benefit(offer.benefit_text, offer.discount_percent),
+        benefit_text=benefit_label,
+        discount_text=benefit_label,
         description=offer.description,
         terms=offer.conditions,
+        regular_price=saving_snapshot.regular_price,
+        club_price=saving_snapshot.club_price,
+        saving_amount=saving_snapshot.saving_amount,
     )
 
 

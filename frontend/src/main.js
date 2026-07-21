@@ -103,7 +103,7 @@ const fallbackClientCategories = [
 
 const featureCards = [
   {
-    title: 'Скидки у партнёров',
+    title: 'Привилегии у партнёров',
     text: 'Салоны, кафе, SPA, фитнес и lifestyle-сервисы города.',
   },
   {
@@ -389,7 +389,7 @@ const renderPublicApp = () => {
       <div class="editorial-subscription__content">
         <p class="editorial-kicker">Одна подписка — много возможностей</p>
         <h2 id="subscription-offer-title">Всё лучшее<br><em>для тебя</em></h2>
-        <p>Доступ к скидкам, подаркам, закрытым предложениям и розыгрышам у партнёров клуба.</p>
+        <p>Доступ к привилегиям, подаркам, закрытым предложениям и розыгрышам у партнёров клуба.</p>
         <div class="editorial-price" aria-label="349 ₽ на 30 дней"><strong>349 ₽</strong><span>на 30 дней</span></div>
         <ul>
           <li>Пробный период 15 дней, если он доступен для аккаунта</li>
@@ -1012,11 +1012,16 @@ const formatValue = (value) => {
 };
 const hasScientificNotation = (value) => /[+-]?\d+(?:[.,]\d+)?e[+-]?\d+%?/i.test(String(value || ''));
 const formatPartnerBenefit = (offer) => {
-  const benefitText = String(offer?.discount_text || offer?.benefit_text || '').trim();
-  if (benefitText && !hasScientificNotation(benefitText)) {
+  const pricing = getOfferPricingView(offer || {});
+  if (pricing.hasSaving) {
+    return `Экономия ${formatMoneyLabel(pricing.savingAmount)}`;
+  }
+  const benefitText = String(offer?.benefit_text || offer?.discount_text || '').trim();
+  const looksLikeDiscount = /%|скидк/i.test(benefitText);
+  if (benefitText && !hasScientificNotation(benefitText) && !looksLikeDiscount) {
     return benefitText;
   }
-  return 'Специальное предложение';
+  return 'Клубная привилегия';
 };
 
 const formatOfferBasePrice = (value) => {
@@ -1058,13 +1063,25 @@ const formatMoneyLabel = (value) => {
 };
 
 const getOfferPricingView = (offer = {}) => {
-  const basePrice = [offer.base_price, offer.regular_price, offer.price, offer.old_price]
+  let basePrice = [offer.base_price, offer.regular_price, offer.price, offer.old_price]
     .map(parseMoneyValue)
     .find((value) => Number.isFinite(value));
 
   let memberPrice = [offer.final_price, offer.member_price, offer.club_price, offer.discounted_price, offer.price_with_discount]
     .map(parseMoneyValue)
     .find((value) => Number.isFinite(value));
+
+  const directSavingAmount = [offer.saving_amount, offer.saving]
+    .map(parseMoneyValue)
+    .find((value) => Number.isFinite(value) && value > 0);
+
+  if (!Number.isFinite(memberPrice) && Number.isFinite(basePrice) && Number.isFinite(directSavingAmount)) {
+    memberPrice = Math.max(basePrice - directSavingAmount, 0);
+  }
+
+  if (!Number.isFinite(basePrice) && Number.isFinite(memberPrice) && Number.isFinite(directSavingAmount)) {
+    basePrice = memberPrice + directSavingAmount;
+  }
 
   if (!Number.isFinite(memberPrice) && Number.isFinite(basePrice)) {
     const discountPercent = parseMoneyValue(offer.discount_percent);
@@ -1075,7 +1092,8 @@ const getOfferPricingView = (offer = {}) => {
 
   const hasBasePrice = Number.isFinite(basePrice);
   const hasMemberPrice = Number.isFinite(memberPrice);
-  const savingAmount = hasBasePrice && hasMemberPrice ? basePrice - memberPrice : null;
+  const calculatedSavingAmount = hasBasePrice && hasMemberPrice ? basePrice - memberPrice : null;
+  const savingAmount = Number.isFinite(directSavingAmount) ? directSavingAmount : calculatedSavingAmount;
   const hasSaving = Number.isFinite(savingAmount) && savingAmount > 0;
 
   return {
@@ -1696,12 +1714,14 @@ const renderLandingPartnerImage = (partner, activePhotoIndex = 0) => {
     const currentPhoto = photos[safePhotoIndex];
     return `
       <div class="landing-partner-cover landing-partner-gallery" aria-label="Галерея партнёра">
-        <div class="landing-partner-gallery-main" style="background-image: url('${escapeHtml(currentPhoto.url)}')" role="img" aria-label="${escapeHtml(currentPhoto.alt_text || partner?.name || 'Фото партнёра')}">
+        <div class="landing-partner-gallery-main">
+          <span class="landing-partner-gallery-backdrop" style="background-image: url('${escapeHtml(currentPhoto.url)}')" aria-hidden="true"></span>
+          <img class="landing-partner-gallery-image" src="${escapeHtml(currentPhoto.url)}" alt="${escapeHtml(currentPhoto.alt_text || partner?.name || 'Фото партнёра')}" loading="lazy" />
           ${photos.length > 1 ? '<button class=\"landing-gallery-nav landing-gallery-nav--prev\" type=\"button\" data-landing-photo-prev aria-label=\"Предыдущее фото\">←</button>' : ''}
           ${photos.length > 1 ? '<button class=\"landing-gallery-nav landing-gallery-nav--next\" type=\"button\" data-landing-photo-next aria-label=\"Следующее фото\">→</button>' : ''}
           <span class=\"landing-gallery-counter\">Фото ${safePhotoIndex + 1} / ${photos.length}</span>
         </div>
-        ${photos.length > 1 ? `<div class="landing-partner-gallery-thumbs">${photos.slice(0, 6).map((photo, index) => `<button type="button" class="landing-partner-gallery-thumb ${index === safePhotoIndex ? 'landing-partner-gallery-thumb--active' : ''}" data-landing-photo-index="${escapeHtml(index)}" style="background-image: url('${escapeHtml(photo.url)}')" aria-label="Показать фото ${escapeHtml(index + 1)}"></button>`).join('')}</div>` : ''}
+        ${photos.length > 1 ? `<div class="landing-partner-gallery-thumbs">${photos.slice(0, 6).map((photo, index) => `<button type="button" class="landing-partner-gallery-thumb ${index === safePhotoIndex ? 'landing-partner-gallery-thumb--active' : ''}" data-landing-photo-index="${escapeHtml(index)}" aria-label="Показать фото ${escapeHtml(index + 1)}"><img src="${escapeHtml(photo.url)}" alt="" loading="lazy" /></button>`).join('')}</div>` : ''}
       </div>
     `;
   }
@@ -1709,7 +1729,7 @@ const renderLandingPartnerImage = (partner, activePhotoIndex = 0) => {
   if (!coverUrl) {
     return '<div class="landing-partner-cover landing-partner-cover--placeholder" aria-hidden="true">♡</div>';
   }
-  return `<div class="landing-partner-cover" style="background-image: url('${escapeHtml(coverUrl)}')" aria-hidden="true"></div>`;
+  return `<div class="landing-partner-cover landing-partner-gallery-main"><span class="landing-partner-gallery-backdrop" style="background-image: url('${escapeHtml(coverUrl)}')" aria-hidden="true"></span><img class="landing-partner-gallery-image" src="${escapeHtml(coverUrl)}" alt="${escapeHtml(partner?.name || 'Фото партнёра')}" loading="lazy" /></div>`;
 };
 
 const renderSafePartnerImagePreview = (url, kind, label) => {
@@ -2944,7 +2964,7 @@ const renderClientSavingsTab = () => {
         <h4>${formatValue(item.partner_name)}</h4>
         <p>${formatValue(item.offer_title)}</p>
         <p>${formatValue(formatDate(item.used_at))}</p>
-        <p>Цена без скидки: ${formatPrice(item.base_price)}</p>
+        <p>Обычная цена: ${formatPrice(item.base_price)}</p>
         <p>Цена участницы: ${formatPrice(item.final_price)}</p>
         <p>Экономия: ${formatPrice(item.saving_amount)}</p>
       </article>
