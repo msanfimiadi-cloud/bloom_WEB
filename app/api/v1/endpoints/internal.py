@@ -15,6 +15,16 @@ from app.schemas.browser_auth import (
     BrowserLoginTokenCreateRequest,
     BrowserLoginTokenCreateResponse,
 )
+from app.schemas.engagement import (
+    InternalPartnerAccessStatusRead,
+    InternalPartnerCodeCheckRequest,
+    InternalPartnerCodeConfirmRequest,
+    InternalPartnerCodeConfirmationRead,
+    InternalPartnerCodeRead,
+    InternalPartnerIdentityRequest,
+)
+from app.services.engagement import check_partner_code, confirm_verification, get_partner_bot_access
+from app.services.offer_savings import calculate_offer_saving_snapshot
 from app.services.browser_login_codes import LOGIN_CODE_TTL_SECONDS, BrowserLoginCodeService
 from app.services.browser_login_tokens import BrowserLoginTokenService
 
@@ -31,6 +41,72 @@ def require_internal_service_token(
     if not compare_digest(credentials.credentials, settings.BOT_SERVICE_TOKEN):
         raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED, detail="Not authenticated")
 
+
+@router.post("/partner-access/status", response_model=InternalPartnerAccessStatusRead)
+def read_partner_access_status(
+    payload: InternalPartnerIdentityRequest,
+    _: None = Depends(require_internal_service_token),
+    db: Session = Depends(get_db),
+) -> InternalPartnerAccessStatusRead:
+    access = get_partner_bot_access(db, payload.provider, payload.provider_user_id)
+    if access is None or not access.partner.is_active:
+        return InternalPartnerAccessStatusRead(is_partner=False)
+    return InternalPartnerAccessStatusRead(
+        is_partner=True,
+        partner_id=access.partner_id,
+        partner_name=access.partner.name,
+        employee_name=access.display_name,
+    )
+
+
+@router.post("/partner-code/check", response_model=InternalPartnerCodeRead)
+def check_internal_partner_code(
+    payload: InternalPartnerCodeCheckRequest,
+    _: None = Depends(require_internal_service_token),
+    db: Session = Depends(get_db),
+) -> InternalPartnerCodeRead:
+    access = get_partner_bot_access(db, payload.provider, payload.provider_user_id)
+    if access is None or not access.partner.is_active:
+        raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="partner_access_required")
+    try:
+        session = check_partner_code(db, access, payload.code)
+        saving = calculate_offer_saving_snapshot(session.offer)
+        result = InternalPartnerCodeRead(
+            session_id=session.id,
+            code=session.code,
+            partner_name=access.partner.name,
+            privilege_title=session.offer.title if session.offer is not None else None,
+            saving_amount=saving.saving_amount,
+            expires_at=session.expires_at,
+        )
+        db.commit()
+        return result
+    except HTTPException:
+        db.commit()
+        raise
+
+
+@router.post("/partner-code/confirm", response_model=InternalPartnerCodeConfirmationRead)
+def confirm_internal_partner_code(
+    payload: InternalPartnerCodeConfirmRequest,
+    _: None = Depends(require_internal_service_token),
+    db: Session = Depends(get_db),
+) -> InternalPartnerCodeConfirmationRead:
+    access = get_partner_bot_access(db, payload.provider, payload.provider_user_id)
+    if access is None or not access.partner.is_active:
+        raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="partner_access_required")
+    from app.models.verification import PrivilegeVerificationSession
+
+    session = db.get(PrivilegeVerificationSession, payload.session_id)
+    if session is None:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="code_not_found")
+    confirmed, number = confirm_verification(db, session, partner=access.partner, bot_access=access)
+    return InternalPartnerCodeConfirmationRead(
+        status=confirmed.status,
+        saving_amount=confirmed.saving_amount or 0,
+        giveaway_number_awarded=number is not None,
+        giveaway_number=number.number if number is not None else None,
+    )
 
 @router.post("/login-code", response_model=BrowserLoginCodeInternalResponse)
 def create_browser_login_code(

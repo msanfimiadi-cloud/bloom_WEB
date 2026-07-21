@@ -19,6 +19,7 @@ from app.models.category import Category
 from app.models.city import City
 from app.models.client import ClientProfile
 from app.models.giveaway import Giveaway, GiveawayNumber, GiveawayPrize
+from app.models.engagement import BloomDailyTask, PartnerBotAccess
 from app.models.lead import LeadClick
 from app.models.landing import LandingSettings
 from app.models.partner import Partner, PartnerOffer, PartnerPhoto, PartnerQrLink
@@ -57,6 +58,16 @@ from app.schemas.admin import (
 )
 from app.schemas.auth import AdminUserRead
 from app.schemas.giveaway import GiveawayRead, GiveawayWrite, GiveawayPrizeRead, GiveawayPrizeWrite
+from app.schemas.engagement import (
+    BloomTaskPatch,
+    BloomTaskRead,
+    BloomTaskWrite,
+    FlowerLeaderboardRewardRead,
+    FlowerLeaderboardSettleRequest,
+    PartnerBotAccessPatch,
+    PartnerBotAccessRead,
+    PartnerBotAccessWrite,
+)
 from app.schemas.landing import LandingSettingsRead, LandingSettingsUpdate
 from app.schemas.partner import PartnerAnalyticsRead
 from app.schemas.payment import AdminPaymentRequestRead, PaymentRequestApprove, PaymentRequestReject
@@ -72,6 +83,7 @@ from app.services.privilege_verifications import (
     ttl_seconds,
 )
 from app.services.social_subscriptions import recheck_giveaway_social_subscriptions, is_number_active
+from app.services.engagement import club_today, settle_flower_leaderboard
 from app.services.qr_links import (
     generate_qr_slug,
     is_valid_qr_slug,
@@ -80,6 +92,109 @@ from app.services.qr_links import (
 )
 
 router = APIRouter(prefix="/admin", tags=["admin"])
+
+
+def _partner_access_read(access: PartnerBotAccess) -> PartnerBotAccessRead:
+    return PartnerBotAccessRead(
+        id=access.id,
+        partner_id=access.partner_id,
+        partner_name=access.partner.name,
+        provider=access.provider,
+        provider_user_id=access.provider_user_id,
+        username=access.username,
+        display_name=access.display_name,
+        is_active=access.is_active,
+        activation_count=access.activation_count,
+        last_activity_at=access.last_activity_at,
+        created_at=access.created_at,
+    )
+
+
+@router.get("/partner-accesses", response_model=list[PartnerBotAccessRead])
+def list_partner_accesses(admin: AdminUser = Depends(require_admin), db: Session = Depends(get_db)) -> list[PartnerBotAccessRead]:
+    _ = admin
+    rows = db.execute(select(PartnerBotAccess).options(selectinload(PartnerBotAccess.partner)).order_by(PartnerBotAccess.created_at.desc())).scalars().all()
+    return [_partner_access_read(row) for row in rows]
+
+
+@router.post("/partner-accesses", response_model=PartnerBotAccessRead, status_code=status.HTTP_201_CREATED)
+def create_partner_access(payload: PartnerBotAccessWrite, admin: AdminUser = Depends(require_admin), db: Session = Depends(get_db)) -> PartnerBotAccessRead:
+    _ = admin
+    partner = db.get(Partner, payload.partner_id)
+    if partner is None:
+        raise HTTPException(status_code=404, detail="Partner not found")
+    access = PartnerBotAccess(**payload.model_dump())
+    access.provider_user_id = access.provider_user_id.strip()
+    access.display_name = access.display_name.strip()
+    access.username = (access.username or "").strip() or None
+    db.add(access)
+    try:
+        db.commit()
+    except IntegrityError:
+        db.rollback()
+        raise HTTPException(status_code=409, detail="This bot account already has partner access") from None
+    db.refresh(access)
+    access.partner = partner
+    return _partner_access_read(access)
+
+
+@router.patch("/partner-accesses/{access_id}", response_model=PartnerBotAccessRead)
+def update_partner_access(access_id: int, payload: PartnerBotAccessPatch, admin: AdminUser = Depends(require_admin), db: Session = Depends(get_db)) -> PartnerBotAccessRead:
+    _ = admin
+    access = db.get(PartnerBotAccess, access_id)
+    if access is None:
+        raise HTTPException(status_code=404, detail="Partner access not found")
+    for field, value in payload.model_dump(exclude_unset=True).items():
+        if field == "partner_id" and db.get(Partner, value) is None:
+            raise HTTPException(status_code=404, detail="Partner not found")
+        setattr(access, field, value.strip() if isinstance(value, str) else value)
+    db.commit()
+    access = db.execute(select(PartnerBotAccess).options(selectinload(PartnerBotAccess.partner)).where(PartnerBotAccess.id == access_id)).scalar_one()
+    return _partner_access_read(access)
+
+
+@router.get("/flower/tasks", response_model=list[BloomTaskRead])
+def list_flower_tasks(admin: AdminUser = Depends(require_admin), db: Session = Depends(get_db)) -> list[BloomTaskRead]:
+    _ = admin
+    return list(db.execute(select(BloomDailyTask).order_by(BloomDailyTask.sort_order, BloomDailyTask.id)).scalars().all())
+
+
+@router.post("/flower/tasks", response_model=BloomTaskRead, status_code=status.HTTP_201_CREATED)
+def create_flower_task(payload: BloomTaskWrite, admin: AdminUser = Depends(require_admin), db: Session = Depends(get_db)) -> BloomTaskRead:
+    _ = admin
+    task = BloomDailyTask(**payload.model_dump())
+    db.add(task)
+    db.commit()
+    db.refresh(task)
+    return task
+
+
+@router.patch("/flower/tasks/{task_id}", response_model=BloomTaskRead)
+def update_flower_task(task_id: int, payload: BloomTaskPatch, admin: AdminUser = Depends(require_admin), db: Session = Depends(get_db)) -> BloomTaskRead:
+    _ = admin
+    task = db.get(BloomDailyTask, task_id)
+    if task is None:
+        raise HTTPException(status_code=404, detail="Flower task not found")
+    for field, value in payload.model_dump(exclude_unset=True).items():
+        setattr(task, field, value)
+    db.commit()
+    db.refresh(task)
+    return task
+
+
+@router.post("/flower/settle", response_model=list[FlowerLeaderboardRewardRead])
+def settle_flower(payload: FlowerLeaderboardSettleRequest, admin: AdminUser = Depends(require_admin), db: Session = Depends(get_db)) -> list[FlowerLeaderboardRewardRead]:
+    _ = admin
+    if payload.month.day != 1:
+        raise HTTPException(status_code=422, detail="month must be the first day of a month")
+    current_month = club_today().replace(day=1)
+    if payload.month >= current_month:
+        raise HTTPException(status_code=409, detail="The flower month has not finished yet")
+    giveaway = db.get(Giveaway, payload.giveaway_id)
+    if giveaway is None:
+        raise HTTPException(status_code=404, detail="Giveaway not found")
+    rewards = settle_flower_leaderboard(db, payload.month, giveaway)
+    return [FlowerLeaderboardRewardRead(client_id=item.client_id, place=item.place, entries_count=item.entries_count) for item in rewards]
 
 CITY_DUPLICATE_DETAIL = "City with this slug or name already exists"
 CATEGORY_DUPLICATE_DETAIL = "Category with this slug already exists"

@@ -22,7 +22,7 @@ from app.schemas.privilege import (
     PrivilegeSessionPartnerRead,
     PrivilegeSessionPrivilegeRead,
 )
-from app.services.privilege_verifications import PRIVILEGE_VERIFICATION_TTL_SECONDS, normalize_expired_verifications
+from app.services.privilege_verifications import PRIVILEGE_VERIFICATION_TTL_SECONDS, generate_unique_display_code, normalize_expired_verifications
 
 router = APIRouter(prefix="/privileges", tags=["privileges"])
 
@@ -58,10 +58,10 @@ def create_privilege_qr_session(
         client_id=profile.id,
         partner_id=partner.id,
         offer_id=privilege.id if privilege is not None else None,
-        code=_generate_display_code(),
+        code=generate_unique_display_code(db, partner.id, now=now),
         token=token,
         status=PrivilegeVerificationStatus.pending.value,
-        source="qr",
+        source="code",
         expires_at=now + timedelta(seconds=PRIVILEGE_VERIFICATION_TTL_SECONDS),
         created_at=now,
     )

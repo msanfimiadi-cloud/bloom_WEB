@@ -28,6 +28,7 @@ from app.models.user import User
 from app.schemas.activity import ActivityFeedRead
 from app.schemas.browser_auth import BrowserLoginCodeRequest, ProviderIdentityLinkRequest
 from app.schemas.giveaway import GiveawayStateRead, PublicGiveawayRead, GiveawayPrizeRead, GiveawayNumberRead, SocialSubscriptionCheckRead
+from app.schemas.engagement import FlowerActionRead, FlowerStateRead
 from app.schemas.client import (
     ClientSiteCredentialsRead,
     ClientCityResponse,
@@ -69,6 +70,7 @@ from app.services.activity_feed import build_client_activity_feed
 from app.services.browser_login_codes import BrowserLoginCodeService
 from app.services.referrals import REWARD_ENTRIES_PER_REFERRAL, activated_referrals_count, ensure_referral_code, referral_counts, referral_link
 from app.services.giveaways import ensure_user_numbers, get_active_giveaway
+from app.services.engagement import award_petals, club_today, flower_state
 from app.services.social_subscriptions import check_and_apply, social_task_settings, is_number_active
 from app.services.offer_savings import calculate_offer_saving_snapshot
 from app.services.site_credentials import (
@@ -80,6 +82,7 @@ from app.services.privilege_verifications import (
     apply_verification_status_filter,
     as_aware_utc,
     normalize_expired_verifications,
+    generate_unique_display_code,
     ttl_seconds,
 )
 
@@ -102,6 +105,49 @@ PAID_SOURCE = "paid"
 LINKING_CHALLENGE_TTL_SECONDS = 600
 LINKING_MAX_ATTEMPTS = 5
 CATEGORY_DISPLAY_BY_SLUG = {item["slug"]: item["title"] for item in get_women_club_categories()}
+
+
+@router.get("/me/flower", response_model=FlowerStateRead)
+def read_flower_state(
+    current_user: User = Depends(require_client),
+    db: Session = Depends(get_db),
+) -> FlowerStateRead:
+    profile = _get_or_create_client_profile(db, current_user.id)
+    return FlowerStateRead.model_validate(flower_state(db, profile.id))
+
+
+@router.post("/me/flower/check-in", response_model=FlowerActionRead)
+def check_in_flower(
+    current_user: User = Depends(require_client),
+    db: Session = Depends(get_db),
+) -> FlowerActionRead:
+    profile = _get_or_create_client_profile(db, current_user.id)
+    awarded = award_petals(db, profile.id, source="checkin")
+    return FlowerActionRead(awarded=awarded, state=FlowerStateRead.model_validate(flower_state(db, profile.id)))
+
+
+@router.post("/me/flower/tasks/{task_id}/complete", response_model=FlowerActionRead)
+def complete_flower_task(
+    task_id: int,
+    current_user: User = Depends(require_client),
+    db: Session = Depends(get_db),
+) -> FlowerActionRead:
+    from app.models.engagement import BloomDailyTask
+
+    profile = _get_or_create_client_profile(db, current_user.id)
+    today = club_today()
+    task = db.execute(
+        select(BloomDailyTask).where(
+            BloomDailyTask.id == task_id,
+            BloomDailyTask.is_active.is_(True),
+            (BloomDailyTask.starts_on.is_(None) | (BloomDailyTask.starts_on <= today)),
+            (BloomDailyTask.ends_on.is_(None) | (BloomDailyTask.ends_on >= today)),
+        )
+    ).scalar_one_or_none()
+    if task is None:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="flower_task_not_found")
+    awarded = award_petals(db, profile.id, source="task", task=task, today=today)
+    return FlowerActionRead(awarded=awarded, state=FlowerStateRead.model_validate(flower_state(db, profile.id, today=today)))
 
 
 def _mask_provider_user_id(value: str | None) -> str | None:
@@ -1037,7 +1083,7 @@ def create_client_partner_verification(
         client_id=profile.id,
         partner_id=partner.id,
         offer_id=offer.id if offer is not None else None,
-        code=_generate_verification_code(),
+        code=generate_unique_display_code(db, partner.id, now=now),
         token=_generate_unique_privilege_session_token(db),
         status=PrivilegeVerificationStatus.active.value,
         source=_normalize_optional_text(request_payload.source) or "web",

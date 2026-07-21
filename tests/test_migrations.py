@@ -64,7 +64,7 @@ def test_migration_files_have_single_head_revision() -> None:
     assert missing_references == []
 
     heads = sorted(set(revisions) - referenced_revisions)
-    assert heads == ["20260716_0031"]
+    assert heads == ["20260721_0032"]
 
 
 def test_20260602_0017_constraint_names_are_postgresql_safe() -> None:

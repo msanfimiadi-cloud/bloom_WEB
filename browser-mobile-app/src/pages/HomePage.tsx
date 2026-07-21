@@ -12,6 +12,7 @@ import { toText } from "../utils/text";
 import { sanitizeCmsHtml } from "../utils/sanitizeCmsHtml";
 import { resolveHomeCtaAction } from "../utils/homeCta";
 import { Coffee, Flower2, HeartPulse, Shirt } from "lucide-react";
+import { FlowerGame } from "../components/FlowerGame";
 
 interface HomePageProps {
   profile: ClientProfile | null;
@@ -377,7 +378,7 @@ export function HomePage({
             <div className="giveaway-modal__card">
               <button className="giveaway-modal__close" type="button" aria-label="Закрыть" onClick={() => setGiveawayModalOpen(false)}>×</button>
               <strong>Мои номера</strong>
-              <ul>{(giveawayState.numbers ?? []).map((item) => <li key={`${toText(item.number)}-${toText(item.source)}`}>{toText(item.number)} — {toText(item.source) === 'referral' ? 'реферал' : toText(item.source) === 'telegram_subscription' ? 'Telegram' : toText(item.source) === 'vk_subscription' ? 'VK' : 'подписка'}</li>)}</ul>
+              <ul>{(giveawayState.numbers ?? []).map((item) => <li key={`${toText(item.number)}-${toText(item.source)}`}>{toText(item.number)} — {toText(item.source) === 'referral' ? 'реферал' : toText(item.source) === 'telegram_subscription' ? 'Telegram' : toText(item.source) === 'vk_subscription' ? 'VK' : toText(item.source) === 'privilege_activation' ? 'активация привилегии' : toText(item.source) === 'flower_rank' ? 'рейтинг Bloom' : 'подписка'}</li>)}</ul>
             </div>
           </div>
         ) : null}
@@ -513,6 +514,7 @@ export function HomePage({
   return (
     <section className="page home-page home-page--membership">
       {renderMembershipHome()}
+      {profile ? <FlowerGame /> : null}
       {visibleHomeBlocks.length ? (
         <>
           {visibleHomeBlocks.filter((block) => block.type !== "hero").map(renderHomeBlock)}
