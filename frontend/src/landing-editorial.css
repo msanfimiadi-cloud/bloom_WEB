@@ -172,7 +172,7 @@
 .editorial-brand__caption {
   margin-top: 6px;
   color: var(--editorial-muted);
-  font-size: 9px;
+  font-size: 10px;
   letter-spacing: 0.16em;
   text-transform: uppercase;
 }
@@ -186,7 +186,7 @@
 .editorial-nav a,
 .editorial-login-link {
   color: var(--editorial-ink);
-  font-size: 12px;
+  font-size: 13px;
   font-weight: 600;
   text-decoration: none;
 }
@@ -240,7 +240,7 @@
 .editorial-button--small {
   min-height: 42px;
   padding-inline: 20px;
-  font-size: 10px;
+  font-size: 11px;
 }
 
 .editorial-mobile-menu {
@@ -264,7 +264,7 @@
 .editorial-kicker {
   margin: 0 0 22px;
   color: var(--editorial-wine);
-  font-size: 10px;
+  font-size: 11px;
   font-weight: 700;
   letter-spacing: 0.22em;
   text-transform: uppercase;
@@ -313,7 +313,7 @@
   padding-bottom: 5px;
   border-bottom: 1px solid currentColor;
   color: var(--editorial-ink);
-  font-size: 11px;
+  font-size: 12px;
   font-weight: 700;
   letter-spacing: 0.08em;
   text-decoration: none;
@@ -340,7 +340,7 @@
 .editorial-stats dd {
   margin: 7px 0 0;
   color: var(--editorial-muted);
-  font-size: 9px;
+  font-size: 10px;
   letter-spacing: 0.08em;
   text-transform: uppercase;
 }
@@ -391,7 +391,7 @@
   display: block;
   margin-top: 8px;
   color: var(--editorial-muted);
-  font-size: 9px;
+  font-size: 10px;
   letter-spacing: 0.08em;
   text-transform: uppercase;
 }
@@ -535,7 +535,7 @@
 .editorial-category-card__overlay small {
   margin-top: 4px;
   color: rgba(255,255,255,.76);
-  font-size: 9px;
+  font-size: 10px;
   letter-spacing: 0.07em;
   text-transform: uppercase;
 }
@@ -615,7 +615,7 @@
 
 .editorial-price span {
   color: #665752;
-  font-size: 11px;
+  font-size: 12px;
   text-transform: uppercase;
 }
 
@@ -625,7 +625,7 @@
   margin: 20px 0 0;
   padding: 0;
   color: #5d504c;
-  font-size: 11px;
+  font-size: 12px;
   line-height: 1.5;
   list-style: none;
 }
@@ -736,7 +736,7 @@
 
 .editorial-footer h2 {
   margin: 0 0 18px;
-  font-size: 10px;
+  font-size: 11px;
   letter-spacing: 0.15em;
   text-transform: uppercase;
 }
@@ -744,7 +744,7 @@
 .editorial-footer p,
 .editorial-footer a {
   color: var(--editorial-muted);
-  font-size: 11px;
+  font-size: 12px;
   line-height: 1.8;
 }
 
@@ -848,7 +848,7 @@
   .editorial-cities,
   .editorial-footer { width: calc(100% - 28px); }
   .editorial-brand__name { font-size: 29px; }
-  .editorial-brand__caption { font-size: 7px; }
+  .editorial-brand__caption { font-size: 9px; }
   .editorial-hero__copy { padding-top: 46px; }
   .editorial-hero h1 { font-size: clamp(57px, 17vw, 78px); line-height: .78; }
   .editorial-hero__actions,
