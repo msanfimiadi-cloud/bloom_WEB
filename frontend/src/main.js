@@ -463,18 +463,18 @@ const partnerTokenKey = 'womenclub_partner_token';
 const clientTokenKey = 'womenclub_client_token';
 let activeLoginMode = 'admin';
 const adminTabs = [
-  { id: 'overview', label: 'Главная', icon: '⌂' },
-  { id: 'users', label: 'Пользователи', icon: '👥' },
-  { id: 'cities', label: 'Города', icon: '⌖' },
-  { id: 'categories', label: 'Категории', icon: '✦' },
-  { id: 'partners', label: 'Партнёры', icon: '♡' },
-  { id: 'offers', label: 'Предложения', icon: '%' },
-  { id: 'contentReview', label: 'На проверке', icon: '◌' },
-  { id: 'paymentRequests', label: 'Оплаты', icon: '₽' },
-  { id: 'qr', label: 'QR / лиды', icon: 'QR' },
-  { id: 'verifications', label: 'Подтверждения', icon: '✓' },
-  { id: 'activity', label: 'Активность', icon: '•' },
-  { id: 'giveaways', label: 'Розыгрыши', icon: '🎁' },
+  { id: 'overview', label: 'Главная', group: 'Обзор' },
+  { id: 'partners', label: 'Партнёры', group: 'Ежедневная работа' },
+  { id: 'contentReview', label: 'На проверке', group: 'Ежедневная работа' },
+  { id: 'paymentRequests', label: 'Оплаты', group: 'Ежедневная работа' },
+  { id: 'verifications', label: 'Подтверждения', group: 'Ежедневная работа' },
+  { id: 'offers', label: 'Привилегии', group: 'Продвижение' },
+  { id: 'qr', label: 'QR и лиды', group: 'Продвижение' },
+  { id: 'giveaways', label: 'Розыгрыши', group: 'Продвижение' },
+  { id: 'users', label: 'Пользователи', group: 'Данные' },
+  { id: 'activity', label: 'Журнал событий', group: 'Данные' },
+  { id: 'cities', label: 'Города', group: 'Настройки' },
+  { id: 'categories', label: 'Категории', group: 'Настройки' },
 ];
 
 const adminState = {
@@ -1611,6 +1611,40 @@ const getRoleCaption = (role) => ({
   client: 'Персональный аккаунт с привилегиями',
 }[role]);
 
+const renderDashboardNavigation = (role, tabs, activeTab, tabAttr) => {
+  if (role !== 'admin') {
+    return tabs.map((tab) => `
+      <button class="dashboard-nav-button${activeTab === tab.id ? ' is-active' : ''}" type="button" ${tabAttr}="${tab.id}">
+        <span>${tab.label}</span>
+      </button>
+    `).join('');
+  }
+
+  const groups = tabs.reduce((result, tab) => {
+    const group = tab.group || 'Разделы';
+    if (!result.has(group)) result.set(group, []);
+    result.get(group).push(tab);
+    return result;
+  }, new Map());
+
+  return `
+    <div class="dashboard-primary-actions">
+      <button class="ui-button ui-button--primary" type="button" data-admin-global-partner-create>Добавить партнёра</button>
+      <button class="ui-button ui-button--secondary" type="button" data-admin-global-giveaway-create>Создать розыгрыш</button>
+    </div>
+    ${Array.from(groups.entries()).map(([group, items]) => `
+      <section class="dashboard-nav-group" aria-label="${escapeHtml(group)}">
+        <p class="dashboard-nav-group__title">${escapeHtml(group)}</p>
+        ${items.map((tab) => `
+          <button class="dashboard-nav-button${activeTab === tab.id ? ' is-active' : ''}" type="button" ${tabAttr}="${tab.id}">
+            <span>${tab.label}</span>
+          </button>
+        `).join('')}
+      </section>
+    `).join('')}
+  `;
+};
+
 const renderDashboardApp = (role) => {
   const user = getRoleUser(role) || {};
   const roleTitle = getRoleTitle(role);
@@ -1654,12 +1688,7 @@ const renderDashboardApp = (role) => {
             <strong>${roleTitle}</strong>
           </div>
           <nav class="dashboard-nav" aria-label="Меню кабинета">
-            ${getRoleTabs(role).map((tab) => `
-              <button class="dashboard-nav-button${activeTab === tab.id ? ' is-active' : ''}" type="button" ${tabAttr}="${tab.id}">
-                <span class="dashboard-nav-icon" aria-hidden="true">${tab.icon || '•'}</span>
-                <span>${tab.label}</span>
-              </button>
-            `).join('')}
+            ${renderDashboardNavigation(role, getRoleTabs(role), activeTab, tabAttr)}
           </nav>
         </aside>
         <main class="dashboard-main">
@@ -4165,27 +4194,33 @@ const renderGiveawayPlaceRows = (giveaway = {}) => {
   return Array.from({ length: Math.max(0, count) }, (_, index) => {
     const place = prizes[index] || { place_number: index + 1 };
     return `<fieldset class="giveaway-prize-row" data-admin-giveaway-place-row>
-      <legend>${index + 1} место</legend>
+      <legend>${index + 1}-е место</legend>
       <input name="place_number" type="hidden" value="${escapeHtml(place.place_number || index + 1)}" />
       <label>Приз<input name="prize_title" value="${escapeHtml(place.prize_title || '')}" /></label>
-      <label>Платформа победителя<select name="winner_provider"><option value="">Не выбран</option><option value="telegram" ${place.winner_provider === 'telegram' ? 'selected' : ''}>Telegram</option><option value="vk" ${place.winner_provider === 'vk' ? 'selected' : ''}>VK</option></select></label>
-      <label>ID победителя<input name="winner_provider_user_id" value="${escapeHtml(place.winner_provider_user_id || '')}" /></label>
-      <label>Победный номер<input name="winning_number" value="${escapeHtml(place.winning_number || '')}" /></label>
+      <details class="giveaway-winner-details" ${place.winner_provider || place.winner_provider_user_id || place.winning_number ? 'open' : ''}>
+        <summary>Заполнить победителя после розыгрыша</summary>
+        <div class="admin-form-grid">
+          <label>Платформа<select name="winner_provider"><option value="">Не выбран</option><option value="telegram" ${place.winner_provider === 'telegram' ? 'selected' : ''}>Telegram</option><option value="vk" ${place.winner_provider === 'vk' ? 'selected' : ''}>VK</option></select></label>
+          <label>ID победителя<input name="winner_provider_user_id" value="${escapeHtml(place.winner_provider_user_id || '')}" /></label>
+          <label>Победный номер<input name="winning_number" value="${escapeHtml(place.winning_number || '')}" /></label>
+        </div>
+      </details>
     </fieldset>`;
   }).join('');
 };
 
-const renderGiveawayForm = (giveaway = {}) => `<form class="admin-form" data-admin-giveaway-form data-giveaway-id="${escapeHtml(giveaway.id || '')}">
-  <label>Название<input name="title" value="${escapeHtml(giveaway.title || 'Розыгрыш месяца')}" required /></label>
-  <label>Описание<textarea name="description" rows="3">${escapeHtml(giveaway.description || '')}</textarea></label>
-  <label class="checkbox-row"><input name="is_active" type="checkbox" ${giveaway.is_active ? 'checked' : ''} /> Активен</label>
-  <label>Начало<input name="starts_at" type="datetime-local" value="${escapeHtml(String(giveaway.starts_at || '').slice(0, 16))}" /></label>
-  <label>Окончание<input name="ends_at" type="datetime-local" value="${escapeHtml(String(giveaway.ends_at || '').slice(0, 16))}" /></label>
-  <label>Количество победителей<input name="winners_count" type="number" min="0" max="100" value="${escapeHtml(giveaway.winners_count || 1)}" data-admin-giveaway-winners-count /></label>
-  <fieldset><legend>Telegram</legend><label>Ссылка на канал/группу<input name="telegram_community_url" value="${escapeHtml(giveaway.telegram_community_url || '')}" /></label><label>Chat ID / identifier<input name="telegram_chat_id" value="${escapeHtml(giveaway.telegram_chat_id || '')}" /></label><label class="checkbox-row"><input name="telegram_reward_enabled" type="checkbox" ${giveaway.telegram_reward_enabled ? 'checked' : ''} /> Включить награду</label><label>Количество номеров<input name="telegram_reward_numbers" type="number" min="1" max="1" value="${escapeHtml(giveaway.telegram_reward_numbers || 1)}" /></label></fieldset>
-  <fieldset><legend>VK</legend><label>Ссылка на сообщество<input name="vk_community_url" value="${escapeHtml(giveaway.vk_community_url || '')}" /></label><label>Group ID<input name="vk_group_id" value="${escapeHtml(giveaway.vk_group_id || '')}" /></label><label class="checkbox-row"><input name="vk_reward_enabled" type="checkbox" ${giveaway.vk_reward_enabled ? 'checked' : ''} /> Включить награду</label><label>Количество номеров<input name="vk_reward_numbers" type="number" min="1" max="1" value="${escapeHtml(giveaway.vk_reward_numbers || 1)}" /></label></fieldset>
-  <div data-admin-giveaway-place-list>${renderGiveawayPlaceRows(giveaway)}</div>
-  <button class="ui-button" type="submit" ${adminState.giveawaySaving ? 'disabled' : ''}>${adminState.giveawaySaving ? 'Сохранение…' : 'Сохранить розыгрыш'}</button>
+const renderGiveawayForm = (giveaway = {}) => `<form class="admin-form admin-giveaway-form" data-admin-giveaway-form data-giveaway-id="${escapeHtml(giveaway.id || '')}">
+  <section class="admin-form-section"><div class="admin-form-section-heading"><span>1</span><div><h4>Основное</h4><p>Название, описание и период проведения.</p></div></div>
+    <label>Название<input name="title" value="${escapeHtml(giveaway.title || '')}" placeholder="Например, Тест2" required /></label>
+    <label>Описание<textarea name="description" rows="3">${escapeHtml(giveaway.description || '')}</textarea></label>
+    <div class="admin-form-grid"><label>Начало<input name="starts_at" type="datetime-local" value="${escapeHtml(String(giveaway.starts_at || '').slice(0, 16))}" /></label><label>Окончание<input name="ends_at" type="datetime-local" value="${escapeHtml(String(giveaway.ends_at || '').slice(0, 16))}" /></label><label>Количество победителей<input name="winners_count" type="number" min="0" max="100" value="${escapeHtml(giveaway.winners_count || 1)}" data-admin-giveaway-winners-count /></label></div>
+  </section>
+  <section class="admin-form-section"><div class="admin-form-section-heading"><span>2</span><div><h4>Призы</h4><p>Количество строк меняется вместе с количеством победителей.</p></div></div><div data-admin-giveaway-place-list>${renderGiveawayPlaceRows(giveaway)}</div></section>
+  <details class="admin-form-section admin-giveaway-social" ${giveaway.telegram_reward_enabled || giveaway.vk_reward_enabled ? 'open' : ''}><summary>Дополнительные номера за подписки</summary><p class="helper-text">Откройте этот блок, только если хотите начислять номера за Telegram или VK.</p>
+    <div class="admin-giveaway-social-grid"><fieldset><legend>Telegram</legend><label>Ссылка на канал<input name="telegram_community_url" value="${escapeHtml(giveaway.telegram_community_url || '')}" /></label><label>Chat ID<input name="telegram_chat_id" value="${escapeHtml(giveaway.telegram_chat_id || '')}" /></label><label class="checkbox-row"><input name="telegram_reward_enabled" type="checkbox" ${giveaway.telegram_reward_enabled ? 'checked' : ''} /> Начислять номер</label><input name="telegram_reward_numbers" type="hidden" value="1" /></fieldset><fieldset><legend>ВКонтакте</legend><label>Ссылка на сообщество<input name="vk_community_url" value="${escapeHtml(giveaway.vk_community_url || '')}" /></label><label>ID группы<input name="vk_group_id" value="${escapeHtml(giveaway.vk_group_id || '')}" /></label><label class="checkbox-row"><input name="vk_reward_enabled" type="checkbox" ${giveaway.vk_reward_enabled ? 'checked' : ''} /> Начислять номер</label><input name="vk_reward_numbers" type="hidden" value="1" /></fieldset></div>
+  </details>
+  <section class="admin-form-section admin-form-section--publish"><div class="admin-form-section-heading"><span>3</span><div><h4>Публикация</h4><p>Новый розыгрыш сохраняется неактивным, пока вы его не включите.</p></div></div><label class="checkbox-row"><input name="is_active" type="checkbox" ${giveaway.is_active ? 'checked' : ''} /> Показывать розыгрыш участницам</label></section>
+  <div class="admin-form-actions"><button class="ui-button ui-button--primary" type="submit" ${adminState.giveawaySaving ? 'disabled' : ''}>${adminState.giveawaySaving ? 'Сохранение…' : 'Сохранить розыгрыш'}</button>${giveaway.id ? '<button class="ui-button ui-button--ghost" type="button" data-admin-giveaway-create>Отмена</button>' : ''}</div>
   <p class="form-message" data-form-message="giveaway">${escapeHtml(adminState.formMessages.giveaway || '')}</p>
 </form>`;
 
@@ -4245,8 +4280,8 @@ const renderGiveawayEntriesSection = (selected) => {
 const renderGiveawaysTab = () => {
   const selected = adminState.giveaways.find((item) => String(item.id) === String(adminState.selectedGiveawayIdForEdit));
   const entriesSelection = resolveGiveawayForEntries();
-  return `<div class="giveaways-page"><div class="admin-section-heading admin-page-heading"><p class="section-eyebrow section-kicker">WEB Admin</p><h3>Розыгрыши</h3><p>Создавайте розыгрыш и места победителей для Browser Mobile App.</p></div>
-  <section class="ui-card giveaway-section"><h4>${selected ? 'Редактировать розыгрыш' : 'Создать розыгрыш'}</h4>${renderGiveawayForm(selected || {})}</section>
+  return `<div class="giveaways-page"><div class="admin-section-heading admin-page-heading admin-page-heading--actions"><div><p class="section-eyebrow section-kicker">Розыгрыши</p><h3>Розыгрыши клуба</h3><p>Создание розыгрыша, призы, участники и выгрузка результатов — в одном разделе.</p></div><button class="ui-button ui-button--primary" type="button" data-admin-giveaway-create>Новый розыгрыш</button></div>
+  <section class="ui-card giveaway-section"><h4>${selected ? `Редактирование: ${escapeHtml(getGiveawayTitle(selected))}` : 'Новый розыгрыш'}</h4>${renderGiveawayForm(selected || {})}</section>
   <section class="ui-card giveaway-section"><h4>Все розыгрыши</h4>${renderTable(
     ['ID', 'Название', 'Статус', 'Победителей', 'Действия'],
     adminState.giveaways.map((g) => [
@@ -4422,7 +4457,7 @@ const renderOverviewTab = () => {
 
   return `
     <div class="admin-section-heading admin-page-heading">
-      <p class="section-kicker">CRM overview</p>
+      <p class="section-kicker">Панель управления</p>
       <h4>Обзор</h4>
       <p>${adminState.overviewPartialError ? 'Не удалось загрузить часть данных.' : 'Короткая сводка по справочникам и активности.'}</p>
     </div>
@@ -4523,7 +4558,6 @@ const renderUsersTab = () => {
       <form class="admin-form" data-admin-form="user">
         <h4>Новый пользователь</h4>
         <label>Логин<input name="email" type="text" autocomplete="username" placeholder="Введите логин" /><small class="helper-text">Логин — email, телефон или технический логин.</small></label>
-        <label>Контактный email<input name="contact_email" type="email" autocomplete="email" placeholder="name@example.com" /><small class="helper-text">Контактный email — почта для связи.</small></label>
         <label>Телефон<input name="phone" autocomplete="tel" /></label>
         <label>Пароль<input name="password" type="password" autocomplete="new-password" required /></label>
         <label>Роль${renderSelect('role', [['client', 'Клиент'], ['partner', 'Партнёр'], ['admin', 'Администратор']], true, 'client', null, { label: 'Роль', data: { adminUserRole: true } })}</label>
@@ -4760,6 +4794,11 @@ const renderPartnerEditForm = () => {
               <label>Телефон<input name="phone" value="${escapeHtml(partner.phone || '')}" /></label>
               <label>Сайт<input name="website_url" value="${escapeHtml(partner.website_url || '')}" /></label>
               <label>Соцсеть<input name="social_url" value="${escapeHtml(partner.social_url || '')}" /></label>
+              <label>ВКонтакте<input name="vk_url" value="${escapeHtml(partner.vk_url || '')}" /></label>
+              <label>Telegram<input name="telegram_url" value="${escapeHtml(partner.telegram_url || '')}" /></label>
+              <label>WhatsApp<input name="whatsapp_url" value="${escapeHtml(partner.whatsapp_url || '')}" /></label>
+              <label>Instagram<input name="instagram_url" value="${escapeHtml(partner.instagram_url || '')}" /></label>
+              <label>Ссылка на карту<input name="map_url" value="${escapeHtml(partner.map_url || '')}" /></label>
               <label>График работы<input name="working_hours" value="${escapeHtml(partner.working_hours || '')}" /></label>
               <label>Порядок сортировки<input name="sort_order" type="number" value="${escapeHtml(partner.sort_order ?? 0)}" /></label>
               <label class="checkbox-row"><input name="is_active" type="checkbox" ${partner.is_active ? 'checked' : ''} /> Активен</label>
@@ -4785,6 +4824,11 @@ const renderPartnerEditForm = () => {
           </section>
         </div>
         <aside class="admin-partner-detail-side">
+          <section class="admin-partner-detail-section admin-partner-next-actions">
+            <div class="admin-section-heading text-stack"><h4 class="section-title">Следующие шаги</h4><p class="section-description compact-copy">Продолжайте настройку этого партнёра без повторного поиска.</p></div>
+            <button class="ui-button ui-button--primary" type="button" data-admin-partner-open-offers="${escapeHtml(partner.id)}">Добавить привилегию</button>
+            <button class="ui-button ui-button--secondary" type="button" data-admin-partner-open-qr="${escapeHtml(partner.id)}">Настроить QR</button>
+          </section>
           <section class="admin-partner-detail-section">
             <div class="admin-section-heading text-stack"><h4 class="section-title">Витрина партнёра</h4><p class="section-description compact-copy">Preview для клиентского каталога.</p></div>
             ${renderPartnerMarketplaceCard(partner, { note: 'Preview для клиента', photos })}
@@ -4807,68 +4851,69 @@ const renderPartnerEditForm = () => {
 };
 
 const renderPartnerForm = () => {
-  const isEditMode = Boolean(adminState.selectedPartnerIdForEdit);
-  const partner = isEditMode
-    ? adminState.partners.find((item) => String(item.id) === String(adminState.selectedPartnerIdForEdit))
-    : null;
-
   const activeCategories = adminState.categories.filter((category) => category.is_active !== false);
-  const selectedCategoryIds = getAdminPartnerSelectedCategoryIds(isEditMode ? partner : null, activeCategories);
-  const currentStepIndex = Math.max(getPartnerWizardStepIndex(adminState.partnerFormStep), 0);
-  const currentStep = adminPartnerWizardSteps[currentStepIndex]?.key || 'basic';
-  const partnerWizardFormId = isEditMode
-    ? `admin-partner-edit-form-${partner?.id || adminState.selectedPartnerIdForEdit}`
-    : 'admin-partner-create-form';
-  const selectedCategories = activeCategories.filter((category) => selectedCategoryIds.has(String(category.id)));
-  const hasDescription = Boolean(String(partner?.description || '').trim());
-  const hasPhoto = Boolean(partner?.logo_url || partner?.cover_url || (adminState.partnerPhotosByPartner[adminState.selectedPartnerIdForEdit] || []).length);
-  const hasContacts = Boolean(
-    String(partner?.address || '').trim()
-      || String(partner?.phone || '').trim()
-      || String(partner?.website_url || '').trim()
-      || String(partner?.social_url || '').trim()
-      || String(partner?.working_hours || '').trim(),
-  );
-  const renderStepClass = (stepKey) => `admin-partner-step ${currentStep === stepKey ? '' : 'hidden'}`;
-
   return `
-    <aside class="admin-partner-form-panel ${adminState.partnerFormOpen ? 'is-open' : ''}" ${adminState.partnerFormOpen ? '' : 'hidden'}>
-      <div class="admin-partner-form-panel__header admin-partner-wizard">
-        <div class="admin-partner-wizard__header">
-          <h4>${isEditMode ? 'Редактировать партнёра' : 'Добавить партнёра'}</h4>
-          <p>${isEditMode ? 'Обновите данные партнёра и сохраните изменения.' : 'Заполните данные партнёра и сохраните.'}</p>
+    <section class="admin-partner-create-page">
+      <header class="admin-partner-create-header">
+        <button class="admin-back-button" type="button" data-admin-partner-edit-cancel>← Назад к партнёрам</button>
+        <div>
+          <p class="section-eyebrow section-kicker">Новый партнёр</p>
+          <h3>Добавить партнёра</h3>
+          <p>Сначала сохраните карточку. Фото, привилегии и QR можно добавить сразу после этого.</p>
         </div>
-        <div class="admin-partner-stepper" role="tablist" aria-label="Шаги формы партнёра">
-          ${adminPartnerWizardSteps.map((step, index) => `<button class="admin-partner-stepper__item ${index === currentStepIndex ? 'admin-partner-stepper__item--active' : ''} ${index < currentStepIndex ? 'admin-partner-stepper__item--done' : ''}" type="button" data-admin-partner-step-jump="${escapeHtml(step.key)}">${index + 1}. ${escapeHtml(step.label)}</button>`).join('')}
+        <span class="ui-badge ui-badge--muted">Черновик</span>
+      </header>
+      <form id="admin-partner-create-form" class="admin-form admin-partner-create-form" data-admin-form="partner" data-admin-partner-wizard-form>
+        <section class="admin-form-section">
+          <div class="admin-form-section-heading"><span>1</span><div><h4>Основная информация</h4><p>Поля, по которым партнёра найдут в каталоге.</p></div></div>
+          <div class="admin-form-grid">
+            <label>Название партнёра<input name="name" required autofocus placeholder="Например, Тест1" /></label>
+            <label>Город${renderSelect('city_id', adminState.cities.filter((city) => city.is_active !== false).map((city) => [city.id, city.name]), true, '', null, { label: 'Город', data: { adminPartnerField: 'city' } })}</label>
+          </div>
+          <fieldset class="partner-multicategory"><legend>Категории</legend><p class="helper-text">Можно выбрать несколько.</p><div class="partner-category-chips admin-partner-chips">${activeCategories.map((category) => `<label class="checkbox-row"><input type="checkbox" name="category_ids" value="${escapeHtml(category.id)}" /> ${escapeHtml(category.title || category.name)}</label>`).join('')}</div></fieldset>
+          <label>Короткое описание<textarea name="description" rows="4" placeholder="Чем занимается партнёр и какую пользу получает участница"></textarea></label>
+        </section>
+        <section class="admin-form-section">
+          <div class="admin-form-section-heading"><span>2</span><div><h4>Контакты</h4><p>Показываются клиентке в карточке партнёра.</p></div></div>
+          <div class="admin-form-grid">
+            <label>Адрес<input name="address" placeholder="Город, улица, дом" /></label>
+            <label>Телефон<input name="phone" autocomplete="tel" placeholder="+7 900 000-00-00" /></label>
+            <label>График работы<input name="working_hours" placeholder="Пн–Вс, 10:00–21:00" /></label>
+            <label>Ссылка на карту<input name="map_url" type="url" placeholder="https://…" /></label>
+          </div>
+        </section>
+        <section class="admin-form-section">
+          <div class="admin-form-section-heading"><span>3</span><div><h4>Сайт и соцсети</h4><p>Заполняйте только те каналы, которыми партнёр пользуется.</p></div></div>
+          <div class="admin-form-grid">
+            <label>Сайт<input name="website_url" type="url" placeholder="https://…" /></label>
+            <label>ВКонтакте<input name="vk_url" type="url" placeholder="https://vk.com/…" /></label>
+            <label>Telegram<input name="telegram_url" type="url" placeholder="https://t.me/…" /></label>
+            <label>WhatsApp<input name="whatsapp_url" type="url" placeholder="https://wa.me/…" /></label>
+            <label>Instagram<input name="instagram_url" type="url" placeholder="https://instagram.com/…" /></label>
+            <label>Другая ссылка<input name="social_url" type="url" placeholder="https://…" /></label>
+          </div>
+        </section>
+        <section class="admin-form-section admin-form-section--publish">
+          <div class="admin-form-section-heading"><span>4</span><div><h4>Доступ и публикация</h4><p>Новый партнёр по умолчанию сохраняется скрытым — его можно спокойно заполнить и проверить.</p></div></div>
+          <div class="admin-form-grid">
+            <label>Аккаунт владельца${renderSelect('owner_user_id', adminState.users.filter((item) => item.role === 'partner').map((item) => [item.id, item.email || item.phone || `Партнёр #${item.id}`]), false, '', 'Подключить позже', { label: 'Аккаунт владельца', data: { adminPartnerField: 'owner' } })}<small class="helper-text">Если аккаунта ещё нет, сохраните карточку и создайте его позже в разделе «Пользователи».</small></label>
+            <label>Порядок в каталоге<input name="sort_order" type="number" value="0" /></label>
+          </div>
+          <div class="admin-publish-options">
+            <label class="checkbox-row"><input name="is_active" type="checkbox" /> Показывать партнёра клиенткам</label>
+            <label class="checkbox-row"><input name="is_verified" type="checkbox" /> Данные проверены администратором</label>
+          </div>
+        </section>
+        <div class="admin-partner-create-actions">
+          <p>После сохранения откроется карточка, где можно загрузить фотографии и добавить привилегию.</p>
+          <div class="ui-action-row ui-action-row--right ui-action-row--stack-mobile">
+            <button class="ui-button ui-button--ghost" type="button" data-admin-partner-edit-cancel>Отмена</button>
+            <button class="ui-button ui-button--primary" type="submit">Сохранить партнёра</button>
+          </div>
+          <p class="form-message" data-form-message="partner">${escapeHtml(adminState.formMessages.partner || '')}</p>
         </div>
-      </div>
-      <form id="${escapeHtml(partnerWizardFormId)}" class="admin-form" data-admin-form="${isEditMode ? 'partnerEdit' : 'partner'}" ${isEditMode ? `data-partner-id="${escapeHtml(partner?.id)}"` : ''} data-admin-partner-wizard-form novalidate>
-        <section class="${renderStepClass('basic')}"><h5 class="admin-form-section__title">Основное</h5><div class="admin-form-grid">
-          <label>Название<input name="name" required value="${escapeHtml(partner?.name || '')}" /></label>
-          <label>Город${renderSelect('city_id', adminState.cities.map((city) => [city.id, city.name]), true, partner?.city_id || '', null, { label: 'Город', data: { adminPartnerField: 'city' } })}</label>
-          <label>Владелец${renderSelect('owner_user_id', adminState.users.filter((item) => item.role === 'partner').map((item) => [item.id, item.email || item.phone || `Партнёр #${item.id}`]), false, partner?.owner_user_id || '', 'Без владельца', { label: 'Владелец', data: { adminPartnerField: 'owner' } })}</label>
-          <label>Порядок сортировки<input name="sort_order" type="number" value="${escapeHtml(partner?.sort_order ?? 0)}" /></label>
-        </div>${adminState.partnerFormInlineError ? `<p class="admin-form-inline-error">${escapeHtml(adminState.partnerFormInlineError)}</p>` : ''}</section>
-        <section class="${renderStepClass('status')}"><h5 class="admin-form-section__title">Статусы</h5><div class="admin-form-grid">
-          <label class="checkbox-row"><input name="is_active" type="checkbox" ${partner?.is_active || !isEditMode ? 'checked' : ''} /> Активен</label>
-          <label class="checkbox-row"><input name="is_verified" type="checkbox" ${partner?.is_verified ? 'checked' : ''} /> Проверен</label>
-        </div><h5 class="admin-form-section__title">Категории</h5><p class="helper-text">Партнёр может отображаться сразу в нескольких категориях.</p><fieldset class="partner-multicategory"><div class="partner-category-chips admin-partner-chips">${activeCategories.map((category) => `<label class="checkbox-row"><input type="checkbox" name="category_ids" value="${escapeHtml(category.id)}" data-category-id="${escapeHtml(category.id)}" data-category-slug="${escapeHtml(category.slug || '')}" data-category-title="${escapeHtml(category.title || category.name || '')}" ${selectedCategoryIds.has(String(category.id)) ? 'checked' : ''}/> ${escapeHtml(category.title)}</label>`).join('')}</div></fieldset></section>
-        <section class="${renderStepClass('contacts')}"><h5 class="admin-form-section__title">Контакты</h5><div class="admin-form-grid">
-          <label>Адрес<input name="address" value="${escapeHtml(partner?.address || '')}" /></label>
-          <label>Телефон<input name="phone" value="${escapeHtml(partner?.phone || '')}" /></label>
-          <label>Сайт<input name="website_url" value="${escapeHtml(partner?.website_url || '')}" /></label>
-          <label>Соцсеть<input name="social_url" value="${escapeHtml(partner?.social_url || '')}" /></label>
-          <label>График работы<input name="working_hours" value="${escapeHtml(partner?.working_hours || '')}" /></label>
-        </div></section>
-        <section class="${renderStepClass('description')}"><h5 class="admin-form-section__title">Описание</h5><label>Описание<textarea name="description" rows="3">${escapeHtml(partner?.description || '')}</textarea></label></section>
-        <section class="${renderStepClass('media')}"><h5 class="admin-form-section__title">Медиа</h5><div class="admin-form-grid"><label>Логотип URL<input name="logo_url" value="${escapeHtml(partner?.logo_url || '')}" /></label><label>Обложка URL<input name="cover_url" value="${escapeHtml(partner?.cover_url || '')}" /></label></div>${isEditMode && partner ? renderPartnerImageUploader(partner, 'admin') : ''}${isEditMode && partner ? renderPartnerGallery(partner, adminState.partnerPhotosByPartner[adminState.selectedPartnerIdForEdit] || [], 'admin') : ''}</section>
-        <div class="ui-form-actions admin-partner-wizard-actions">
-          <button class="ui-button ui-button--primary" type="submit" form="${escapeHtml(partnerWizardFormId)}" data-admin-partner-save-button>Сохранить</button>
-          <button class="admin-inline-action ui-button ui-button--ghost" type="button" data-admin-partner-edit-cancel>Отмена</button>
-        </div>
-        <p class="form-message" data-form-message="${isEditMode ? 'partnerEdit' : 'partner'}">${escapeHtml(adminState.formMessages[isEditMode ? 'partnerEdit' : 'partner'] || '')}</p>
       </form>
-    </aside>
+    </section>
   `;
 };
 
@@ -5011,6 +5056,13 @@ const renderPartnersList = (partners, totalPartners) => {
 };
 
 const renderPartnersTab = () => {
+  if (adminState.selectedPartnerIdForEdit) {
+    return renderPartnerEditForm();
+  }
+  if (adminState.partnerFormOpen) {
+    return renderPartnerForm();
+  }
+
   const searchedPartners = filterAdminRows(adminState.partners, adminState.search.partners, [
     'name',
     'city_name',
@@ -5025,12 +5077,7 @@ const renderPartnersTab = () => {
 
   const partners = filterPartnersRegistry(searchedPartners);
 
-  return `
-    <div class="admin-partners-layout">
-      ${renderPartnersList(partners, adminState.partners)}
-      ${renderPartnerForm()}
-    </div>
-  `;
+  return `<div class="admin-partners-layout">${renderPartnersList(partners, adminState.partners)}</div>`;
 };
 
 const renderAdminOfferAction = (offer) => renderAdminTableActions(`
@@ -5102,7 +5149,7 @@ const renderOffersPreviewPanel = (offers) => {
   const previewOffer = selectedOffer || { is_active: true };
   return `
     <section class="admin-offers-preview-panel">
-      <div class="admin-section-heading text-stack"><h4 class="section-title">Preview предложения</h4><p class="section-description compact-copy">Компактный вид для клиентки.</p></div>
+      <div class="admin-section-heading text-stack"><h4 class="section-title">Предпросмотр привилегии</h4><p class="section-description compact-copy">Компактный вид для клиентки.</p></div>
       ${renderOfferMarketplaceCard(previewOffer, {
         compact: true,
         note: selectedOffer ? 'Preview для клиента' : 'Добавьте первое предложение',
@@ -5116,7 +5163,7 @@ const renderOffersTab = () => {
   const offers = filterAdminRows(adminState.offers, adminState.search.offers, ['title', 'description', 'benefit_text', 'discount_text', 'terms', 'conditions', (offer) => searchableBool(offer.is_active)]);
   return `
     <div class="admin-offers-layout">
-      <div class="admin-section-heading text-stack"><p class="section-eyebrow section-kicker">Offers</p><h4 class="section-title">Предложения</h4><p class="section-description compact-copy">Preview, таблица и форма.</p></div>
+      <div class="admin-section-heading text-stack"><p class="section-eyebrow section-kicker">Привилегии</p><h4 class="section-title">Привилегии партнёров</h4><p class="section-description compact-copy">Настройка и предпросмотр предложений для участниц клуба.</p></div>
       <section class="admin-offers-toolbar">
         <label class="admin-select-label">Партнёр${renderPartnerPicker('offers', adminState.selectedPartnerIdForOffers)}</label>
         ${adminState.selectedPartnerIdForOffers ? renderAdminSearch('offers', 'Поиск по предложениям') : ''}
@@ -5194,7 +5241,7 @@ const renderContentReviewTab = () => {
   return `
     <div class="content-review">
       <div class="admin-section-heading admin-page-heading">
-        <p class="section-eyebrow section-kicker">Content review</p>
+        <p class="section-eyebrow section-kicker">Модерация</p>
         <h4 class="section-title">На проверке</h4>
         <p class="section-description compact-copy">Новые предложения и фото перед публикацией.</p>
       </div>
@@ -5366,7 +5413,7 @@ const renderAdminPaymentCard = (request) => {
 const renderAdminPaymentRequestsTab = () => `
   <section class="admin-payments">
     <div class="admin-section-heading admin-page-heading">
-      <p class="section-eyebrow section-kicker">Manual payments</p>
+      <p class="section-eyebrow section-kicker">Оплаты</p>
       <h4>Заявки на оплату</h4>
       <p>Проверяйте ручные оплаты и продлевайте доступ после подтверждения.</p>
     </div>
@@ -6035,6 +6082,11 @@ const buildAdminPartnerPayload = (formData, selectedCategoryIds = null) => ({
   phone: getOptionalText(formData, 'phone'),
   website_url: getOptionalText(formData, 'website_url'),
   social_url: getOptionalText(formData, 'social_url'),
+  instagram_url: getOptionalText(formData, 'instagram_url'),
+  vk_url: getOptionalText(formData, 'vk_url'),
+  telegram_url: getOptionalText(formData, 'telegram_url'),
+  whatsapp_url: getOptionalText(formData, 'whatsapp_url'),
+  map_url: getOptionalText(formData, 'map_url'),
   working_hours: getOptionalText(formData, 'working_hours'),
   logo_url: getOptionalText(formData, 'logo_url'),
   cover_url: getOptionalText(formData, 'cover_url'),
@@ -6325,6 +6377,7 @@ const submitLandingGiveaway = async (form) => {
 
 const handleAdminFormSubmit = async (form) => {
   const formType = form.dataset.adminForm;
+  let savedEntity = null;
   const message = form.querySelector(`[data-form-message="${formType}"]`);
   setFormMessage(formType);
   if (message) {
@@ -6343,7 +6396,7 @@ const handleAdminFormSubmit = async (form) => {
     } else if (formType === 'categoryEdit') {
       await submitCategoryEdit(form);
     } else if (formType === 'partner') {
-      await submitPartner(form);
+      savedEntity = await submitPartner(form);
     } else if (formType === 'partnerEdit') {
       await submitPartnerEdit(form);
     } else if (formType === 'offer') {
@@ -6362,11 +6415,9 @@ const handleAdminFormSubmit = async (form) => {
     setFormMessage(formType, 'Сохранено.');
     if (formType === 'partner' || formType === 'partnerEdit') {
       if (formType === 'partner') {
-        const partnersByName = [...adminState.partners].reverse();
-        const justCreated = partnersByName.find((item) => item.name === getOptionalText(new FormData(form), 'name'));
-        if (justCreated?.id) adminState.selectedPartnerIdForEdit = String(justCreated.id);
+        if (savedEntity?.id) adminState.selectedPartnerIdForEdit = String(savedEntity.id);
       }
-      adminState.partnerFormOpen = true;
+      adminState.partnerFormOpen = false;
       adminState.partnerFormInlineError = '';
     }
     setPanelMessage('Сохранено.', 'success');
@@ -7161,6 +7212,52 @@ root.addEventListener('click', async (event) => {
     clearToken();
     showLoginForm();
     setLoginMode('admin');
+    return;
+  }
+
+  const globalPartnerCreate = event.target.closest('[data-admin-global-partner-create]');
+  if (globalPartnerCreate) {
+    adminState.activeTab = 'partners';
+    adminState.selectedPartnerIdForEdit = '';
+    adminState.partnerFormOpen = true;
+    setFormMessage('partner');
+    await ensureAdminDictionaries();
+    renderAdminLayout();
+    return;
+  }
+
+  const globalGiveawayCreate = event.target.closest('[data-admin-global-giveaway-create]');
+  if (globalGiveawayCreate) {
+    adminState.activeTab = 'giveaways';
+    adminState.selectedGiveawayIdForEdit = '';
+    await loadGiveaways();
+    renderAdminLayout();
+    return;
+  }
+
+  const partnerOpenOffers = event.target.closest('[data-admin-partner-open-offers]');
+  if (partnerOpenOffers) {
+    adminState.activeTab = 'offers';
+    adminState.selectedPartnerIdForOffers = partnerOpenOffers.dataset.adminPartnerOpenOffers;
+    adminState.selectedOfferIdForEdit = '';
+    await loadActiveTabData();
+    return;
+  }
+
+  const partnerOpenQr = event.target.closest('[data-admin-partner-open-qr]');
+  if (partnerOpenQr) {
+    adminState.activeTab = 'qr';
+    adminState.selectedPartnerIdForQr = partnerOpenQr.dataset.adminPartnerOpenQr;
+    adminState.selectedQrLinkIdForEdit = '';
+    await loadActiveTabData();
+    return;
+  }
+
+  const giveawayCreate = event.target.closest('[data-admin-giveaway-create]');
+  if (giveawayCreate) {
+    adminState.selectedGiveawayIdForEdit = '';
+    setFormMessage('giveaway');
+    renderAdminLayout();
     return;
   }
 
