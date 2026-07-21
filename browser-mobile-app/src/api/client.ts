@@ -1175,6 +1175,18 @@ export function getGiveawayState() {
   return requestClientApiGet<import("./types").GiveawayState>("/clients/giveaway");
 }
 
+export function getFlowerState() {
+  return requestClientApiGet<import("./types").FlowerState>("/clients/me/flower");
+}
+
+export function checkInFlower() {
+  return requestClientApiPost<import("./types").FlowerAction>("/clients/me/flower/check-in", {});
+}
+
+export function completeFlowerTask(taskId: number) {
+  return requestClientApiPost<import("./types").FlowerAction>(`/clients/me/flower/tasks/${taskId}/complete`, {});
+}
+
 export function checkSocialSubscription(platform: "telegram" | "vk") {
   return requestClientApiPost<import("./types").SocialSubscriptionCheck>(`/clients/me/social-subscriptions/${platform}/check`, {});
 }

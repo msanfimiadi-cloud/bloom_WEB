@@ -17,3 +17,14 @@ def login_keyboard(app_url: str, *, repeat_label: str = REPEAT_CODE_LABEL) -> st
         ],
     }
     return json.dumps(keyboard, ensure_ascii=False)
+
+
+def partner_confirmation_keyboard(session_id: int) -> str:
+    keyboard = {
+        "inline": True,
+        "buttons": [[
+            {"action": {"type": "text", "label": "Да, активировать", "payload": json.dumps({"command": "confirm_partner_code", "session_id": session_id}, ensure_ascii=False)}, "color": "positive"},
+            {"action": {"type": "text", "label": "Нет", "payload": json.dumps({"command": "cancel_partner_code"}, ensure_ascii=False)}, "color": "secondary"},
+        ]],
+    }
+    return json.dumps(keyboard, ensure_ascii=False)

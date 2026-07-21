@@ -121,3 +121,21 @@ class InternalApiClient:
             )
         response.raise_for_status()
         return response.json()
+
+    async def partner_status(self, user_id: str) -> dict[str, Any]:
+        return await self._partner_request("partner-access/status", {"provider": "vk", "provider_user_id": user_id})
+
+    async def check_partner_code(self, user_id: str, code: str) -> dict[str, Any]:
+        return await self._partner_request("partner-code/check", {"provider": "vk", "provider_user_id": user_id, "code": code})
+
+    async def confirm_partner_code(self, user_id: str, session_id: int) -> dict[str, Any]:
+        return await self._partner_request("partner-code/confirm", {"provider": "vk", "provider_user_id": user_id, "session_id": session_id})
+
+    async def _partner_request(self, path: str, payload: dict[str, Any]) -> dict[str, Any]:
+        response = await self.http.post(
+            f"{self.settings.internal_api_base_url.rstrip('/')}/api/v1/internal/{path}",
+            json=payload,
+            headers={"Authorization": f"Bearer {self.settings.internal_api_key}"},
+        )
+        response.raise_for_status()
+        return response.json()

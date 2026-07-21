@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 from collections.abc import Generator
+from dataclasses import replace
 from datetime import datetime, timedelta, timezone
 
 import pytest
@@ -20,6 +21,9 @@ from app.models.partner import Partner, PartnerOffer
 from app.models.payment import Subscription, SubscriptionStatus
 from app.models.user import AdminUser, User, UserRole
 from app.models.verification import PrivilegeVerificationSession, PrivilegeVerificationStatus
+from app.models.engagement import BloomDailyTask, PartnerBotAccess
+from app.models.giveaway import Giveaway, GiveawayNumber
+from app.core.config import settings
 
 
 @pytest.fixture()
@@ -264,6 +268,84 @@ def _assert_privilege_session_qr_response(data: dict[str, object]) -> None:
     assert data["token"]
     assert data["qr_payload"] == f"bloomclub:privilege:{data['token']}"
     assert data["expires_at"]
+
+
+def test_confirmed_code_awards_exactly_one_giveaway_number(verification_client: TestClient) -> None:
+    now = datetime.now(timezone.utc)
+    with _session(verification_client) as session:
+        session.add(Giveaway(title="July", is_active=True, starts_at=now - timedelta(days=1), ends_at=now + timedelta(days=10)))
+        session.commit()
+    verification_id = _create_verification(verification_client, offer_id=1)
+    token = _partner_token(verification_client)
+
+    first = verification_client.post(
+        "/api/v1/partner/privileges/confirm",
+        json={"session_id": verification_id},
+        headers=_auth_headers(token),
+    )
+    second = verification_client.post(
+        "/api/v1/partner/privileges/confirm",
+        json={"session_id": verification_id},
+        headers=_auth_headers(token),
+    )
+
+    assert first.status_code == 200
+    assert second.status_code == 400
+    with _session(verification_client) as session:
+        numbers = session.execute(select(GiveawayNumber).where(GiveawayNumber.source == "privilege_activation")).scalars().all()
+        assert len(numbers) == 1
+        assert numbers[0].source_reference == f"verification:{verification_id}"
+
+
+def test_flower_checkin_and_task_are_idempotent_per_day(verification_client: TestClient) -> None:
+    with _session(verification_client) as session:
+        session.add(BloomDailyTask(title="Open partner of the day", petals=3, is_active=True))
+        session.commit()
+    token = _client_token(verification_client)
+    headers = _auth_headers(token)
+
+    checkin = verification_client.post("/api/v1/clients/me/flower/check-in", headers=headers)
+    duplicate_checkin = verification_client.post("/api/v1/clients/me/flower/check-in", headers=headers)
+    task = verification_client.post("/api/v1/clients/me/flower/tasks/1/complete", headers=headers)
+    duplicate_task = verification_client.post("/api/v1/clients/me/flower/tasks/1/complete", headers=headers)
+
+    assert checkin.status_code == 200 and checkin.json()["awarded"] is True
+    assert duplicate_checkin.status_code == 200 and duplicate_checkin.json()["awarded"] is False
+    assert task.status_code == 200 and task.json()["awarded"] is True
+    assert duplicate_task.status_code == 200 and duplicate_task.json()["awarded"] is False
+    assert duplicate_task.json()["state"]["petals"] == 4
+    assert duplicate_task.json()["state"]["rank"] == 1
+
+
+def test_vk_partner_bot_checks_and_confirms_client_code(verification_client: TestClient, monkeypatch: pytest.MonkeyPatch) -> None:
+    monkeypatch.setattr("app.api.v1.endpoints.internal.settings", replace(settings, BOT_SERVICE_TOKEN="bot-secret"))
+    now = datetime.now(timezone.utc)
+    with _session(verification_client) as session:
+        session.add(Giveaway(title="July", is_active=True, starts_at=now - timedelta(days=1), ends_at=now + timedelta(days=10)))
+        session.add(PartnerBotAccess(partner_id=1, provider="vk", provider_user_id="777", display_name="Cashier", is_active=True))
+        session.commit()
+    verification_id = _create_verification(verification_client, offer_id=1, code="654321")
+    headers = {"Authorization": "Bearer bot-secret"}
+
+    checked = verification_client.post(
+        "/api/v1/internal/partner-code/check",
+        json={"provider": "vk", "provider_user_id": "777", "code": "654321"},
+        headers=headers,
+    )
+    confirmed = verification_client.post(
+        "/api/v1/internal/partner-code/confirm",
+        json={"provider": "vk", "provider_user_id": "777", "session_id": verification_id},
+        headers=headers,
+    )
+
+    assert checked.status_code == 200
+    assert checked.json()["session_id"] == verification_id
+    assert checked.json()["saving_amount"] == "200.00"
+    assert confirmed.status_code == 200
+    assert confirmed.json()["giveaway_number_awarded"] is True
+    with _session(verification_client) as session:
+        access = session.get(PartnerBotAccess, 1)
+        assert access.activation_count == 1
 
 
 def test_client_post_verify_without_token_returns_401(verification_client: TestClient) -> None:

@@ -55,6 +55,7 @@ class GiveawayNumber(Base):
     __table_args__ = (
         UniqueConstraint("giveaway_id", "number", name="uq_giveaway_numbers_giveaway_number"),
         UniqueConstraint("giveaway_id", "client_id", "number", name="uq_giveaway_numbers_client_number"),
+        UniqueConstraint("giveaway_id", "source", "source_reference", name="uq_giveaway_numbers_source_reference"),
     )
 
     id: Mapped[int] = mapped_column(Integer, primary_key=True)
@@ -62,6 +63,7 @@ class GiveawayNumber(Base):
     client_id: Mapped[int] = mapped_column(ForeignKey("client_profiles.id", ondelete="CASCADE"), nullable=False, index=True)
     number: Mapped[str] = mapped_column(String(32), nullable=False, index=True)
     source: Mapped[str] = mapped_column(String(32), nullable=False, default="subscription")
+    source_reference: Mapped[str | None] = mapped_column(String(96), nullable=True, index=True)
     created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), nullable=False, server_default=func.now())
     is_active: Mapped[bool] = mapped_column(Boolean, nullable=False, default=True, index=True)
     status: Mapped[str] = mapped_column(String(32), nullable=False, default="active", index=True)

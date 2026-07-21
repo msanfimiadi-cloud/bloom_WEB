@@ -52,11 +52,48 @@ def desired_number_sources(db: Session, client_id: int, now: datetime | None = N
 def ensure_user_numbers(db: Session, giveaway_id: int, client_id: int) -> list[GiveawayNumber]:
     sources = desired_number_sources(db, client_id)
     existing = db.execute(select(GiveawayNumber).where(GiveawayNumber.giveaway_id == giveaway_id, GiveawayNumber.client_id == client_id).order_by(GiveawayNumber.id)).scalars().all()
-    missing = len(sources) - len(existing)
+    managed_existing = [number for number in existing if number.source in {"subscription", "referral"}]
+    missing = len(sources) - len(managed_existing)
     if missing > 0:
-        start = int(db.execute(select(func.count(GiveawayNumber.id)).where(GiveawayNumber.giveaway_id == giveaway_id)).scalar_one() or 0) + 1
         for idx in range(missing):
-            db.add(GiveawayNumber(giveaway_id=giveaway_id, client_id=client_id, number=f"{start + idx:06d}", source=sources[len(existing) + idx]))
+            source = sources[len(managed_existing) + idx]
+            create_bonus_number(db, giveaway_id=giveaway_id, client_id=client_id, source=source)
         db.flush()
         existing = db.execute(select(GiveawayNumber).where(GiveawayNumber.giveaway_id == giveaway_id, GiveawayNumber.client_id == client_id).order_by(GiveawayNumber.id)).scalars().all()
     return [n for n in existing if is_number_active(n)]
+
+
+def create_bonus_number(
+    db: Session,
+    *,
+    giveaway_id: int,
+    client_id: int,
+    source: str,
+    source_reference: str | None = None,
+) -> GiveawayNumber:
+    if source_reference:
+        existing = db.execute(
+            select(GiveawayNumber).where(
+                GiveawayNumber.giveaway_id == giveaway_id,
+                GiveawayNumber.source == source,
+                GiveawayNumber.source_reference == source_reference,
+            )
+        ).scalar_one_or_none()
+        if existing is not None:
+            return existing
+
+    values = db.execute(
+        select(GiveawayNumber.number).where(GiveawayNumber.giveaway_id == giveaway_id)
+    ).scalars().all()
+    numeric_values = [int(value) for value in values if str(value).isdigit()]
+    next_number = max(numeric_values, default=0) + 1
+    number = GiveawayNumber(
+        giveaway_id=giveaway_id,
+        client_id=client_id,
+        number=f"{next_number:06d}",
+        source=source,
+        source_reference=source_reference,
+    )
+    db.add(number)
+    db.flush()
+    return number

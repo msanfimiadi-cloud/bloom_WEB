@@ -1,6 +1,41 @@
 export type ApiId = string | number;
 export type BackendText = string | number | null | Record<string, unknown> | unknown[];
 
+export interface FlowerTaskState {
+  id: number;
+  title: string;
+  description?: string | null;
+  petals: number;
+  completed_today: boolean;
+}
+
+export interface FlowerLeaderboardItem {
+  place: number;
+  client_id: number;
+  display_name: string;
+  petals: number;
+  is_current_user: boolean;
+}
+
+export interface FlowerState {
+  month: string;
+  petals: number;
+  streak: number;
+  stage: number;
+  stage_count: number;
+  checked_in_today: boolean;
+  days_grown: number;
+  days_in_month: number;
+  rank?: number | null;
+  tasks: FlowerTaskState[];
+  leaderboard: FlowerLeaderboardItem[];
+}
+
+export interface FlowerAction {
+  awarded: boolean;
+  state: FlowerState;
+}
+
 export interface AuthResponse {
   token?: string;
   [key: string]: unknown;

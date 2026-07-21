@@ -6938,3 +6938,22 @@ small,
 .home-page--membership .giveaway-panel {
   background: rgba(255, 253, 251, 0.9);
 }
+/* Bloom flower: calm, tactile daily progress with no prize-like random reward. */
+.flower-game { position: relative; overflow: hidden; padding: 1.25rem; border-radius: 1.75rem; background: linear-gradient(145deg, #fff8fb 0%, #f7edf5 52%, #edf6ee 100%); box-shadow: 0 1rem 2.8rem rgba(91, 54, 78, .12); color: #352b32; }
+.flower-game__heading, .flower-leaderboard__heading { display: flex; align-items: center; justify-content: space-between; gap: 1rem; }
+.flower-game__heading h2 { margin: .1rem 0 0; letter-spacing: -.025em; }
+.flower-game__rank { min-height: 2.6rem; padding: .65rem .9rem; border: 0; border-radius: 999px; background: rgba(255,255,255,.72); color: #734f66; font-weight: 700; box-shadow: inset 0 0 0 1px rgba(112,73,97,.1); }
+.flower-game__rank:active, .flower-game__checkin:active { transform: scale(.97); }
+.flower-visual { position: relative; display: grid; place-items: center; min-height: 13rem; text-align: center; isolation: isolate; }
+.flower-visual__glow { position: absolute; width: 9rem; height: 9rem; border-radius: 50%; background: rgba(231,154,194,.2); filter: blur(1rem); z-index: -1; transform: scale(calc(.75 + var(--flower-stage, 0) * .08)); }
+.flower-visual__bloom { display: grid; place-items: center; width: 7.5rem; height: 7.5rem; font-size: 4.7rem; transform: scale(calc(.75 + var(--flower-stage, 0) * .07)); transition: transform .4s cubic-bezier(.2,.8,.2,1); }
+.flower-visual--stage-1 { --flower-stage: 1; }.flower-visual--stage-2 { --flower-stage: 2; }.flower-visual--stage-3 { --flower-stage: 3; }.flower-visual--stage-4 { --flower-stage: 4; }
+.flower-visual strong { font-size: 1.2rem; }.flower-visual small { margin-top: .35rem; color: #745f6b; }
+.flower-progress { display: grid; gap: .4rem; margin-bottom: 1rem; }.flower-progress > span { overflow: hidden; height: .55rem; border-radius: 999px; background: rgba(113,75,98,.1); }.flower-progress i { display: block; height: 100%; border-radius: inherit; background: linear-gradient(90deg,#d67baa,#8eb994); transition: width .4s ease; }.flower-progress small { color: #745f6b; }
+.flower-game__checkin { width: 100%; min-height: 3.25rem; }
+.flower-tasks { margin-top: 1.15rem; }.flower-tasks article { display: flex; align-items: center; justify-content: space-between; gap: .8rem; padding: 1rem; border-radius: 1.2rem; background: rgba(255,255,255,.66); }.flower-tasks article p { margin: .3rem 0; }.flower-tasks article small { color: #9c527b; font-weight: 700; }
+.flower-game__message { margin: .9rem 0 0; text-align: center; color: #7c4c67; font-weight: 650; }
+.flower-leaderboard { position: absolute; inset: .75rem; z-index: 5; overflow: auto; padding: 1.15rem; border-radius: 1.4rem; background: rgba(255,255,255,.94); backdrop-filter: blur(1.4rem) saturate(150%); box-shadow: 0 1.2rem 3rem rgba(66,35,53,.2); }.flower-leaderboard__heading button { width: 2.5rem; height: 2.5rem; border: 0; border-radius: 50%; background: #f5edf2; font-size: 1.4rem; }.flower-leaderboard ol { display: grid; gap: .45rem; padding: 0; list-style: none; }.flower-leaderboard li { display: grid; grid-template-columns: 2rem 1fr auto; align-items: center; gap: .55rem; padding: .7rem; border-radius: .9rem; }.flower-leaderboard li.is-current { background: #f6e5ef; }.flower-leaderboard li > span { display: grid; place-items: center; width: 1.8rem; height: 1.8rem; border-radius: 50%; background: #f1e8ed; font-weight: 800; }
+.flower-game--loading { display: flex; align-items: center; gap: .8rem; min-height: 5rem; }.flower-game__sprout { font-size: 2rem; }
+@media (prefers-reduced-motion: reduce) { .flower-visual__bloom, .flower-progress i { transition: none; } }
+@media (prefers-reduced-transparency: reduce) { .flower-leaderboard { background: #fff; backdrop-filter: none; } }

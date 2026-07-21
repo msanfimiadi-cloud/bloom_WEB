@@ -33,6 +33,9 @@ class PrivilegeVerificationSession(Base):
     expires_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), nullable=False)
     confirmed_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
     confirmed_by_partner_id: Mapped[int | None] = mapped_column(ForeignKey("partners.id"), nullable=True, index=True)
+    confirmed_by_bot_access_id: Mapped[int | None] = mapped_column(
+        ForeignKey("partner_bot_accesses.id", ondelete="SET NULL"), nullable=True, index=True
+    )
     saving_base_price: Mapped[Decimal | None] = mapped_column(Numeric(12, 2), nullable=True)
     saving_final_price: Mapped[Decimal | None] = mapped_column(Numeric(12, 2), nullable=True)
     saving_discount_percent: Mapped[Decimal | None] = mapped_column(Numeric(5, 2), nullable=True)

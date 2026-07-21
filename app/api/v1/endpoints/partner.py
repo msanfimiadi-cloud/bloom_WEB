@@ -32,6 +32,7 @@ from app.schemas.partner import (
 )
 from app.services.offer_savings import calculate_offer_saving_snapshot
 from app.services.privilege_verifications import as_aware_utc, normalize_expired_verifications
+from app.services.engagement import confirm_verification
 
 router = APIRouter(prefix="/partner", tags=["partner"])
 
@@ -121,19 +122,7 @@ def confirm_partner_privilege(
     ).scalar_one_or_none()
     _validate_session_for_partner_action(db, session, partner.id, now=now)
 
-    session.status = PrivilegeVerificationStatus.confirmed.value
-    session.confirmed_at = now
-    session.confirmed_by_partner_id = partner.id
-    saving_snapshot = calculate_offer_saving_snapshot(session.offer)
-    session.saving_base_price = saving_snapshot.regular_price
-    session.saving_final_price = saving_snapshot.club_price
-    session.saving_discount_percent = saving_snapshot.discount_percent
-    session.saving_amount = saving_snapshot.saving_amount
-    session.saving_partner_name = session.partner.name if session.partner is not None else partner.name
-    session.saving_offer_title = session.offer.title if session.offer is not None else None
-    session.saving_used_at = now
-    db.commit()
-    db.refresh(session)
+    session, _number = confirm_verification(db, session, partner=partner, now=now)
     return PartnerPrivilegeConfirmResponse(
         status=session.status,
         confirmed_at=session.confirmed_at,

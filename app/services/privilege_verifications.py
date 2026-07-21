@@ -1,8 +1,10 @@
 from __future__ import annotations
 
 from datetime import datetime, timezone
+import secrets
+import string
 
-from sqlalchemy import Select, update
+from sqlalchemy import Select, select, update
 from sqlalchemy.orm import Session
 
 from app.models.verification import PrivilegeVerificationSession, PrivilegeVerificationStatus
@@ -29,6 +31,27 @@ def ttl_seconds(expires_at: datetime, *, now: datetime | None = None) -> int:
 
 def is_final_verification_status(status: str) -> bool:
     return status in PRIVILEGE_VERIFICATION_FINAL_STATUSES
+
+
+def generate_unique_display_code(db: Session, partner_id: int, *, now: datetime | None = None, length: int = 6) -> str:
+    current_time = now or datetime.now(timezone.utc)
+    alphabet = string.digits
+    for _ in range(30):
+        code = "".join(secrets.choice(alphabet) for _ in range(length))
+        exists = db.execute(
+            select(PrivilegeVerificationSession.id).where(
+                PrivilegeVerificationSession.partner_id == partner_id,
+                PrivilegeVerificationSession.code == code,
+                PrivilegeVerificationSession.status.in_([
+                    PrivilegeVerificationStatus.active.value,
+                    PrivilegeVerificationStatus.pending.value,
+                ]),
+                PrivilegeVerificationSession.expires_at >= current_time,
+            ).limit(1)
+        ).scalar_one_or_none()
+        if exists is None:
+            return code
+    raise RuntimeError("Could not generate a unique privilege display code")
 
 
 def normalize_expired_verifications(

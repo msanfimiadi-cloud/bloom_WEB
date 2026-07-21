@@ -111,8 +111,8 @@ const featureCards = [
     text: 'Каждый месяц — новые призы, beauty-боксы и сертификаты.',
   },
   {
-    title: 'QR-доступ',
-    text: 'Показывайте QR-код партнёру и активируйте привилегию.',
+    title: 'Код привилегии',
+    text: 'Покажите короткий код партнёру — он подтвердит использование в боте.',
   },
   {
     title: 'Ваш город',
@@ -360,7 +360,7 @@ const renderPublicApp = () => {
       <ol class="editorial-steps">
         <li><span class="editorial-step__number">01</span><img src="/assets/icons/user-plus.svg" alt="" /><h3>Вступи в клуб</h3><p>Оформи доступ за пару минут в приложении.</p></li>
         <li><span class="editorial-step__number">02</span><img src="/assets/icons/storefront.svg" alt="" /><h3>Выбери партнёра</h3><p>Найди место и предложение, которое тебе подходит.</p></li>
-        <li><span class="editorial-step__number">03</span><img src="/assets/icons/gift.svg" alt="" /><h3>Получи привилегию</h3><p>Покажи клубный QR-код и пользуйся выгодой.</p></li>
+        <li><span class="editorial-step__number">03</span><img src="/assets/icons/gift.svg" alt="" /><h3>Получи привилегию</h3><p>Покажи код партнёру — после подтверждения экономия и номерок появятся в приложении.</p></li>
       </ol>
     </section>
 
@@ -468,9 +468,11 @@ const adminTabs = [
   { id: 'contentReview', label: 'На проверке', group: 'Ежедневная работа' },
   { id: 'paymentRequests', label: 'Оплаты', group: 'Ежедневная работа' },
   { id: 'verifications', label: 'Подтверждения', group: 'Ежедневная работа' },
+  { id: 'partnerAccess', label: 'Партнёрский доступ', group: 'Ежедневная работа' },
   { id: 'offers', label: 'Привилегии', group: 'Продвижение' },
   { id: 'qr', label: 'QR и лиды', group: 'Продвижение' },
   { id: 'giveaways', label: 'Розыгрыши', group: 'Продвижение' },
+  { id: 'flower', label: 'Цветок Bloom', group: 'Продвижение' },
   { id: 'users', label: 'Пользователи', group: 'Данные' },
   { id: 'activity', label: 'Журнал событий', group: 'Данные' },
   { id: 'cities', label: 'Города', group: 'Настройки' },
@@ -495,6 +497,8 @@ const adminState = {
   qrLinks: [],
   leads: [],
   verifications: [],
+  partnerAccesses: [],
+  flowerTasks: [],
   paymentRequests: [],
   paymentRequestsLoading: false,
   paymentRequestsError: '',
@@ -535,6 +539,7 @@ const adminState = {
     qr: '',
     leads: '',
     verifications: '',
+    partnerAccesses: '',
     paymentRequests: '',
   },
   activityItems: [],
@@ -4038,10 +4043,14 @@ const renderAdminTabContent = () => {
       return renderQrTab();
     case 'verifications':
       return renderVerificationsTab();
+    case 'partnerAccess':
+      return renderPartnerAccessTab();
     case 'activity':
       return renderAdminActivityTab();
     case 'giveaways':
       return renderGiveawaysTab();
+    case 'flower':
+      return renderFlowerAdminTab();
     default:
       return renderOverviewTab();
   }
@@ -4051,6 +4060,49 @@ const renderAdminTabContent = () => {
 const loadGiveaways = async () => {
   adminState.giveaways = await apiFetch('/api/v1/admin/giveaways');
 };
+
+const loadPartnerAccesses = async () => {
+  adminState.partnerAccesses = await apiFetch('/api/v1/admin/partner-accesses');
+};
+
+const loadFlowerTasks = async () => {
+  adminState.flowerTasks = await apiFetch('/api/v1/admin/flower/tasks');
+};
+
+const renderPartnerAccessTab = () => {
+  const rows = filterAdminRows(adminState.partnerAccesses, adminState.search.partnerAccesses, ['display_name', 'partner_name', 'provider', 'provider_user_id', 'username']);
+  return `<div class="partner-access-page stack">
+    <div class="admin-section-heading admin-page-heading"><p class="section-eyebrow section-kicker">Боты партнёров</p><h3>Партнёрский доступ</h3><p>Добавьте постоянный Telegram или VK ID сотрудника. Ник используется только как подпись и не даёт доступ.</p></div>
+    <form class="admin-form admin-form--inline ui-card" data-admin-form="partnerAccess">
+      <h4>Добавить сотрудника партнёра</h4>
+      <label>Партнёр${renderPartnerPicker('partnerAccess', '')}</label>
+      <label>Бот<select name="provider" required><option value="vk">VK</option><option value="telegram">Telegram</option></select></label>
+      <label>Постоянный ID<input name="provider_user_id" required placeholder="Например, 123456789" /></label>
+      <label>Имя сотрудника<input name="display_name" required placeholder="Например, Анна · кассир" /></label>
+      <label>Ник, необязательно<input name="username" placeholder="Например, anna_shop" /></label>
+      <button type="submit">Добавить доступ</button><p class="form-message" data-form-message="partnerAccess">${escapeHtml(adminState.formMessages.partnerAccess || '')}</p>
+    </form>
+    <section class="ui-card"><div class="admin-section-heading"><h4>Сотрудники</h4><p>Доступ можно выключить без удаления истории активаций.</p></div>${renderAdminSearch('partnerAccesses', 'Поиск по сотрудникам и партнёрам')}
+      ${renderTable(['Сотрудник', 'Партнёр', 'Бот', 'Постоянный ID', 'Активаций', 'Последняя активность', 'Доступ'], rows.map((item) => [formatValue(item.display_name), formatValue(item.partner_name), item.provider === 'telegram' ? 'Telegram' : 'VK', formatValue(item.provider_user_id), formatValue(item.activation_count), formatValue(formatDate(item.last_activity_at)), `<button class="admin-inline-action ui-button ${item.is_active ? 'ui-button--danger' : 'ui-button--secondary'}" type="button" data-partner-access-toggle="${escapeHtml(item.id)}" data-next-active="${item.is_active ? 'false' : 'true'}">${item.is_active ? 'Отключить' : 'Включить'}</button>`]), true, '', 'Сотрудники пока не добавлены.')}
+    </section>
+  </div>`;
+};
+
+const renderFlowerAdminTab = () => `<div class="flower-admin-page stack">
+  <div class="admin-section-heading admin-page-heading"><p class="section-eyebrow section-kicker">Ежедневная активность</p><h3>Цветок Bloom</h3><p>Задания дают только лепестки. Номерки топ-10 начисляются отдельно после подведения итогов.</p></div>
+  <form class="admin-form admin-form--inline ui-card" data-admin-form="flowerTask">
+    <h4>Новое ежедневное задание</h4>
+    <label>Название<input name="title" required placeholder="Например, Откройте партнёра дня" /></label>
+    <label>Описание<textarea name="description" rows="2" placeholder="Коротко объясните действие"></textarea></label>
+    <label>Лепестки<input name="petals" type="number" min="1" max="100" value="3" required /></label>
+    <label>Начало<input name="starts_on" type="date" /></label><label>Окончание<input name="ends_on" type="date" /></label>
+    <button type="submit">Добавить задание</button><p class="form-message" data-form-message="flowerTask">${escapeHtml(adminState.formMessages.flowerTask || '')}</p>
+  </form>
+  <section class="ui-card"><div class="admin-section-heading"><h4>Задания</h4><p>Выполненное задание нельзя получить повторно в тот же день.</p></div>
+    ${renderTable(['Задание', 'Лепестки', 'Период', 'Статус'], adminState.flowerTasks.map((task) => [formatValue(task.title), `+${formatValue(task.petals)}`, `${formatDate(task.starts_on) || 'сейчас'} — ${formatDate(task.ends_on) || 'без ограничения'}`, `<button class="admin-inline-action ui-button ${task.is_active ? 'ui-button--danger' : 'ui-button--secondary'}" type="button" data-flower-task-toggle="${escapeHtml(task.id)}" data-next-active="${task.is_active ? 'false' : 'true'}">${task.is_active ? 'Остановить' : 'Запустить'}</button>`]), true, '', 'Заданий пока нет.')}
+  </section>
+  <form class="admin-form admin-form--inline ui-card" data-admin-form="flowerSettle"><h4>Подвести итоги месяца</h4><p class="helper-text">Операция повторобезопасна: второй запуск не создаст дубли номерков.</p><label>Месяц<input name="month" type="month" required /></label><label>Розыгрыш<select name="giveaway_id" required><option value="">Выберите розыгрыш</option>${adminState.giveaways.map((item) => `<option value="${escapeHtml(item.id)}">${escapeHtml(getGiveawayTitle(item))}</option>`).join('')}</select></label><button type="submit">Начислить номерки топ-10</button><p class="form-message" data-form-message="flowerSettle">${escapeHtml(adminState.formMessages.flowerSettle || '')}</p></form>
+</div>`;
 
 const getGiveawayTitle = (giveaway = {}) => giveaway.title || `Розыгрыш #${giveaway.id}`;
 
@@ -4765,7 +4817,8 @@ const renderPartnerEditForm = () => {
   }
 
   const activeCategories = adminState.categories.filter((category) => category.is_active !== false);
-  const selectedCategoryIds = getAdminPartnerSelectedCategoryIds(partner, activeCategories);
+  const isEditMode = Boolean(partner);
+  const selectedCategoryIds = getAdminPartnerSelectedCategoryIds(isEditMode ? partner : null, activeCategories);
   return `
     <section class="admin-partner-detail">
       <div class="admin-partner-detail-header">
@@ -5623,9 +5676,13 @@ const loadActiveTabData = async () => {
       await loadQrLinks();
     } else if (adminState.activeTab === 'verifications') {
       await loadVerifications();
+    } else if (adminState.activeTab === 'partnerAccess') {
+      await Promise.all([ensureAdminDictionaries(), loadPartnerAccesses()]);
     } else if (adminState.activeTab === 'giveaways') {
       await loadGiveaways();
       await syncGiveawayEntriesSelection({ force: true });
+    } else if (adminState.activeTab === 'flower') {
+      await Promise.all([loadFlowerTasks(), loadGiveaways()]);
     } else if (adminState.activeTab === 'activity') {
       adminState.activityLoading = true;
       adminState.activityError = '';
@@ -6411,6 +6468,30 @@ const handleAdminFormSubmit = async (form) => {
       await submitLandingSettings(form);
     } else if (formType === 'landingGiveaway') {
       await submitLandingGiveaway(form);
+    } else if (formType === 'partnerAccess') {
+      const data = new FormData(form);
+      await postJson('/api/v1/admin/partner-accesses', {
+        partner_id: Number(data.get('partner_id')),
+        provider: String(data.get('provider') || ''),
+        provider_user_id: String(data.get('provider_user_id') || '').trim(),
+        display_name: String(data.get('display_name') || '').trim(),
+        username: getOptionalText(data, 'username'),
+        is_active: true,
+      });
+      await loadPartnerAccesses();
+      form.reset();
+    } else if (formType === 'flowerTask') {
+      const data = new FormData(form);
+      await postJson('/api/v1/admin/flower/tasks', {
+        title: String(data.get('title') || '').trim(), description: getOptionalText(data, 'description'), petals: Number(data.get('petals') || 3),
+        starts_on: getOptionalText(data, 'starts_on'), ends_on: getOptionalText(data, 'ends_on'), is_active: true, sort_order: 0,
+      });
+      await loadFlowerTasks();
+      form.reset();
+    } else if (formType === 'flowerSettle') {
+      const data = new FormData(form);
+      const rewards = await postJson('/api/v1/admin/flower/settle', { month: `${data.get('month')}-01`, giveaway_id: Number(data.get('giveaway_id')) });
+      setFormMessage(formType, `Готово. Награды начислены: ${Array.isArray(rewards) ? rewards.length : 0}.`);
     }
     setFormMessage(formType, 'Сохранено.');
     if (formType === 'partner' || formType === 'partnerEdit') {
@@ -6863,6 +6944,26 @@ root.addEventListener('click', async (event) => {
     adminState.partnerFilters = { ...defaultPartnerFilters(), ...(adminState.partnerFilters || {}), [partnerFilterReset.dataset.adminPartnerFilterReset]: defaultPartnerFilters()[partnerFilterReset.dataset.adminPartnerFilterReset] ?? '' };
     renderAdminLayout();
     return;
+  }
+
+  const partnerAccessToggle = event.target.closest('[data-partner-access-toggle]');
+  if (partnerAccessToggle) {
+    try {
+      await patchJson(`/api/v1/admin/partner-accesses/${partnerAccessToggle.dataset.partnerAccessToggle}`, { is_active: partnerAccessToggle.dataset.nextActive === 'true' });
+      await loadPartnerAccesses();
+      setPanelMessage('Партнёрский доступ обновлён.', 'success');
+    } catch (error) { setPanelMessage(error.message || 'Не удалось обновить доступ.', 'error'); }
+    renderAdminLayout(); return;
+  }
+
+  const flowerTaskToggle = event.target.closest('[data-flower-task-toggle]');
+  if (flowerTaskToggle) {
+    try {
+      await patchJson(`/api/v1/admin/flower/tasks/${flowerTaskToggle.dataset.flowerTaskToggle}`, { is_active: flowerTaskToggle.dataset.nextActive === 'true' });
+      await loadFlowerTasks();
+      setPanelMessage('Задание обновлено.', 'success');
+    } catch (error) { setPanelMessage(error.message || 'Не удалось обновить задание.', 'error'); }
+    renderAdminLayout(); return;
   }
 
   const partnerFilterClear = event.target.closest('[data-admin-partner-filter-clear]');
