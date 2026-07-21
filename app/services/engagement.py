@@ -2,6 +2,8 @@ from __future__ import annotations
 
 from calendar import monthrange
 from datetime import date, datetime, timedelta, timezone
+from hashlib import sha256
+from random import Random
 from zoneinfo import ZoneInfo
 
 from fastapi import HTTPException, status
@@ -10,7 +12,17 @@ from sqlalchemy.exc import IntegrityError
 from sqlalchemy.orm import Session, selectinload
 
 from app.models.client import ClientProfile
-from app.models.engagement import BloomDailyTask, BloomLeaderboardReward, BloomPetalEvent, PartnerBotAccess, PartnerCodeAttempt
+from app.models.engagement import (
+    BloomDailyTask,
+    BloomGardenSettings,
+    BloomLeaderboardReward,
+    BloomPetalEvent,
+    BloomSpecialSubmission,
+    BloomSpecialQuestion,
+    BloomSpecialTask,
+    PartnerBotAccess,
+    PartnerCodeAttempt,
+)
 from app.models.giveaway import Giveaway, GiveawayNumber
 from app.models.partner import Partner
 from app.models.verification import PrivilegeVerificationSession, PrivilegeVerificationStatus
@@ -21,13 +33,28 @@ from app.services.privilege_verifications import as_aware_utc
 PARTNER_CODE_ATTEMPT_WINDOW_MINUTES = 5
 PARTNER_CODE_ATTEMPT_LIMIT = 10
 FLOWER_CHECKIN_PETALS = 1
+FLOWER_PRIVILEGE_PETALS = 5
 FLOWER_STAGE_THRESHOLDS = (0, 5, 12, 22, 35)
 FLOWER_RANK_REWARDS = {1: 10, 2: 8, 3: 6, 4: 4, 5: 4, 6: 2, 7: 2, 8: 2, 9: 2, 10: 2}
 CLUB_TIMEZONE = ZoneInfo("Asia/Novosibirsk")
+FLOWER_PETAL_POSITIONS = ("top_left", "top_right", "middle_left", "middle_right", "bottom_left", "bottom_right")
 
 
 def club_today() -> date:
     return datetime.now(CLUB_TIMEZONE).date()
+
+
+def garden_settings(db: Session) -> BloomGardenSettings:
+    return db.get(BloomGardenSettings, 1) or BloomGardenSettings(
+        id=1, placement_mode="random", manual_position="top_right", daily_petals=FLOWER_CHECKIN_PETALS
+    )
+
+
+def daily_petal_position(settings: BloomGardenSettings, today: date) -> str:
+    if settings.placement_mode == "manual" and settings.manual_position in FLOWER_PETAL_POSITIONS:
+        return settings.manual_position
+    seed = int.from_bytes(sha256(f"bloom-petal:{today.isoformat()}".encode()).digest()[:8], "big")
+    return Random(seed).choice(FLOWER_PETAL_POSITIONS)
 
 
 def get_partner_bot_access(db: Session, provider: str, provider_user_id: str, *, active_only: bool = True) -> PartnerBotAccess | None:
@@ -131,6 +158,16 @@ def confirm_verification(
     locked.saving_offer_title = locked.offer.title if locked.offer is not None else None
     locked.saving_used_at = now
 
+    event_day = now.astimezone(CLUB_TIMEZONE).date()
+    db.add(BloomPetalEvent(
+        client_id=locked.client_id,
+        event_date=event_day,
+        month_start=month_start_for(event_day),
+        source="privilege",
+        idempotency_key=f"privilege:{locked.id}",
+        petals=FLOWER_PRIVILEGE_PETALS,
+    ))
+
     giveaway = get_active_giveaway(db, now)
     bonus_number = None
     if giveaway is not None:
@@ -157,6 +194,7 @@ def month_start_for(day: date) -> date:
 def flower_state(db: Session, client_id: int, *, today: date | None = None) -> dict[str, object]:
     today = today or club_today()
     month_start = month_start_for(today)
+    settings = garden_settings(db)
     tasks = db.execute(
         select(BloomDailyTask).where(
             BloomDailyTask.is_active.is_(True),
@@ -185,12 +223,37 @@ def flower_state(db: Session, client_id: int, *, today: date | None = None) -> d
         .group_by(BloomPetalEvent.client_id)
         .order_by(func.sum(BloomPetalEvent.petals).desc(), BloomPetalEvent.client_id.asc())
     ).all()
-    rank = next((index for index, row in enumerate(leaderboard_rows, 1) if row.client_id == client_id), None)
-    client_ids = [row.client_id for row in leaderboard_rows[:10]]
+    ranked_rows: list[tuple[int, object]] = []
+    previous_petals = None
+    current_rank = 0
+    for index, row in enumerate(leaderboard_rows, 1):
+        if previous_petals != int(row.petals or 0):
+            current_rank = index
+            previous_petals = int(row.petals or 0)
+        ranked_rows.append((current_rank, row))
+    rank = next((place for place, row in ranked_rows if row.client_id == client_id), None)
+    visible_rows = [(place, row) for place, row in ranked_rows if place <= 10]
+    client_ids = [row.client_id for _, row in visible_rows]
     profiles = {
         profile.id: profile
         for profile in db.execute(select(ClientProfile).where(ClientProfile.id.in_(client_ids))).scalars().all()
     } if client_ids else {}
+    special_task = db.execute(
+        select(BloomSpecialTask)
+        .options(selectinload(BloomSpecialTask.questions).selectinload(BloomSpecialQuestion.options))
+        .where(
+            BloomSpecialTask.is_active.is_(True),
+            BloomSpecialTask.starts_on <= today,
+            BloomSpecialTask.ends_on >= today,
+        )
+        .order_by(BloomSpecialTask.starts_on.desc(), BloomSpecialTask.id.desc())
+    ).scalars().first()
+    special_completed = False
+    if special_task is not None:
+        special_completed = db.execute(select(BloomSpecialSubmission.id).where(
+            BloomSpecialSubmission.task_id == special_task.id,
+            BloomSpecialSubmission.client_id == client_id,
+        )).scalar_one_or_none() is not None
     days_in_month = monthrange(today.year, today.month)[1]
     return {
         "month": month_start.isoformat(),
@@ -199,6 +262,8 @@ def flower_state(db: Session, client_id: int, *, today: date | None = None) -> d
         "stage": max(index for index, threshold in enumerate(FLOWER_STAGE_THRESHOLDS) if petals >= threshold),
         "stage_count": len(FLOWER_STAGE_THRESHOLDS),
         "checked_in_today": today in checkin_dates,
+        "petal_position": daily_petal_position(settings, today),
+        "petal_reward": settings.daily_petals,
         "days_grown": len(checkin_dates),
         "days_in_month": days_in_month,
         "rank": rank,
@@ -212,15 +277,25 @@ def flower_state(db: Session, client_id: int, *, today: date | None = None) -> d
             }
             for task in tasks
         ],
+        "special_task": {
+            "id": special_task.id,
+            "title": special_task.title,
+            "description": special_task.description,
+            "petals": special_task.petals,
+            "starts_on": special_task.starts_on,
+            "ends_on": special_task.ends_on,
+            "completed": special_completed,
+            "questions": special_task.questions,
+        } if special_task is not None and special_task.questions else None,
         "leaderboard": [
             {
-                "place": index,
+                "place": place,
                 "client_id": row.client_id,
                 "display_name": (profiles.get(row.client_id).full_name if profiles.get(row.client_id) else None) or f"Участница {row.client_id}",
                 "petals": int(row.petals or 0),
                 "is_current_user": row.client_id == client_id,
             }
-            for index, row in enumerate(leaderboard_rows[:10], 1)
+            for place, row in visible_rows
         ],
     }
 
@@ -228,14 +303,33 @@ def flower_state(db: Session, client_id: int, *, today: date | None = None) -> d
 def award_petals(db: Session, client_id: int, *, source: str, task: BloomDailyTask | None = None, today: date | None = None) -> bool:
     today = today or club_today()
     key = f"checkin:{today.isoformat()}" if source == "checkin" else f"task:{task.id}:{today.isoformat()}"
-    petals = FLOWER_CHECKIN_PETALS if source == "checkin" else int(task.petals)
+    petals = garden_settings(db).daily_petals if source == "checkin" else int(task.petals)
     db.add(BloomPetalEvent(client_id=client_id, task_id=task.id if task else None, event_date=today, month_start=month_start_for(today), source=source, idempotency_key=key, petals=petals))
     try:
-        db.commit()
-        return True
+        db.flush()
     except IntegrityError:
         db.rollback()
         return False
+    if source == "checkin":
+        dates = set(db.execute(select(BloomPetalEvent.event_date).where(
+            BloomPetalEvent.client_id == client_id,
+            BloomPetalEvent.source == "checkin",
+            BloomPetalEvent.event_date <= today,
+        )).scalars().all())
+        streak = 0
+        cursor = today
+        while cursor in dates:
+            streak += 1
+            cursor -= timedelta(days=1)
+        bonuses: list[tuple[str, int]] = []
+        if streak % 7 == 0:
+            bonuses.append((f"streak7:{today.isoformat()}", 3))
+        if streak % 30 == 0:
+            bonuses.append((f"streak30:{today.isoformat()}", 10))
+        for bonus_key, bonus_petals in bonuses:
+            db.add(BloomPetalEvent(client_id=client_id, event_date=today, month_start=month_start_for(today), source="streak", idempotency_key=bonus_key, petals=bonus_petals))
+    db.commit()
+    return True
 
 
 def settle_flower_leaderboard(db: Session, month_start: date, giveaway: Giveaway) -> list[BloomLeaderboardReward]:
@@ -244,10 +338,24 @@ def settle_flower_leaderboard(db: Session, month_start: date, giveaway: Giveaway
         .where(BloomPetalEvent.month_start == month_start)
         .group_by(BloomPetalEvent.client_id)
         .order_by(func.sum(BloomPetalEvent.petals).desc(), BloomPetalEvent.client_id.asc())
-        .limit(10)
     ).all()
+    selected: list[tuple[int, object]] = []
+    cursor = 0
+    while cursor < len(rows) and len(selected) < 10:
+        group_petals = int(rows[cursor].petals or 0)
+        group: list[object] = []
+        while cursor < len(rows) and int(rows[cursor].petals or 0) == group_petals:
+            group.append(rows[cursor])
+            cursor += 1
+        place = len(selected) + 1
+        slots = 10 - len(selected)
+        if len(group) > slots:
+            seed = int.from_bytes(sha256(f"bloom-rank:{month_start.isoformat()}:{giveaway.id}:{group_petals}".encode()).digest()[:8], "big")
+            group = Random(seed).sample(group, slots)
+            group.sort(key=lambda row: row.client_id)
+        selected.extend((place, row) for row in group)
     rewards: list[BloomLeaderboardReward] = []
-    for place, row in enumerate(rows, 1):
+    for place, row in selected:
         existing = db.execute(select(BloomLeaderboardReward).where(BloomLeaderboardReward.month_start == month_start, BloomLeaderboardReward.client_id == row.client_id)).scalar_one_or_none()
         if existing is not None:
             rewards.append(existing)

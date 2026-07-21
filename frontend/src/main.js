@@ -472,7 +472,7 @@ const adminTabs = [
   { id: 'offers', label: 'Привилегии', group: 'Продвижение' },
   { id: 'qr', label: 'QR и лиды', group: 'Продвижение' },
   { id: 'giveaways', label: 'Розыгрыши', group: 'Продвижение' },
-  { id: 'flower', label: 'Цветок Bloom', group: 'Продвижение' },
+  { id: 'flower', label: 'Сад Bloom', group: 'Продвижение' },
   { id: 'users', label: 'Пользователи', group: 'Данные' },
   { id: 'activity', label: 'Журнал событий', group: 'Данные' },
   { id: 'cities', label: 'Города', group: 'Настройки' },
@@ -499,6 +499,10 @@ const adminState = {
   verifications: [],
   partnerAccesses: [],
   flowerTasks: [],
+  flowerSettings: { placement_mode: 'random', manual_position: 'top_right', daily_petals: 1 },
+  flowerSpecialTasks: [],
+  flowerAnalytics: null,
+  flowerCalendarMonth: new Date().toISOString().slice(0, 7),
   paymentRequests: [],
   paymentRequestsLoading: false,
   paymentRequestsError: '',
@@ -4069,6 +4073,15 @@ const loadFlowerTasks = async () => {
   adminState.flowerTasks = await apiFetch('/api/v1/admin/flower/tasks');
 };
 
+const loadFlowerGarden = async () => {
+  const [settings, specialTasks] = await Promise.all([
+    apiFetch('/api/v1/admin/flower/settings'),
+    apiFetch('/api/v1/admin/flower/special-tasks'),
+  ]);
+  adminState.flowerSettings = settings;
+  adminState.flowerSpecialTasks = specialTasks;
+};
+
 const renderPartnerAccessTab = () => {
   const rows = filterAdminRows(adminState.partnerAccesses, adminState.search.partnerAccesses, ['display_name', 'partner_name', 'provider', 'provider_user_id', 'username']);
   return `<div class="partner-access-page stack">
@@ -4088,21 +4101,59 @@ const renderPartnerAccessTab = () => {
   </div>`;
 };
 
-const renderFlowerAdminTab = () => `<div class="flower-admin-page stack">
-  <div class="admin-section-heading admin-page-heading"><p class="section-eyebrow section-kicker">Ежедневная активность</p><h3>Цветок Bloom</h3><p>Задания дают только лепестки. Номерки топ-10 начисляются отдельно после подведения итогов.</p></div>
-  <form class="admin-form admin-form--inline ui-card" data-admin-form="flowerTask">
-    <h4>Новое ежедневное задание</h4>
-    <label>Название<input name="title" required placeholder="Например, Откройте партнёра дня" /></label>
-    <label>Описание<textarea name="description" rows="2" placeholder="Коротко объясните действие"></textarea></label>
-    <label>Лепестки<input name="petals" type="number" min="1" max="100" value="3" required /></label>
-    <label>Начало<input name="starts_on" type="date" /></label><label>Окончание<input name="ends_on" type="date" /></label>
-    <button type="submit">Добавить задание</button><p class="form-message" data-form-message="flowerTask">${escapeHtml(adminState.formMessages.flowerTask || '')}</p>
-  </form>
-  <section class="ui-card"><div class="admin-section-heading"><h4>Задания</h4><p>Выполненное задание нельзя получить повторно в тот же день.</p></div>
-    ${renderTable(['Задание', 'Лепестки', 'Период', 'Статус'], adminState.flowerTasks.map((task) => [formatValue(task.title), `+${formatValue(task.petals)}`, `${formatDate(task.starts_on) || 'сейчас'} — ${formatDate(task.ends_on) || 'без ограничения'}`, `<button class="admin-inline-action ui-button ${task.is_active ? 'ui-button--danger' : 'ui-button--secondary'}" type="button" data-flower-task-toggle="${escapeHtml(task.id)}" data-next-active="${task.is_active ? 'false' : 'true'}">${task.is_active ? 'Остановить' : 'Запустить'}</button>`]), true, '', 'Заданий пока нет.')}
-  </section>
-  <form class="admin-form admin-form--inline ui-card" data-admin-form="flowerSettle"><h4>Подвести итоги месяца</h4><p class="helper-text">Операция повторобезопасна: второй запуск не создаст дубли номерков.</p><label>Месяц<input name="month" type="month" required /></label><label>Розыгрыш<select name="giveaway_id" required><option value="">Выберите розыгрыш</option>${adminState.giveaways.map((item) => `<option value="${escapeHtml(item.id)}">${escapeHtml(getGiveawayTitle(item))}</option>`).join('')}</select></label><button type="submit">Начислить номерки топ-10</button><p class="form-message" data-form-message="flowerSettle">${escapeHtml(adminState.formMessages.flowerSettle || '')}</p></form>
-</div>`;
+const bloomPositionLabels = { top_left: 'Сверху слева', top_right: 'Сверху справа', middle_left: 'По центру слева', middle_right: 'По центру справа', bottom_left: 'Снизу слева', bottom_right: 'Снизу справа' };
+
+const renderBloomCalendar = () => {
+  const [year, month] = adminState.flowerCalendarMonth.split('-').map(Number);
+  const first = new Date(Date.UTC(year, month - 1, 1));
+  const days = new Date(Date.UTC(year, month, 0)).getUTCDate();
+  const offset = (first.getUTCDay() + 6) % 7;
+  const cells = Array.from({ length: offset }, () => '<span class="bloom-calendar__day is-empty"></span>');
+  for (let day = 1; day <= days; day += 1) {
+    const iso = `${year}-${String(month).padStart(2, '0')}-${String(day).padStart(2, '0')}`;
+    const tasks = adminState.flowerSpecialTasks.filter((task) => task.starts_on <= iso && task.ends_on >= iso);
+    cells.push(`<span class="bloom-calendar__day"><strong>${day}</strong>${tasks.map((task) => `<small title="${escapeHtml(task.title)}">${escapeHtml(task.title)}</small>`).join('')}</span>`);
+  }
+  return `<div class="bloom-calendar"><div class="bloom-calendar__weekdays">${['Пн','Вт','Ср','Чт','Пт','Сб','Вс'].map((day) => `<b>${day}</b>`).join('')}</div><div class="bloom-calendar__grid">${cells.join('')}</div></div>`;
+};
+
+const bloomChartColors = ['#d46b9c', '#8b74c7', '#72a88b', '#e2a75f', '#6e9fc7', '#cf7a70'];
+const renderBloomAnalytics = () => {
+  const data = adminState.flowerAnalytics;
+  if (!data) return '';
+  const questions = data.questions.map((question) => {
+    let cursor = 0;
+    const stops = question.options.map((option, index) => { const start = cursor; cursor += Number(option.percent || 0); return `${bloomChartColors[index % bloomChartColors.length]} ${start}% ${cursor}%`; });
+    return `<article class="bloom-analytics__question"><h5>${escapeHtml(question.prompt)}</h5><div class="bloom-chart-row"><div class="bloom-pie" style="background:conic-gradient(${stops.length ? stops.join(',') : '#eee 0 100%'})" role="img" aria-label="Распределение ответов"></div><ul>${question.options.map((option, index) => `<li><i style="background:${bloomChartColors[index % bloomChartColors.length]}"></i><span>${escapeHtml(option.label)}</span><strong>${formatValue(option.percent)}% · ${formatValue(option.count)}</strong></li>`).join('')}</ul></div></article>`;
+  }).join('');
+  const rows = data.submissions.map((item) => [
+    `#${formatValue(item.client_id)}`,
+    [item.full_name, item.email, item.phone, item.telegram_username ? `TG: @${item.telegram_username}` : '', item.vk_username ? `VK: ${item.vk_username}` : ''].filter(Boolean).map(escapeHtml).join('<br>') || '—',
+    formatDate(item.completed_at),
+    item.answers.map(escapeHtml).join('<br>'),
+  ]);
+  return `<section class="ui-card bloom-analytics"><div class="admin-section-heading"><h4>Ответы: ${escapeHtml(data.title)}</h4><p>Заполнили: ${formatValue(data.submissions_count)}</p></div>${questions}${renderTable(['ID', 'Участница и контакты', 'Дата', 'Ответы'], rows, true, '', 'Ответов пока нет.')}</section>`;
+};
+
+const renderFlowerAdminTab = () => {
+  const settings = adminState.flowerSettings || {};
+  const taskCards = adminState.flowerSpecialTasks.map((task) => `<article class="ui-card bloom-survey-card">
+    <div class="admin-section-heading"><div><h4>${escapeHtml(task.title)}</h4><p>${formatDate(task.starts_on)} — ${formatDate(task.ends_on)} · +${formatValue(task.petals)} лепестков · ответов: ${formatValue(task.submissions_count)}</p></div><button class="admin-inline-action ui-button ${task.is_active ? 'ui-button--danger' : 'ui-button--secondary'}" type="button" data-special-task-toggle="${escapeHtml(task.id)}" data-next-active="${task.is_active ? 'false' : 'true'}">${task.is_active ? 'Остановить' : 'Запустить'}</button></div>
+    ${task.description ? `<p>${escapeHtml(task.description)}</p>` : ''}
+    <ol class="bloom-question-list">${task.questions.map((question) => `<li><strong>${escapeHtml(question.prompt)}</strong><small>${question.options.map((option) => escapeHtml(option.label)).join(' · ')}</small></li>`).join('') || '<li>Добавьте первый вопрос.</li>'}</ol>
+    <form class="admin-form admin-form--inline bloom-question-form" data-admin-form="flowerSpecialQuestion"><input type="hidden" name="task_id" value="${escapeHtml(task.id)}"><label>Новый вопрос<input name="prompt" required placeholder="Текст вопроса"></label><label>Варианты ответа<textarea name="options" rows="3" required placeholder="Каждый вариант с новой строки"></textarea></label><button type="submit">Добавить вопрос</button></form>
+    <button type="button" class="ui-button ui-button--secondary" data-special-task-analytics="${escapeHtml(task.id)}">Показать ответы и графики</button>
+  </article>`).join('');
+  return `<div class="flower-admin-page stack">
+    <div class="admin-section-heading admin-page-heading"><p class="section-eyebrow section-kicker">Ежедневная и недельная активность</p><h3>Сад Bloom</h3><p>Здесь настраивается игровой лепесток и специальные опросники. Эти настройки, календарь и ответы видны только администраторам.</p></div>
+    <form class="admin-form admin-form--inline ui-card" data-admin-form="flowerGardenSettings"><h4>Задание дня — найти лепесток</h4><p class="helper-text">Участница находит лепесток в карточке сада и нажимает на него один раз в день.</p><label>Размещение<select name="placement_mode"><option value="random" ${settings.placement_mode === 'random' ? 'selected' : ''}>Случайное каждый день</option><option value="manual" ${settings.placement_mode === 'manual' ? 'selected' : ''}>Выбранное администратором</option></select></label><label>Место<select name="manual_position">${Object.entries(bloomPositionLabels).map(([value,label]) => `<option value="${value}" ${settings.manual_position === value ? 'selected' : ''}>${label}</option>`).join('')}</select></label><label>Лепестков за находку<input name="daily_petals" type="number" min="1" max="20" value="${escapeHtml(settings.daily_petals || 1)}"></label><button type="submit">Сохранить</button></form>
+    <form class="admin-form admin-form--inline ui-card" data-admin-form="flowerSpecialTask"><h4>Новое специальное задание клуба</h4><label>Название<input name="title" required placeholder="Опрос недели"></label><label>Описание<textarea name="description" rows="2"></textarea></label><label>Лепестки<input name="petals" type="number" min="1" max="100" value="5" required></label><label>Начало недели<input name="starts_on" type="date" required></label><label>Окончание<input name="ends_on" type="date" required></label><button type="submit">Создать опросник</button></form>
+    <section class="ui-card"><div class="admin-section-heading"><div><h4>Календарь опросников</h4><p>По дням видно, в какую неделю действовал каждый опросник.</p></div><label>Месяц<input type="month" value="${escapeHtml(adminState.flowerCalendarMonth)}" data-bloom-calendar-month></label></div>${renderBloomCalendar()}</section>
+    <section class="stack"><div class="admin-section-heading"><h4>Специальные задания</h4><p>Кнопка появляется у участниц только в указанный период и после добавления вопросов.</p></div>${taskCards || '<div class="ui-card"><p>Опросников пока нет.</p></div>'}</section>
+    ${renderBloomAnalytics()}
+    <form class="admin-form admin-form--inline ui-card" data-admin-form="flowerSettle"><h4>Подвести итоги месяца</h4><p class="helper-text">При равном количестве лепестков участницы делят место; на границе топ-10 проводится фиксируемая системная жеребьёвка.</p><label>Месяц<input name="month" type="month" required /></label><label>Розыгрыш<select name="giveaway_id" required><option value="">Выберите розыгрыш</option>${adminState.giveaways.map((item) => `<option value="${escapeHtml(item.id)}">${escapeHtml(getGiveawayTitle(item))}</option>`).join('')}</select></label><button type="submit">Начислить номерки топ-10</button><p class="form-message" data-form-message="flowerSettle">${escapeHtml(adminState.formMessages.flowerSettle || '')}</p></form>
+  </div>`;
+};
 
 const getGiveawayTitle = (giveaway = {}) => giveaway.title || `Розыгрыш #${giveaway.id}`;
 
@@ -5682,7 +5733,7 @@ const loadActiveTabData = async () => {
       await loadGiveaways();
       await syncGiveawayEntriesSelection({ force: true });
     } else if (adminState.activeTab === 'flower') {
-      await Promise.all([loadFlowerTasks(), loadGiveaways()]);
+      await Promise.all([loadFlowerGarden(), loadGiveaways()]);
     } else if (adminState.activeTab === 'activity') {
       adminState.activityLoading = true;
       adminState.activityError = '';
@@ -6480,14 +6531,22 @@ const handleAdminFormSubmit = async (form) => {
       });
       await loadPartnerAccesses();
       form.reset();
-    } else if (formType === 'flowerTask') {
+    } else if (formType === 'flowerGardenSettings') {
       const data = new FormData(form);
-      await postJson('/api/v1/admin/flower/tasks', {
-        title: String(data.get('title') || '').trim(), description: getOptionalText(data, 'description'), petals: Number(data.get('petals') || 3),
-        starts_on: getOptionalText(data, 'starts_on'), ends_on: getOptionalText(data, 'ends_on'), is_active: true, sort_order: 0,
+      adminState.flowerSettings = await patchJson('/api/v1/admin/flower/settings', {
+        placement_mode: String(data.get('placement_mode') || 'random'), manual_position: String(data.get('manual_position') || 'top_right'), daily_petals: Number(data.get('daily_petals') || 1),
       });
-      await loadFlowerTasks();
+    } else if (formType === 'flowerSpecialTask') {
+      const data = new FormData(form);
+      await postJson('/api/v1/admin/flower/special-tasks', { title: String(data.get('title') || '').trim(), description: getOptionalText(data, 'description'), petals: Number(data.get('petals') || 5), starts_on: String(data.get('starts_on') || ''), ends_on: String(data.get('ends_on') || ''), is_active: true });
+      await loadFlowerGarden();
       form.reset();
+    } else if (formType === 'flowerSpecialQuestion') {
+      const data = new FormData(form);
+      const taskId = Number(data.get('task_id'));
+      const options = String(data.get('options') || '').split('\n').map((item) => item.trim()).filter(Boolean);
+      await postJson(`/api/v1/admin/flower/special-tasks/${taskId}/questions`, { prompt: String(data.get('prompt') || '').trim(), options });
+      await loadFlowerGarden();
     } else if (formType === 'flowerSettle') {
       const data = new FormData(form);
       const rewards = await postJson('/api/v1/admin/flower/settle', { month: `${data.get('month')}-01`, giveaway_id: Number(data.get('giveaway_id')) });
@@ -6963,6 +7022,24 @@ root.addEventListener('click', async (event) => {
       await loadFlowerTasks();
       setPanelMessage('Задание обновлено.', 'success');
     } catch (error) { setPanelMessage(error.message || 'Не удалось обновить задание.', 'error'); }
+    renderAdminLayout(); return;
+  }
+
+  const specialTaskToggle = event.target.closest('[data-special-task-toggle]');
+  if (specialTaskToggle) {
+    try {
+      await patchJson(`/api/v1/admin/flower/special-tasks/${specialTaskToggle.dataset.specialTaskToggle}`, { is_active: specialTaskToggle.dataset.nextActive === 'true' });
+      await loadFlowerGarden();
+      setPanelMessage('Специальное задание обновлено.', 'success');
+    } catch (error) { setPanelMessage(error.message || 'Не удалось обновить задание.', 'error'); }
+    renderAdminLayout(); return;
+  }
+
+  const specialTaskAnalytics = event.target.closest('[data-special-task-analytics]');
+  if (specialTaskAnalytics) {
+    try {
+      adminState.flowerAnalytics = await apiFetch(`/api/v1/admin/flower/special-tasks/${specialTaskAnalytics.dataset.specialTaskAnalytics}/analytics`);
+    } catch (error) { setPanelMessage(error.message || 'Не удалось загрузить ответы.', 'error'); }
     renderAdminLayout(); return;
   }
 
@@ -7831,6 +7908,13 @@ const handlePartnerOfferPhotoFormSubmit = async (form) => {
 };
 
 root.addEventListener('change', (event) => {
+  const bloomCalendarMonth = event.target.closest('[data-bloom-calendar-month]');
+  if (bloomCalendarMonth) {
+    adminState.flowerCalendarMonth = bloomCalendarMonth.value || new Date().toISOString().slice(0, 7);
+    renderAdminLayout();
+    return;
+  }
+
   const adminPartnerCategoryInput = event.target.closest('[data-admin-partner-wizard-form] input[name="category_ids"]');
   if (adminPartnerCategoryInput) {
     captureAdminPartnerCategoryDraft(adminPartnerCategoryInput.closest('[data-admin-partner-wizard-form]'));

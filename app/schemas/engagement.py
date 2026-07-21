@@ -107,6 +107,139 @@ class BloomTaskRead(BloomTaskWrite):
     model_config = {"from_attributes": True}
 
 
+class BloomGardenSettingsPatch(BaseModel):
+    placement_mode: str | None = None
+    manual_position: str | None = None
+    daily_petals: int | None = Field(default=None, ge=1, le=20)
+
+    @field_validator("placement_mode")
+    @classmethod
+    def validate_mode(cls, value: str | None) -> str | None:
+        if value is not None and value not in {"random", "manual"}:
+            raise ValueError("placement_mode must be random or manual")
+        return value
+
+    @field_validator("manual_position")
+    @classmethod
+    def validate_position(cls, value: str | None) -> str | None:
+        allowed = {"top_left", "top_right", "middle_left", "middle_right", "bottom_left", "bottom_right"}
+        if value is not None and value not in allowed:
+            raise ValueError("unknown petal position")
+        return value
+
+
+class BloomGardenSettingsRead(BaseModel):
+    placement_mode: str
+    manual_position: str
+    daily_petals: int
+
+
+class BloomSpecialOptionRead(BaseModel):
+    id: int
+    label: str
+    sort_order: int
+    model_config = {"from_attributes": True}
+
+
+class BloomSpecialQuestionRead(BaseModel):
+    id: int
+    prompt: str
+    sort_order: int
+    options: list[BloomSpecialOptionRead]
+    model_config = {"from_attributes": True}
+
+
+class BloomSpecialTaskWrite(BaseModel):
+    title: str = Field(min_length=1, max_length=255)
+    description: str | None = None
+    petals: int = Field(default=5, ge=1, le=100)
+    starts_on: date
+    ends_on: date
+    is_active: bool = True
+
+
+class BloomSpecialTaskPatch(BaseModel):
+    title: str | None = Field(default=None, min_length=1, max_length=255)
+    description: str | None = None
+    petals: int | None = Field(default=None, ge=1, le=100)
+    starts_on: date | None = None
+    ends_on: date | None = None
+    is_active: bool | None = None
+
+
+class BloomSpecialQuestionWrite(BaseModel):
+    prompt: str = Field(min_length=1, max_length=2000)
+    options: list[str] = Field(min_length=2, max_length=10)
+
+    @field_validator("options")
+    @classmethod
+    def validate_options(cls, values: list[str]) -> list[str]:
+        normalized = [value.strip() for value in values if value.strip()]
+        if len(normalized) < 2:
+            raise ValueError("at least two non-empty options are required")
+        return normalized
+
+
+class BloomSpecialTaskRead(BloomSpecialTaskWrite):
+    id: int
+    created_at: datetime
+    questions: list[BloomSpecialQuestionRead]
+    submissions_count: int = 0
+    model_config = {"from_attributes": True}
+
+
+class BloomSpecialAnswerWrite(BaseModel):
+    question_id: int
+    option_id: int
+
+
+class BloomSpecialSubmissionWrite(BaseModel):
+    answers: list[BloomSpecialAnswerWrite]
+
+
+class BloomSpecialTaskClientRead(BaseModel):
+    id: int
+    title: str
+    description: str | None
+    petals: int
+    starts_on: date
+    ends_on: date
+    completed: bool
+    questions: list[BloomSpecialQuestionRead]
+
+
+class BloomSpecialOptionAnalyticsRead(BaseModel):
+    option_id: int
+    label: str
+    count: int
+    percent: float
+
+
+class BloomSpecialQuestionAnalyticsRead(BaseModel):
+    question_id: int
+    prompt: str
+    options: list[BloomSpecialOptionAnalyticsRead]
+
+
+class BloomSpecialSubmissionRead(BaseModel):
+    client_id: int
+    full_name: str | None
+    email: str | None
+    phone: str | None
+    telegram_username: str | None
+    vk_username: str | None
+    completed_at: datetime
+    answers: list[str]
+
+
+class BloomSpecialAnalyticsRead(BaseModel):
+    task_id: int
+    title: str
+    submissions_count: int
+    questions: list[BloomSpecialQuestionAnalyticsRead]
+    submissions: list[BloomSpecialSubmissionRead]
+
+
 class FlowerTaskStateRead(BaseModel):
     id: int
     title: str
@@ -130,10 +263,13 @@ class FlowerStateRead(BaseModel):
     stage: int
     stage_count: int
     checked_in_today: bool
+    petal_position: str
+    petal_reward: int
     days_grown: int
     days_in_month: int
     rank: int | None
     tasks: list[FlowerTaskStateRead]
+    special_task: BloomSpecialTaskClientRead | None = None
     leaderboard: list[FlowerLeaderboardItemRead]
 
 

@@ -51,6 +51,80 @@ class BloomDailyTask(Base):
     created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), nullable=False, server_default=func.now())
 
 
+class BloomGardenSettings(Base):
+    __tablename__ = "bloom_garden_settings"
+
+    id: Mapped[int] = mapped_column(Integer, primary_key=True)
+    placement_mode: Mapped[str] = mapped_column(String(16), nullable=False, default="random")
+    manual_position: Mapped[str] = mapped_column(String(32), nullable=False, default="top_right")
+    daily_petals: Mapped[int] = mapped_column(Integer, nullable=False, default=1)
+    updated_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), nullable=False, server_default=func.now(), onupdate=func.now())
+
+
+class BloomSpecialTask(Base):
+    __tablename__ = "bloom_special_tasks"
+
+    id: Mapped[int] = mapped_column(Integer, primary_key=True)
+    title: Mapped[str] = mapped_column(String(255), nullable=False)
+    description: Mapped[str | None] = mapped_column(Text, nullable=True)
+    petals: Mapped[int] = mapped_column(Integer, nullable=False, default=5)
+    starts_on: Mapped[date] = mapped_column(Date, nullable=False, index=True)
+    ends_on: Mapped[date] = mapped_column(Date, nullable=False, index=True)
+    is_active: Mapped[bool] = mapped_column(Boolean, nullable=False, default=True, index=True)
+    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), nullable=False, server_default=func.now())
+
+    questions: Mapped[list["BloomSpecialQuestion"]] = relationship(
+        "BloomSpecialQuestion", back_populates="task", cascade="all, delete-orphan", order_by="BloomSpecialQuestion.sort_order"
+    )
+
+
+class BloomSpecialQuestion(Base):
+    __tablename__ = "bloom_special_questions"
+
+    id: Mapped[int] = mapped_column(Integer, primary_key=True)
+    task_id: Mapped[int] = mapped_column(ForeignKey("bloom_special_tasks.id", ondelete="CASCADE"), nullable=False, index=True)
+    prompt: Mapped[str] = mapped_column(Text, nullable=False)
+    sort_order: Mapped[int] = mapped_column(Integer, nullable=False, default=0)
+
+    task: Mapped["BloomSpecialTask"] = relationship("BloomSpecialTask", back_populates="questions")
+    options: Mapped[list["BloomSpecialOption"]] = relationship(
+        "BloomSpecialOption", back_populates="question", cascade="all, delete-orphan", order_by="BloomSpecialOption.sort_order"
+    )
+
+
+class BloomSpecialOption(Base):
+    __tablename__ = "bloom_special_options"
+
+    id: Mapped[int] = mapped_column(Integer, primary_key=True)
+    question_id: Mapped[int] = mapped_column(ForeignKey("bloom_special_questions.id", ondelete="CASCADE"), nullable=False, index=True)
+    label: Mapped[str] = mapped_column(String(500), nullable=False)
+    sort_order: Mapped[int] = mapped_column(Integer, nullable=False, default=0)
+
+    question: Mapped["BloomSpecialQuestion"] = relationship("BloomSpecialQuestion", back_populates="options")
+
+
+class BloomSpecialSubmission(Base):
+    __tablename__ = "bloom_special_submissions"
+    __table_args__ = (UniqueConstraint("task_id", "client_id", name="uq_bloom_special_submission_task_client"),)
+
+    id: Mapped[int] = mapped_column(Integer, primary_key=True)
+    task_id: Mapped[int] = mapped_column(ForeignKey("bloom_special_tasks.id", ondelete="CASCADE"), nullable=False, index=True)
+    client_id: Mapped[int] = mapped_column(ForeignKey("client_profiles.id", ondelete="CASCADE"), nullable=False, index=True)
+    completed_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), nullable=False, server_default=func.now(), index=True)
+
+    answers: Mapped[list["BloomSpecialAnswer"]] = relationship("BloomSpecialAnswer", cascade="all, delete-orphan")
+
+
+class BloomSpecialAnswer(Base):
+    __tablename__ = "bloom_special_answers"
+    __table_args__ = (UniqueConstraint("submission_id", "question_id", name="uq_bloom_special_answer_submission_question"),)
+
+    id: Mapped[int] = mapped_column(Integer, primary_key=True)
+    submission_id: Mapped[int] = mapped_column(ForeignKey("bloom_special_submissions.id", ondelete="CASCADE"), nullable=False, index=True)
+    question_id: Mapped[int] = mapped_column(ForeignKey("bloom_special_questions.id", ondelete="CASCADE"), nullable=False, index=True)
+    option_id: Mapped[int] = mapped_column(ForeignKey("bloom_special_options.id", ondelete="RESTRICT"), nullable=False, index=True)
+
+
 class BloomPetalEvent(Base):
     __tablename__ = "bloom_petal_events"
     __table_args__ = (

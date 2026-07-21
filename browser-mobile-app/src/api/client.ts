@@ -1187,6 +1187,10 @@ export function completeFlowerTask(taskId: number) {
   return requestClientApiPost<import("./types").FlowerAction>(`/clients/me/flower/tasks/${taskId}/complete`, {});
 }
 
+export function submitFlowerSpecialTask(taskId: number, answers: Array<{ question_id: number; option_id: number }>) {
+  return requestClientApiPost<import("./types").FlowerAction>(`/clients/me/flower/special-tasks/${taskId}/submit`, { answers });
+}
+
 export function checkSocialSubscription(platform: "telegram" | "vk") {
   return requestClientApiPost<import("./types").SocialSubscriptionCheck>(`/clients/me/social-subscriptions/${platform}/check`, {});
 }

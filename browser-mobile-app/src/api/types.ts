@@ -24,11 +24,27 @@ export interface FlowerState {
   stage: number;
   stage_count: number;
   checked_in_today: boolean;
+  petal_position: "top_left" | "top_right" | "middle_left" | "middle_right" | "bottom_left" | "bottom_right";
+  petal_reward: number;
   days_grown: number;
   days_in_month: number;
   rank?: number | null;
   tasks: FlowerTaskState[];
+  special_task?: FlowerSpecialTask | null;
   leaderboard: FlowerLeaderboardItem[];
+}
+
+export interface FlowerSpecialOption { id: number; label: string; sort_order: number; }
+export interface FlowerSpecialQuestion { id: number; prompt: string; sort_order: number; options: FlowerSpecialOption[]; }
+export interface FlowerSpecialTask {
+  id: number;
+  title: string;
+  description?: string | null;
+  petals: number;
+  starts_on: string;
+  ends_on: string;
+  completed: boolean;
+  questions: FlowerSpecialQuestion[];
 }
 
 export interface FlowerAction {
