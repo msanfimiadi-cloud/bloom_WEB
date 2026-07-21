@@ -19,7 +19,16 @@ from app.models.category import Category
 from app.models.city import City
 from app.models.client import ClientProfile
 from app.models.giveaway import Giveaway, GiveawayNumber, GiveawayPrize
-from app.models.engagement import BloomDailyTask, PartnerBotAccess
+from app.models.engagement import (
+    BloomDailyTask,
+    BloomGardenSettings,
+    BloomSpecialAnswer,
+    BloomSpecialOption,
+    BloomSpecialQuestion,
+    BloomSpecialSubmission,
+    BloomSpecialTask,
+    PartnerBotAccess,
+)
 from app.models.lead import LeadClick
 from app.models.landing import LandingSettings
 from app.models.partner import Partner, PartnerOffer, PartnerPhoto, PartnerQrLink
@@ -62,6 +71,16 @@ from app.schemas.engagement import (
     BloomTaskPatch,
     BloomTaskRead,
     BloomTaskWrite,
+    BloomGardenSettingsPatch,
+    BloomGardenSettingsRead,
+    BloomSpecialAnalyticsRead,
+    BloomSpecialOptionAnalyticsRead,
+    BloomSpecialQuestionAnalyticsRead,
+    BloomSpecialQuestionWrite,
+    BloomSpecialSubmissionRead,
+    BloomSpecialTaskPatch,
+    BloomSpecialTaskRead,
+    BloomSpecialTaskWrite,
     FlowerLeaderboardRewardRead,
     FlowerLeaderboardSettleRequest,
     PartnerBotAccessPatch,
@@ -83,7 +102,7 @@ from app.services.privilege_verifications import (
     ttl_seconds,
 )
 from app.services.social_subscriptions import recheck_giveaway_social_subscriptions, is_number_active
-from app.services.engagement import club_today, settle_flower_leaderboard
+from app.services.engagement import club_today, garden_settings, settle_flower_leaderboard
 from app.services.qr_links import (
     generate_qr_slug,
     is_valid_qr_slug,
@@ -180,6 +199,149 @@ def update_flower_task(task_id: int, payload: BloomTaskPatch, admin: AdminUser =
     db.commit()
     db.refresh(task)
     return task
+
+
+@router.get("/flower/settings", response_model=BloomGardenSettingsRead)
+def read_flower_settings(admin: AdminUser = Depends(require_admin), db: Session = Depends(get_db)) -> BloomGardenSettingsRead:
+    _ = admin
+    settings_row = garden_settings(db)
+    if settings_row not in db:
+        db.add(settings_row)
+        db.commit()
+        db.refresh(settings_row)
+    return BloomGardenSettingsRead.model_validate(settings_row, from_attributes=True)
+
+
+@router.patch("/flower/settings", response_model=BloomGardenSettingsRead)
+def update_flower_settings(payload: BloomGardenSettingsPatch, admin: AdminUser = Depends(require_admin), db: Session = Depends(get_db)) -> BloomGardenSettingsRead:
+    _ = admin
+    settings_row = garden_settings(db)
+    if settings_row not in db:
+        db.add(settings_row)
+    for field, value in payload.model_dump(exclude_unset=True).items():
+        setattr(settings_row, field, value)
+    db.commit()
+    db.refresh(settings_row)
+    return BloomGardenSettingsRead.model_validate(settings_row, from_attributes=True)
+
+
+def _special_task_read(db: Session, task: BloomSpecialTask) -> BloomSpecialTaskRead:
+    count = db.execute(select(func.count(BloomSpecialSubmission.id)).where(BloomSpecialSubmission.task_id == task.id)).scalar_one()
+    result = BloomSpecialTaskRead.model_validate(task, from_attributes=True)
+    return result.model_copy(update={"submissions_count": int(count or 0)})
+
+
+def _ensure_no_special_task_overlap(db: Session, starts_on: date, ends_on: date, *, exclude_id: int | None = None) -> None:
+    query = select(BloomSpecialTask.id).where(
+        BloomSpecialTask.is_active.is_(True),
+        BloomSpecialTask.starts_on <= ends_on,
+        BloomSpecialTask.ends_on >= starts_on,
+    )
+    if exclude_id is not None:
+        query = query.where(BloomSpecialTask.id != exclude_id)
+    if db.execute(query).scalars().first() is not None:
+        raise HTTPException(status_code=409, detail="Another active special task overlaps this period")
+
+
+@router.get("/flower/special-tasks", response_model=list[BloomSpecialTaskRead])
+def list_special_tasks(admin: AdminUser = Depends(require_admin), db: Session = Depends(get_db)) -> list[BloomSpecialTaskRead]:
+    _ = admin
+    tasks = db.execute(
+        select(BloomSpecialTask)
+        .options(selectinload(BloomSpecialTask.questions).selectinload(BloomSpecialQuestion.options))
+        .order_by(BloomSpecialTask.starts_on.desc(), BloomSpecialTask.id.desc())
+    ).scalars().all()
+    return [_special_task_read(db, task) for task in tasks]
+
+
+@router.post("/flower/special-tasks", response_model=BloomSpecialTaskRead, status_code=status.HTTP_201_CREATED)
+def create_special_task(payload: BloomSpecialTaskWrite, admin: AdminUser = Depends(require_admin), db: Session = Depends(get_db)) -> BloomSpecialTaskRead:
+    _ = admin
+    if payload.ends_on < payload.starts_on:
+        raise HTTPException(status_code=422, detail="ends_on must not be before starts_on")
+    if payload.is_active:
+        _ensure_no_special_task_overlap(db, payload.starts_on, payload.ends_on)
+    task = BloomSpecialTask(**payload.model_dump())
+    db.add(task)
+    db.commit()
+    db.refresh(task)
+    return _special_task_read(db, task)
+
+
+@router.patch("/flower/special-tasks/{task_id}", response_model=BloomSpecialTaskRead)
+def update_special_task(task_id: int, payload: BloomSpecialTaskPatch, admin: AdminUser = Depends(require_admin), db: Session = Depends(get_db)) -> BloomSpecialTaskRead:
+    _ = admin
+    task = db.execute(select(BloomSpecialTask).options(selectinload(BloomSpecialTask.questions).selectinload(BloomSpecialQuestion.options)).where(BloomSpecialTask.id == task_id)).scalar_one_or_none()
+    if task is None:
+        raise HTTPException(status_code=404, detail="Special task not found")
+    for field, value in payload.model_dump(exclude_unset=True).items():
+        setattr(task, field, value)
+    if task.ends_on < task.starts_on:
+        raise HTTPException(status_code=422, detail="ends_on must not be before starts_on")
+    if task.is_active:
+        _ensure_no_special_task_overlap(db, task.starts_on, task.ends_on, exclude_id=task.id)
+    db.commit()
+    db.refresh(task)
+    return _special_task_read(db, task)
+
+
+@router.post("/flower/special-tasks/{task_id}/questions", response_model=BloomSpecialTaskRead, status_code=status.HTTP_201_CREATED)
+def add_special_question(task_id: int, payload: BloomSpecialQuestionWrite, admin: AdminUser = Depends(require_admin), db: Session = Depends(get_db)) -> BloomSpecialTaskRead:
+    _ = admin
+    task = db.get(BloomSpecialTask, task_id)
+    if task is None:
+        raise HTTPException(status_code=404, detail="Special task not found")
+    sort_order = int(db.execute(select(func.count(BloomSpecialQuestion.id)).where(BloomSpecialQuestion.task_id == task_id)).scalar_one() or 0)
+    question = BloomSpecialQuestion(task_id=task_id, prompt=payload.prompt.strip(), sort_order=sort_order)
+    db.add(question)
+    db.flush()
+    for index, label in enumerate(payload.options):
+        db.add(BloomSpecialOption(question_id=question.id, label=label, sort_order=index))
+    db.commit()
+    task = db.execute(select(BloomSpecialTask).options(selectinload(BloomSpecialTask.questions).selectinload(BloomSpecialQuestion.options)).where(BloomSpecialTask.id == task_id)).scalar_one()
+    return _special_task_read(db, task)
+
+
+@router.get("/flower/special-tasks/{task_id}/analytics", response_model=BloomSpecialAnalyticsRead)
+def special_task_analytics(task_id: int, admin: AdminUser = Depends(require_admin), db: Session = Depends(get_db)) -> BloomSpecialAnalyticsRead:
+    _ = admin
+    task = db.execute(select(BloomSpecialTask).options(selectinload(BloomSpecialTask.questions).selectinload(BloomSpecialQuestion.options)).where(BloomSpecialTask.id == task_id)).scalar_one_or_none()
+    if task is None:
+        raise HTTPException(status_code=404, detail="Special task not found")
+    submissions = db.execute(
+        select(BloomSpecialSubmission)
+        .options(selectinload(BloomSpecialSubmission.answers))
+        .where(BloomSpecialSubmission.task_id == task_id)
+        .order_by(BloomSpecialSubmission.completed_at.desc())
+    ).scalars().all()
+    option_by_id = {option.id: option for question in task.questions for option in question.options}
+    answer_counts: dict[int, int] = {}
+    for submission in submissions:
+        for answer in submission.answers:
+            answer_counts[answer.option_id] = answer_counts.get(answer.option_id, 0) + 1
+    question_stats = []
+    for question in task.questions:
+        total = sum(answer_counts.get(option.id, 0) for option in question.options)
+        question_stats.append(BloomSpecialQuestionAnalyticsRead(
+            question_id=question.id,
+            prompt=question.prompt,
+            options=[BloomSpecialOptionAnalyticsRead(option_id=option.id, label=option.label, count=answer_counts.get(option.id, 0), percent=round(answer_counts.get(option.id, 0) * 100 / total, 1) if total else 0.0) for option in question.options],
+        ))
+    profiles = {profile.id: profile for profile in db.execute(select(ClientProfile).options(selectinload(ClientProfile.user)).where(ClientProfile.id.in_([item.client_id for item in submissions]))).scalars().all()} if submissions else {}
+    submission_rows = []
+    for submission in submissions:
+        profile = profiles.get(submission.client_id)
+        submission_rows.append(BloomSpecialSubmissionRead(
+            client_id=submission.client_id,
+            full_name=profile.full_name if profile else None,
+            email=profile.contact_email or profile.user.email if profile and profile.user else profile.contact_email if profile else None,
+            phone=profile.user.phone if profile and profile.user else None,
+            telegram_username=profile.telegram_username if profile else None,
+            vk_username=profile.vk_username if profile else None,
+            completed_at=submission.completed_at,
+            answers=[option_by_id[answer.option_id].label for answer in submission.answers if answer.option_id in option_by_id],
+        ))
+    return BloomSpecialAnalyticsRead(task_id=task.id, title=task.title, submissions_count=len(submissions), questions=question_stats, submissions=submission_rows)
 
 
 @router.post("/flower/settle", response_model=list[FlowerLeaderboardRewardRead])

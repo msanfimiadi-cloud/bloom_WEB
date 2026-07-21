@@ -17,7 +17,19 @@ from app.models.content import (
 from app.models.lead import LeadClick
 from app.models.landing import LandingSettings
 from app.models.giveaway import Giveaway, GiveawayPrize, GiveawayNumber
-from app.models.engagement import BloomDailyTask, BloomLeaderboardReward, BloomPetalEvent, PartnerBotAccess, PartnerCodeAttempt
+from app.models.engagement import (
+    BloomDailyTask,
+    BloomGardenSettings,
+    BloomLeaderboardReward,
+    BloomPetalEvent,
+    BloomSpecialAnswer,
+    BloomSpecialOption,
+    BloomSpecialQuestion,
+    BloomSpecialSubmission,
+    BloomSpecialTask,
+    PartnerBotAccess,
+    PartnerCodeAttempt,
+)
 from app.models.partner import OfferPhoto, Partner, PartnerOffer, PartnerPhoto, PartnerQrLink
 from app.models.payment import PaymentReceipt, PaymentRequest, PaymentRequestStatus, Subscription, SubscriptionStatus
 from app.models.user import AdminUser, User, UserRole
@@ -39,8 +51,14 @@ __all__ = [
     "GiveawayPrize",
     "GiveawayNumber",
     "BloomDailyTask",
+    "BloomGardenSettings",
     "BloomLeaderboardReward",
     "BloomPetalEvent",
+    "BloomSpecialAnswer",
+    "BloomSpecialOption",
+    "BloomSpecialQuestion",
+    "BloomSpecialSubmission",
+    "BloomSpecialTask",
     "PartnerBotAccess",
     "PartnerCodeAttempt",
     "ContentBanner",

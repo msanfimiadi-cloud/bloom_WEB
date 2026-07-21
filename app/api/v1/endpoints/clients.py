@@ -10,6 +10,7 @@ import string
 
 from fastapi import APIRouter, Depends, HTTPException, status
 from sqlalchemy import func, or_, select, update
+from sqlalchemy.exc import IntegrityError
 from sqlalchemy.orm import Session, selectinload
 
 from app.api.deps import get_optional_current_user, require_client
@@ -28,7 +29,7 @@ from app.models.user import User
 from app.schemas.activity import ActivityFeedRead
 from app.schemas.browser_auth import BrowserLoginCodeRequest, ProviderIdentityLinkRequest
 from app.schemas.giveaway import GiveawayStateRead, PublicGiveawayRead, GiveawayPrizeRead, GiveawayNumberRead, SocialSubscriptionCheckRead
-from app.schemas.engagement import FlowerActionRead, FlowerStateRead
+from app.schemas.engagement import FlowerActionRead, FlowerStateRead, BloomSpecialSubmissionWrite
 from app.schemas.client import (
     ClientSiteCredentialsRead,
     ClientCityResponse,
@@ -70,7 +71,7 @@ from app.services.activity_feed import build_client_activity_feed
 from app.services.browser_login_codes import BrowserLoginCodeService
 from app.services.referrals import REWARD_ENTRIES_PER_REFERRAL, activated_referrals_count, ensure_referral_code, referral_counts, referral_link
 from app.services.giveaways import ensure_user_numbers, get_active_giveaway
-from app.services.engagement import award_petals, club_today, flower_state
+from app.services.engagement import award_petals, club_today, flower_state, month_start_for
 from app.services.social_subscriptions import check_and_apply, social_task_settings, is_number_active
 from app.services.offer_savings import calculate_offer_saving_snapshot
 from app.services.site_credentials import (
@@ -148,6 +149,67 @@ def complete_flower_task(
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="flower_task_not_found")
     awarded = award_petals(db, profile.id, source="task", task=task, today=today)
     return FlowerActionRead(awarded=awarded, state=FlowerStateRead.model_validate(flower_state(db, profile.id, today=today)))
+
+
+@router.post("/me/flower/special-tasks/{task_id}/submit", response_model=FlowerActionRead)
+def submit_special_flower_task(
+    task_id: int,
+    payload: BloomSpecialSubmissionWrite,
+    current_user: User = Depends(require_client),
+    db: Session = Depends(get_db),
+) -> FlowerActionRead:
+    from app.models.engagement import (
+        BloomPetalEvent,
+        BloomSpecialAnswer,
+        BloomSpecialOption,
+        BloomSpecialQuestion,
+        BloomSpecialSubmission,
+        BloomSpecialTask,
+    )
+
+    profile = _get_or_create_client_profile(db, current_user.id)
+    today = club_today()
+    task = db.execute(
+        select(BloomSpecialTask).where(
+            BloomSpecialTask.id == task_id,
+            BloomSpecialTask.is_active.is_(True),
+            BloomSpecialTask.starts_on <= today,
+            BloomSpecialTask.ends_on >= today,
+        )
+    ).scalar_one_or_none()
+    if task is None:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="special_task_not_found")
+    if db.execute(select(BloomSpecialSubmission.id).where(BloomSpecialSubmission.task_id == task_id, BloomSpecialSubmission.client_id == profile.id)).scalar_one_or_none() is not None:
+        return FlowerActionRead(awarded=False, state=FlowerStateRead.model_validate(flower_state(db, profile.id, today=today)))
+    questions = db.execute(select(BloomSpecialQuestion).where(BloomSpecialQuestion.task_id == task_id).order_by(BloomSpecialQuestion.sort_order, BloomSpecialQuestion.id)).scalars().all()
+    submitted = {answer.question_id: answer.option_id for answer in payload.answers}
+    if len(submitted) != len(payload.answers) or set(submitted) != {question.id for question in questions} or not questions:
+        raise HTTPException(status_code=status.HTTP_422_UNPROCESSABLE_ENTITY, detail="answer_every_question")
+    valid_options = set(db.execute(select(BloomSpecialOption.id).where(
+        BloomSpecialOption.question_id.in_([question.id for question in questions])
+    )).scalars().all())
+    option_question = dict(db.execute(select(BloomSpecialOption.id, BloomSpecialOption.question_id).where(BloomSpecialOption.id.in_(submitted.values()))).all())
+    if any(option_id not in valid_options or option_question.get(option_id) != question_id for question_id, option_id in submitted.items()):
+        raise HTTPException(status_code=status.HTTP_422_UNPROCESSABLE_ENTITY, detail="invalid_answer_option")
+    submission = BloomSpecialSubmission(task_id=task_id, client_id=profile.id)
+    db.add(submission)
+    db.flush()
+    for question_id, option_id in submitted.items():
+        db.add(BloomSpecialAnswer(submission_id=submission.id, question_id=question_id, option_id=option_id))
+    db.add(BloomPetalEvent(
+        client_id=profile.id,
+        event_date=today,
+        month_start=month_start_for(today),
+        source="special_task",
+        idempotency_key=f"special:{task_id}",
+        petals=task.petals,
+    ))
+    try:
+        db.commit()
+    except IntegrityError:
+        db.rollback()
+        return FlowerActionRead(awarded=False, state=FlowerStateRead.model_validate(flower_state(db, profile.id, today=today)))
+    return FlowerActionRead(awarded=True, state=FlowerStateRead.model_validate(flower_state(db, profile.id, today=today)))
 
 
 def _mask_provider_user_id(value: str | None) -> str | None:
