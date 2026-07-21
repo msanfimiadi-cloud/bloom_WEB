@@ -385,7 +385,7 @@ const renderPublicApp = () => {
     <section class="landing-partner-modal" data-landing-partner-modal aria-live="polite" hidden></section>
 
     <section class="editorial-subscription" id="landing-subscription" aria-labelledby="subscription-offer-title">
-      <img class="editorial-subscription__image" src="/assets/editorial/subscription-still-life.webp" alt="Подарочная коробка и цветы Bloom Club" loading="lazy" />
+      <img class="editorial-subscription__image" src="/assets/editorial/subscription-still-life.webp" alt="Цветущие ветки в вазе и чашка на светлом столе" loading="lazy" />
       <div class="editorial-subscription__content">
         <p class="editorial-kicker">Одна подписка — много возможностей</p>
         <h2 id="subscription-offer-title">Всё лучшее<br><em>для тебя</em></h2>
@@ -398,7 +398,6 @@ const renderPublicApp = () => {
         </ul>
         <div class="editorial-subscription__actions">
           <a class="editorial-button" href="https://app.bloomclub.ru/">Оформить подписку <span aria-hidden="true">→</span></a>
-          <a class="editorial-text-link" href="/offer/">Условия оплаты и возврата</a>
         </div>
       </div>
     </section>
@@ -446,7 +445,7 @@ const renderPublicApp = () => {
 
     <footer class="editorial-footer" id="landing-contacts" aria-labelledby="business-info-title">
       <div class="editorial-footer__brand"><span class="editorial-brand__name">Bloom Club</span><p>Федеральный клуб привилегий для девушек.</p></div>
-      <div><h2 id="business-info-title">Поддержка и контакты</h2><p>Ежедневно 09:00–18:00<br>по новосибирскому времени (UTC+7)</p><a href="mailto:danka1948@mail.ru">danka1948@mail.ru</a></div>
+      <div><h2 id="business-info-title">Поддержка и контакты</h2><p>Время работы: 09:00–18:00<br>по новосибирскому времени (UTC+7)</p><a href="mailto:danka1948@mail.ru">danka1948@mail.ru</a></div>
       <div><h2>Мы на связи</h2><a href="https://t.me/Wo_ClubNSK" target="_blank" rel="noopener noreferrer">Telegram-канал</a><a href="https://t.me/app_bloom_club_bot" target="_blank" rel="noopener noreferrer">Telegram-бот</a><a href="https://vk.ru/club238169934" target="_blank" rel="noopener noreferrer">ВКонтакте</a></div>
       <div><h2>Документы</h2>${renderLegalDocumentLinks('legal-links editorial-footer__links')}</div>
       <p class="editorial-footer__operator">© Bloom Club · ИП Глущенко Анастасия Дмитриевна · ИНН 541007956565 · ОГРНИП 323547600049744</p>
