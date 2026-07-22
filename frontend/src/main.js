@@ -4137,6 +4137,12 @@ const renderBloomAnalytics = () => {
 
 const renderFlowerAdminTab = () => {
   const settings = adminState.flowerSettings || {};
+  const clientUsers = adminState.users.filter((item) => item.role === 'client');
+  const clientOptions = clientUsers.map((item) => {
+    const contact = item.phone || item.contact_email || item.email || '';
+    const label = [item.display_name || item.full_name || `Пользователь #${item.id}`, contact, `ID ${item.id}`].filter(Boolean).join(' · ');
+    return `<option value="${escapeHtml(item.id)}">${escapeHtml(label)}</option>`;
+  }).join('');
   const taskCards = adminState.flowerSpecialTasks.map((task) => `<article class="ui-card bloom-survey-card">
     <div class="admin-section-heading"><div><h4>${escapeHtml(task.title)}</h4><p>${formatDate(task.starts_on)} — ${formatDate(task.ends_on)} · +${formatValue(task.petals)} лепестков · ответов: ${formatValue(task.submissions_count)}</p></div><button class="admin-inline-action ui-button ${task.is_active ? 'ui-button--danger' : 'ui-button--secondary'}" type="button" data-special-task-toggle="${escapeHtml(task.id)}" data-next-active="${task.is_active ? 'false' : 'true'}">${task.is_active ? 'Остановить' : 'Запустить'}</button></div>
     ${task.description ? `<p>${escapeHtml(task.description)}</p>` : ''}
@@ -4146,6 +4152,7 @@ const renderFlowerAdminTab = () => {
   </article>`).join('');
   return `<div class="flower-admin-page stack">
     <div class="admin-section-heading admin-page-heading"><p class="section-eyebrow section-kicker">Ежедневная и недельная активность</p><h3>Сад Bloom</h3><p>Здесь настраивается игровой лепесток и специальные опросники. Эти настройки, календарь и ответы видны только администраторам.</p></div>
+    <form class="admin-form admin-form--inline ui-card" data-admin-form="flowerPetalAward"><h4>Начислить лепестки участнице</h4><p class="helper-text">Ручное начисление сразу попадёт в цветок и рейтинг текущего месяца. Операция сохранится в истории вместе с причиной.</p><label>Участница<select name="user_id" required><option value="">Выберите участницу</option>${clientOptions}</select></label><label>Количество<input name="petals" type="number" min="1" max="1000" value="1" required></label><label>Причина<textarea name="note" rows="2" minlength="2" maxlength="1000" required placeholder="Например, победа в активности клуба"></textarea></label><button type="submit" ${clientUsers.length ? '' : 'disabled'}>Начислить</button><p class="form-message" data-form-message="flowerPetalAward">${escapeHtml(adminState.formMessages.flowerPetalAward || '')}</p></form>
     <form class="admin-form admin-form--inline ui-card" data-admin-form="flowerGardenSettings"><h4>Задание дня — найти лепесток</h4><p class="helper-text">Участница находит лепесток в карточке сада и нажимает на него один раз в день.</p><label>Размещение<select name="placement_mode"><option value="random" ${settings.placement_mode === 'random' ? 'selected' : ''}>Случайное каждый день</option><option value="manual" ${settings.placement_mode === 'manual' ? 'selected' : ''}>Выбранное администратором</option></select></label><label>Место<select name="manual_position">${Object.entries(bloomPositionLabels).map(([value,label]) => `<option value="${value}" ${settings.manual_position === value ? 'selected' : ''}>${label}</option>`).join('')}</select></label><label>Лепестков за находку<input name="daily_petals" type="number" min="1" max="20" value="${escapeHtml(settings.daily_petals || 1)}"></label><button type="submit">Сохранить</button></form>
     <form class="admin-form admin-form--inline ui-card" data-admin-form="flowerSpecialTask"><h4>Новое специальное задание клуба</h4><label>Название<input name="title" required placeholder="Опрос недели"></label><label>Описание<textarea name="description" rows="2"></textarea></label><label>Лепестки<input name="petals" type="number" min="1" max="100" value="5" required></label><label>Начало недели<input name="starts_on" type="date" required></label><label>Окончание<input name="ends_on" type="date" required></label><button type="submit">Создать опросник</button></form>
     <section class="ui-card"><div class="admin-section-heading"><div><h4>Календарь опросников</h4><p>По дням видно, в какую неделю действовал каждый опросник.</p></div><label>Месяц<input type="month" value="${escapeHtml(adminState.flowerCalendarMonth)}" data-bloom-calendar-month></label></div>${renderBloomCalendar()}</section>
@@ -5733,7 +5740,7 @@ const loadActiveTabData = async () => {
       await loadGiveaways();
       await syncGiveawayEntriesSelection({ force: true });
     } else if (adminState.activeTab === 'flower') {
-      await Promise.all([loadFlowerGarden(), loadGiveaways()]);
+      await Promise.all([loadFlowerGarden(), loadGiveaways(), loadUsers()]);
     } else if (adminState.activeTab === 'activity') {
       adminState.activityLoading = true;
       adminState.activityError = '';
@@ -6486,6 +6493,7 @@ const submitLandingGiveaway = async (form) => {
 const handleAdminFormSubmit = async (form) => {
   const formType = form.dataset.adminForm;
   let savedEntity = null;
+  let successMessage = 'Сохранено.';
   const message = form.querySelector(`[data-form-message="${formType}"]`);
   setFormMessage(formType);
   if (message) {
@@ -6536,6 +6544,15 @@ const handleAdminFormSubmit = async (form) => {
       adminState.flowerSettings = await patchJson('/api/v1/admin/flower/settings', {
         placement_mode: String(data.get('placement_mode') || 'random'), manual_position: String(data.get('manual_position') || 'top_right'), daily_petals: Number(data.get('daily_petals') || 1),
       });
+    } else if (formType === 'flowerPetalAward') {
+      const data = new FormData(form);
+      const result = await postJson('/api/v1/admin/flower/petals/award', {
+        user_id: Number(data.get('user_id')),
+        petals: Number(data.get('petals')),
+        note: String(data.get('note') || '').trim(),
+      });
+      form.reset();
+      successMessage = `Начислено ${result.petals}. Теперь у участницы ${result.total_petals} лепестков в этом месяце.`;
     } else if (formType === 'flowerSpecialTask') {
       const data = new FormData(form);
       await postJson('/api/v1/admin/flower/special-tasks', { title: String(data.get('title') || '').trim(), description: getOptionalText(data, 'description'), petals: Number(data.get('petals') || 5), starts_on: String(data.get('starts_on') || ''), ends_on: String(data.get('ends_on') || ''), is_active: true });
@@ -6550,9 +6567,9 @@ const handleAdminFormSubmit = async (form) => {
     } else if (formType === 'flowerSettle') {
       const data = new FormData(form);
       const rewards = await postJson('/api/v1/admin/flower/settle', { month: `${data.get('month')}-01`, giveaway_id: Number(data.get('giveaway_id')) });
-      setFormMessage(formType, `Готово. Награды начислены: ${Array.isArray(rewards) ? rewards.length : 0}.`);
+      successMessage = `Готово. Награды начислены: ${Array.isArray(rewards) ? rewards.length : 0}.`;
     }
-    setFormMessage(formType, 'Сохранено.');
+    setFormMessage(formType, successMessage);
     if (formType === 'partner' || formType === 'partnerEdit') {
       if (formType === 'partner') {
         if (savedEntity?.id) adminState.selectedPartnerIdForEdit = String(savedEntity.id);
@@ -6560,7 +6577,7 @@ const handleAdminFormSubmit = async (form) => {
       adminState.partnerFormOpen = false;
       adminState.partnerFormInlineError = '';
     }
-    setPanelMessage('Сохранено.', 'success');
+    setPanelMessage(successMessage, 'success');
     renderAdminLayout();
   } catch (error) {
     setFormMessage(formType, error.message || 'Не удалось сохранить.');
