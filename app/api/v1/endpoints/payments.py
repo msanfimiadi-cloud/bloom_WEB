@@ -16,7 +16,14 @@ from app.db.session import get_db
 from app.models.acquiring import Payment, PaymentEvent, PaymentRefund, PaymentStatus, SubscriptionPlan
 from app.models.client import ClientProfile
 from app.models.user import AdminUser, User
-from app.schemas.acquiring import AdminPaymentRead, PaymentCreate, PaymentRead, RefundCreate
+from app.schemas.acquiring import (
+    AdminPaymentRead,
+    PaymentCreate,
+    PaymentRead,
+    RefundCreate,
+    SubscriptionPlanRead,
+    SubscriptionPlanUpdate,
+)
 from app.services.payment_fulfillment import PaymentFulfillmentService, add_payment_event, apply_provider_state, payload_hash
 from app.services.payments import create_payment, payment_read, refresh_payment
 from app.services.tochka_payments import TochkaError, TochkaPaymentsClient, TochkaWebhookSignatureError, verify_webhook
@@ -40,6 +47,32 @@ def _owned(db: Session, public_id: str, user_id: int) -> Payment:
     if payment is None:
         raise HTTPException(status_code=404, detail="Payment not found")
     return payment
+
+
+def _plan_read(plan: SubscriptionPlan) -> SubscriptionPlanRead:
+    return SubscriptionPlanRead(
+        id=plan.id,
+        code=plan.code,
+        name=plan.name,
+        price=plan.price,
+        currency=plan.currency,
+        duration_days=plan.duration_days,
+        is_active=plan.is_active,
+        updated_at=plan.updated_at,
+    )
+
+
+@router.get("/clients/subscription-plans", response_model=list[SubscriptionPlanRead], tags=["client-payments"])
+def list_client_subscription_plans(
+    current_user: User = Depends(require_client), db: Session = Depends(get_db),
+):
+    _ = current_user
+    plans = db.execute(
+        select(SubscriptionPlan)
+        .where(SubscriptionPlan.is_active.is_(True))
+        .order_by(SubscriptionPlan.id)
+    ).scalars().all()
+    return [_plan_read(plan) for plan in plans]
 
 
 @router.post("/clients/payments", response_model=PaymentRead, status_code=201, tags=["client-payments"])
@@ -138,6 +171,42 @@ def _admin_read(payment: Payment) -> AdminPaymentRead:
         payment_link_id=payment.payment_link_id, paid_at=payment.paid_at, subscription_id=payment.subscription_id,
         refunded_amount=payment.refunded_amount, created_at=payment.created_at,
     )
+
+
+@router.get("/admin/subscription-plans", response_model=list[SubscriptionPlanRead], tags=["admin-payments"])
+def list_admin_subscription_plans(
+    admin: AdminUser = Depends(require_admin), db: Session = Depends(get_db),
+):
+    _ = admin
+    plans = db.execute(select(SubscriptionPlan).order_by(SubscriptionPlan.id)).scalars().all()
+    return [_plan_read(plan) for plan in plans]
+
+
+@router.patch("/admin/subscription-plans/{plan_id}", response_model=SubscriptionPlanRead, tags=["admin-payments"])
+def update_admin_subscription_plan(
+    plan_id: int,
+    payload: SubscriptionPlanUpdate,
+    admin: AdminUser = Depends(require_admin),
+    db: Session = Depends(get_db),
+):
+    plan = db.execute(
+        select(SubscriptionPlan).where(SubscriptionPlan.id == plan_id).with_for_update()
+    ).scalar_one_or_none()
+    if plan is None:
+        raise HTTPException(status_code=404, detail="Subscription plan not found")
+    old_price = plan.price
+    plan.price = payload.price.quantize(Decimal("0.01"))
+    plan.updated_at = datetime.now(timezone.utc)
+    db.commit()
+    db.refresh(plan)
+    logger.info(
+        "subscription_plan_price_updated admin_id=%s plan_id=%s old_price=%s new_price=%s",
+        admin.id,
+        plan.id,
+        old_price,
+        plan.price,
+    )
+    return _plan_read(plan)
 
 
 @router.get("/admin/payments", response_model=list[AdminPaymentRead], tags=["admin-payments"])
