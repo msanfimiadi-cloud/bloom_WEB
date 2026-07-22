@@ -148,9 +148,9 @@ const CONNECTION_PROBLEM_DESCRIPTION =
 
 
 const LEGAL_DOCUMENT_LINKS = {
-  privacy: '/docs/Политика%20Конфиденциальности.docx',
-  agreement: '/docs/Пользовательское%20соглашение.docx',
-  personalDataConsent: '/docs/Согласие%20на%20обработку%20персональных%20данных.docx',
+  privacy: 'https://bloomclub.ru/privacy/',
+  agreement: 'https://bloomclub.ru/terms/',
+  personalDataConsent: 'https://bloomclub.ru/personal-data-consent/',
 };
 
 const BROWSER_LOGIN_REQUIRED_MESSAGE =
@@ -3045,6 +3045,8 @@ export default function App() {
             cities={safeData.cities}
             onOpenSubscription={() => setPage("subscription")}
             onActivateTrial={activateTrial}
+            isCreatingPayment={isCreatingPayment}
+            onCreatePayment={openPayment}
             onSaveProfile={saveProfile}
             referralSummary={safeData.referralSummary}
             onLogout={logout}

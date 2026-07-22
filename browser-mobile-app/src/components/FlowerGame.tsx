@@ -1,4 +1,4 @@
-import { useEffect, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { checkInFlower, getFlowerState, submitFlowerSpecialTask } from "../api/client";
 import type { FlowerState } from "../api/types";
 
@@ -88,11 +88,16 @@ export function FlowerGame() {
   const [showRating, setShowRating] = useState(false);
   const [showSpecialTask, setShowSpecialTask] = useState(false);
   const [specialAnswers, setSpecialAnswers] = useState<Record<number, number>>({});
+  const [isPetalJoining, setIsPetalJoining] = useState(false);
+  const petalAnimationTimeoutRef = useRef<number | null>(null);
 
   useEffect(() => {
     let active = true;
     getFlowerState().then((result) => active && setState(result)).catch(() => active && setMessage("Цветок временно недоступен"));
-    return () => { active = false; };
+    return () => {
+      active = false;
+      if (petalAnimationTimeoutRef.current !== null) window.clearTimeout(petalAnimationTimeoutRef.current);
+    };
   }, []);
 
   async function findPetal() {
@@ -101,6 +106,13 @@ export function FlowerGame() {
     try {
       const result = await checkInFlower();
       setState(result.state);
+      if (result.awarded) {
+        setIsPetalJoining(true);
+        petalAnimationTimeoutRef.current = window.setTimeout(() => {
+          setIsPetalJoining(false);
+          petalAnimationTimeoutRef.current = null;
+        }, 850);
+      }
       setMessage(result.awarded ? `+${result.state.petal_reward} лепесток. Цветок стал сильнее` : "Сегодня лепесток уже найден");
     } catch {
       setMessage("Не удалось сохранить. Попробуйте ещё раз");
@@ -148,18 +160,24 @@ export function FlowerGame() {
 
       <div className={`flower-visual flower-visual--stage-${stage}`} aria-label={`Стадия: ${STAGE_NAMES[stage]}`}>
         <span className="flower-visual__glow" aria-hidden="true" />
-        {!state.checked_in_today ? <button className={`flower-daily-petal flower-daily-petal--${state.petal_position}`} type="button" onClick={() => void findPetal()} disabled={busyAction !== null} aria-label={`Найти лепесток, +${state.petal_reward}`}><span aria-hidden="true">🌸</span></button> : null}
+        {isPetalJoining ? <span className="flower-joining-petal" aria-hidden="true" /> : null}
         <div className="flower-visual__bloom"><FlowerIllustration stage={stage} /></div>
         <strong>{STAGE_NAMES[stage]}</strong>
         <small>{state.petals} лепестков · серия {state.streak} дн.</small>
       </div>
+
+      {!state.checked_in_today ? (
+        <button className="button button--secondary flower-game__checkin" type="button" onClick={() => void findPetal()} disabled={busyAction !== null}>
+          {busyAction === "checkin" ? "Добавляем лепесток…" : `Добавить лепесток дня · +${state.petal_reward}`}
+        </button>
+      ) : null}
 
       <div className="flower-progress" aria-label={`Прогресс месяца ${progress}%`}>
         <span><i style={{ width: `${progress}%` }} /></span>
         <small>{state.days_grown} из {state.days_in_month} дней</small>
       </div>
 
-      <p className="flower-game__daily-hint">{state.checked_in_today ? "Лепесток сегодня найден" : "Задание дня: найдите лепесток в саду и нажмите на него"}</p>
+      <p className="flower-game__daily-hint">{state.checked_in_today ? "Лепесток сегодня присоединился к цветку" : "Задание дня: добавьте новый лепесток к цветку"}</p>
 
       {specialTask ? <div className="flower-special-task"><p className="eyebrow">Задание недели</p><strong>{specialTask.title}</strong>{specialTask.description ? <p>{specialTask.description}</p> : null}<small>+{specialTask.petals} лепестков</small><button className="button button--secondary" type="button" onClick={() => setShowSpecialTask(true)} disabled={specialTask.completed || busyAction !== null}>{specialTask.completed ? "Задание выполнено" : "Специальное задание клуба"}</button></div> : null}
 

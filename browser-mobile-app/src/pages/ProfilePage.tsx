@@ -2,24 +2,25 @@ import { isTimeoutError, linkProviderIdentity, mergeProviderIdentity, previewPro
 import { useEffect, useMemo, useState, type FormEvent } from 'react';
 import { AppImage } from '../components/AppImage';
 import { ContentText } from '../components/ContentText';
+import { LEGAL_DOCUMENT_URLS, SubscriptionPaymentCard } from '../components/SubscriptionPaymentCard';
 import { useContentText } from '../content/ContentContext';
 import { useAddToHomeScreen } from '../utils/pwaInstall';
-import type { City, ClientProfile, ClientProfilePatch, ReferralSummary, Subscription } from '../api/types';
+import type { AcquiringPayment, City, ClientProfile, ClientProfilePatch, ReferralSummary, Subscription } from '../api/types';
 import { pickText, toText } from '../utils/text';
 
 
 const legalDocuments = [
   {
     label: 'Политика конфиденциальности',
-    href: '/docs/Политика%20Конфиденциальности.docx',
+    href: LEGAL_DOCUMENT_URLS.privacy,
   },
   {
     label: 'Пользовательское соглашение',
-    href: '/docs/Пользовательское%20соглашение.docx',
+    href: LEGAL_DOCUMENT_URLS.agreement,
   },
   {
     label: 'Согласие на обработку персональных данных',
-    href: '/docs/Согласие%20на%20обработку%20персональных%20данных.docx',
+    href: LEGAL_DOCUMENT_URLS.personalDataConsent,
   },
 ];
 
@@ -35,6 +36,8 @@ interface ProfilePageProps {
   cities?: City[] | null;
   onOpenSubscription: () => void;
   onActivateTrial: () => Promise<Subscription>;
+  isCreatingPayment: boolean;
+  onCreatePayment: (email: string, subscriptionPlanId: number) => Promise<AcquiringPayment | null>;
   onSaveProfile: (payload: ClientProfilePatch) => Promise<ClientProfile>;
   referralSummary?: ReferralSummary | null;
   onLogout: () => void;
@@ -74,7 +77,7 @@ function getProfileDisplayName(profile: ClientProfile | null | undefined): strin
   ) || '';
 }
 
-export function ProfilePage({ profile, cities, onSaveProfile, referralSummary, onLogout, onLinkedProvider }: ProfilePageProps) {
+export function ProfilePage({ profile, subscription, cities, onOpenSubscription, onActivateTrial, isCreatingPayment, onCreatePayment, onSaveProfile, referralSummary, onLogout, onLinkedProvider }: ProfilePageProps) {
   const safeCities = useMemo(() => (Array.isArray(cities) ? cities : []), [cities]);
   const initialName = getProfileDisplayName(profile);
   const initialCity = getCityName(profile?.city);
@@ -223,6 +226,19 @@ export function ProfilePage({ profile, cities, onSaveProfile, referralSummary, o
         <h1>{name || defaultProfileName}</h1>
         <p>{city || defaultProfileCity}</p>
       </div>
+
+      <section className="profile-subscription-section" aria-label="Оплата подписки">
+        <SubscriptionPaymentCard
+          profile={profile}
+          subscription={subscription}
+          isCreatingPayment={isCreatingPayment}
+          onCreatePayment={onCreatePayment}
+          onActivateTrial={onActivateTrial}
+        />
+        <button className="link-button profile-subscription-section__details" type="button" onClick={onOpenSubscription}>
+          Посмотреть условия подписки
+        </button>
+      </section>
 
       <form className="profile-form" onSubmit={(event: FormEvent<HTMLFormElement>) => void handleSubmit(event)}>
         <div>

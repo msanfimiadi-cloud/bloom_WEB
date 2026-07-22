@@ -6991,7 +6991,7 @@ small,
 .flower-illustration__bud-petal { fill: url(#bloom-petal); stroke: rgba(157,70,108,.38); stroke-width: 2; }
 .flower-illustration__bud-fold { fill: none; stroke: rgba(157,70,108,.42); stroke-width: 2; stroke-linecap: round; }
 .flower-illustration__bud { transform-box: fill-box; transform-origin: center bottom; animation: bloom-bud-sway 4.2s ease-in-out infinite; }
-.flower-illustration__petal { fill: url(#bloom-petal); stroke: rgba(166,79,113,.28); stroke-width: 1.5; transform-box: fill-box; transform-origin: center; }
+.flower-illustration__petal { fill: url(#bloom-petal); stroke: rgba(166,79,113,.28); stroke-width: 1.5; }
 .flower-illustration__center { fill: #d8a14d; stroke: #bc7935; stroke-width: 2; }
 .flower-illustration__center-light { fill: #f8da88; }
 .flower-illustration__flower { transform-box: fill-box; transform-origin: center bottom; animation: bloom-flower-float 4.5s ease-in-out infinite; }
@@ -7001,13 +7001,27 @@ small,
 @keyframes bloom-flower-float { 0%,100% { transform: translateY(0) rotate(-.8deg); } 50% { transform: translateY(-2px) rotate(.8deg); } }
 .flower-progress { display: grid; gap: .4rem; margin-bottom: 1rem; }.flower-progress > span { overflow: hidden; height: .55rem; border-radius: 999px; background: rgba(113,75,98,.1); }.flower-progress i { display: block; height: 100%; border-radius: inherit; background: linear-gradient(90deg,#d67baa,#8eb994); transition: width .4s ease; }.flower-progress small { color: #745f6b; }
 .flower-game__checkin { width: 100%; min-height: 3.25rem; }
-.flower-daily-petal { position: absolute; z-index: 2; display: grid; place-items: center; width: 3rem; height: 3rem; padding: 0; border: 0; border-radius: 50%; background: rgba(255,255,255,.82); box-shadow: 0 .55rem 1.3rem rgba(116,62,91,.2), inset 0 0 0 1px rgba(214,123,170,.2); font-size: 1.55rem; cursor: pointer; animation: bloom-petal-pulse 2s ease-in-out infinite; }
-.flower-daily-petal--top_left { top: 1rem; left: 1rem; }.flower-daily-petal--top_right { top: 1rem; right: 1rem; }.flower-daily-petal--middle_left { top: 46%; left: .5rem; }.flower-daily-petal--middle_right { top: 46%; right: .5rem; }.flower-daily-petal--bottom_left { bottom: 1rem; left: 1rem; }.flower-daily-petal--bottom_right { right: 1rem; bottom: 1rem; }
+.flower-joining-petal { position: absolute; z-index: 3; right: 12%; bottom: 19%; width: 1.7rem; height: 2.7rem; border: 1px solid rgba(166,79,113,.25); border-radius: 70% 30% 65% 35%; background: radial-gradient(circle at 45% 30%, #fff5f8 0%, #e9a6bd 62%, #bd6688 100%); box-shadow: 0 .4rem .9rem rgba(116,62,91,.18); animation: bloom-petal-join .85s cubic-bezier(.25,.75,.25,1) both; }
 .flower-game__daily-hint { margin: .85rem 0 0; text-align: center; color: #745f6b; font-size: .9rem; }
 .flower-special-task { display: grid; gap: .55rem; margin-top: 1.15rem; padding: 1rem; border-radius: 1.2rem; background: rgba(255,255,255,.68); }.flower-special-task p { margin: 0; }.flower-special-task small { color: #9c527b; font-weight: 700; }.flower-special-task button { margin-top: .35rem; }
 .flower-special-modal { position: fixed; inset: 0; z-index: 100; display: grid; align-items: end; padding: 1rem; background: rgba(43,31,39,.4); backdrop-filter: blur(.5rem); }
 .flower-special-modal__card { position: relative; overflow: auto; max-height: 88vh; padding: 1.35rem; border-radius: 1.5rem; background: #fffafc; box-shadow: 0 1.5rem 4rem rgba(43,31,39,.3); }.flower-special-modal__close { position: absolute; top: .8rem; right: .8rem; width: 2.5rem; height: 2.5rem; border: 0; border-radius: 50%; background: #f5edf2; font-size: 1.4rem; }.flower-special-modal fieldset { display: grid; gap: .55rem; margin: 1.1rem 0; padding: 0; border: 0; }.flower-special-modal legend { margin-bottom: .65rem; font-weight: 750; }.flower-special-modal label { display: flex; align-items: center; gap: .6rem; padding: .75rem; border-radius: .8rem; background: #f8eff4; }.flower-special-modal .button { width: 100%; }
-@keyframes bloom-petal-pulse { 0%,100% { transform: scale(1) rotate(-5deg); } 50% { transform: scale(1.08) rotate(5deg); } }
+@keyframes bloom-petal-join { 0% { opacity: 0; transform: translate(0, 0) rotate(24deg) scale(.72); } 28% { opacity: 1; } 100% { opacity: 0; transform: translate(-4.9rem, -7.5rem) rotate(-32deg) scale(1); } }
+
+.profile-subscription-section { display: grid; gap: .65rem; }
+.profile-subscription-section__details { justify-self: center; }
+
+/* The detailed partner card must show the whole source image. Keep cover only on catalog previews. */
+.partner-gallery__main .partner-detail__image {
+  width: 100%;
+  height: auto;
+  min-height: 0;
+  max-height: min(70vh, 560px);
+  aspect-ratio: auto;
+  object-fit: contain;
+  object-position: center;
+  background: linear-gradient(135deg, #fffafa, #f4dfe1);
+}
 .flower-tasks { margin-top: 1.15rem; }.flower-tasks article { display: flex; align-items: center; justify-content: space-between; gap: .8rem; padding: 1rem; border-radius: 1.2rem; background: rgba(255,255,255,.66); }.flower-tasks article p { margin: .3rem 0; }.flower-tasks article small { color: #9c527b; font-weight: 700; }
 .flower-game__message { margin: .9rem 0 0; text-align: center; color: #7c4c67; font-weight: 650; }
 .flower-leaderboard { position: absolute; inset: .75rem; z-index: 5; overflow: auto; padding: 1.15rem; border-radius: 1.4rem; background: rgba(255,255,255,.94); backdrop-filter: blur(1.4rem) saturate(150%); box-shadow: 0 1.2rem 3rem rgba(66,35,53,.2); }.flower-leaderboard__heading button { width: 2.5rem; height: 2.5rem; border: 0; border-radius: 50%; background: #f5edf2; font-size: 1.4rem; }.flower-leaderboard ol { display: grid; gap: .45rem; padding: 0; list-style: none; }.flower-leaderboard li { display: grid; grid-template-columns: 2rem 1fr auto; align-items: center; gap: .55rem; padding: .7rem; border-radius: .9rem; }.flower-leaderboard li.is-current { background: #f6e5ef; }.flower-leaderboard li > span { display: grid; place-items: center; width: 1.8rem; height: 1.8rem; border-radius: 50%; background: #f1e8ed; font-weight: 800; }
