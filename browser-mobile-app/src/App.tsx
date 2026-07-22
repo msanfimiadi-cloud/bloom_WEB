@@ -2442,13 +2442,13 @@ export default function App() {
     [],
   );
 
-  const openPayment = useCallback(async (receiptEmail: string) => {
+  const openPayment = useCallback(async (receiptEmail: string, subscriptionPlanId: number) => {
     if (requireRegisteredUser()) return null;
     setIsCreatingPayment(true);
     setPaymentMessage(null);
 
     try {
-      const payment = await createAcquiringPayment(receiptEmail);
+      const payment = await createAcquiringPayment(subscriptionPlanId, receiptEmail);
       setPaymentMessage("Ссылка на оплату создана.");
       return payment;
     } catch (caughtError) {
