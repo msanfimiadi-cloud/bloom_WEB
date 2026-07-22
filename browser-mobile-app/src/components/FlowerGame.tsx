@@ -1,12 +1,23 @@
 import { useEffect, useRef, useState } from "react";
+import type { CSSProperties } from "react";
 import { checkInFlower, getFlowerState, submitFlowerSpecialTask } from "../api/client";
 import type { FlowerState } from "../api/types";
 
 const STAGE_NAMES = ["Семечко", "Проклюнулось", "Росток", "Бутон", "Расцвёл"];
+const STAGE_STARTS = [0, 5, 12, 22, 35];
+const STAGE_ENDS = [4, 11, 21, 34, 35];
 
-function FlowerIllustration({ stage }: { stage: number }) {
+function getStageProgress(petals: number, stage: number) {
+  if (stage >= STAGE_NAMES.length - 1) return 1;
+  const start = STAGE_STARTS[stage];
+  const end = STAGE_ENDS[stage];
+  return Math.max(0, Math.min(1, (petals - start) / Math.max(end - start, 1)));
+}
+
+function FlowerIllustration({ stage, stageProgress }: { stage: number; stageProgress: number }) {
+  const progressStyle = { "--stage-progress": stageProgress } as CSSProperties;
   return (
-    <svg className="flower-illustration" viewBox="0 0 220 190" role="img" aria-label={STAGE_NAMES[stage]}>
+    <svg className={`flower-illustration flower-illustration--stage-${stage}`} style={progressStyle} viewBox="0 0 220 190" role="img" aria-label={STAGE_NAMES[stage]}>
       <defs>
         <linearGradient id="bloom-soil" x1="0" y1="0" x2="0" y2="1">
           <stop offset="0" stopColor="#8b5f56" />
@@ -35,6 +46,7 @@ function FlowerIllustration({ stage }: { stage: number }) {
         <g className="flower-illustration__seed flower-illustration__seed--resting" filter="url(#bloom-shadow)">
           <path d="M88 120c0-18 12-31 27-31 14 0 24 11 24 25 0 19-16 31-34 29-11-2-17-10-17-23Z" />
           <path className="flower-illustration__seed-shine" d="M101 102c6-6 14-7 20-3" />
+          <path className="flower-illustration__seed-crack" d="m116 89-5 10 7 7-8 11" />
         </g>
       ) : null}
 
@@ -43,6 +55,12 @@ function FlowerIllustration({ stage }: { stage: number }) {
           <path className="flower-illustration__root" d="M110 130c-1 11-6 18-14 24m15-17c7 4 11 10 13 17" />
           <path className="flower-illustration__stem" d={stage === 1 ? "M110 132C108 123 111 116 116 110" : stage === 2 ? "M110 132C109 111 110 88 111 66" : "M110 132C109 103 112 73 111 47"} />
           {stage === 1 ? <path className="flower-illustration__seed-shell" d="M93 125c2-15 11-24 24-24 12 0 21 9 22 21-10-4-18-2-23 8-8-8-15-10-23-5Z" /> : null}
+          {stage === 1 ? (
+            <g className="flower-illustration__cotyledons">
+              <path className="flower-illustration__leaf" d="M115 111C102 99 93 103 94 108c1 7 9 10 21 9Z" />
+              <path className="flower-illustration__leaf" d="M116 110c12-12 22-8 21-3-1 7-9 11-21 10Z" />
+            </g>
+          ) : null}
           {stage >= 2 ? (
             <>
               <path className="flower-illustration__leaf flower-illustration__leaf--left" d="M109 100C91 78 73 83 72 88c-1 10 16 21 37 18Z" />
@@ -89,7 +107,9 @@ export function FlowerGame() {
   const [showSpecialTask, setShowSpecialTask] = useState(false);
   const [specialAnswers, setSpecialAnswers] = useState<Record<number, number>>({});
   const [isPetalJoining, setIsPetalJoining] = useState(false);
+  const [isStageChanging, setIsStageChanging] = useState(false);
   const petalAnimationTimeoutRef = useRef<number | null>(null);
+  const stageAnimationTimeoutRef = useRef<number | null>(null);
 
   useEffect(() => {
     let active = true;
@@ -97,15 +117,28 @@ export function FlowerGame() {
     return () => {
       active = false;
       if (petalAnimationTimeoutRef.current !== null) window.clearTimeout(petalAnimationTimeoutRef.current);
+      if (stageAnimationTimeoutRef.current !== null) window.clearTimeout(stageAnimationTimeoutRef.current);
     };
   }, []);
+
+  function updateFlowerState(nextState: FlowerState) {
+    if (state && nextState.stage !== state.stage) {
+      setIsStageChanging(true);
+      if (stageAnimationTimeoutRef.current !== null) window.clearTimeout(stageAnimationTimeoutRef.current);
+      stageAnimationTimeoutRef.current = window.setTimeout(() => {
+        setIsStageChanging(false);
+        stageAnimationTimeoutRef.current = null;
+      }, 1050);
+    }
+    setState(nextState);
+  }
 
   async function findPetal() {
     setBusyAction("checkin");
     setMessage("");
     try {
       const result = await checkInFlower();
-      setState(result.state);
+      updateFlowerState(result.state);
       if (result.awarded) {
         setIsPetalJoining(true);
         petalAnimationTimeoutRef.current = window.setTimeout(() => {
@@ -131,7 +164,7 @@ export function FlowerGame() {
     setMessage("");
     try {
       const result = await submitFlowerSpecialTask(task.id, task.questions.map((question) => ({ question_id: question.id, option_id: specialAnswers[question.id] })));
-      setState(result.state);
+      updateFlowerState(result.state);
       setShowSpecialTask(false);
       setMessage(result.awarded ? `Специальное задание выполнено · +${task.petals} лепестков` : "Задание уже выполнено");
     } catch {
@@ -146,8 +179,11 @@ export function FlowerGame() {
   }
 
   const stage = Math.min(state.stage, STAGE_NAMES.length - 1);
+  const stageProgress = getStageProgress(state.petals, stage);
   const progress = Math.min(100, Math.round((state.days_grown / Math.max(state.days_in_month, 1)) * 100));
   const specialTask = state.special_task;
+  const nextStage = stage < STAGE_NAMES.length - 1 ? stage + 1 : null;
+  const petalsToNextStage = nextStage === null ? 0 : Math.max(0, STAGE_STARTS[nextStage] - state.petals);
 
   return (
     <section className="flower-game" aria-labelledby="flower-game-title">
@@ -158,12 +194,25 @@ export function FlowerGame() {
         </button>
       </div>
 
-      <div className={`flower-visual flower-visual--stage-${stage}`} aria-label={`Стадия: ${STAGE_NAMES[stage]}`}>
+      <div className={`flower-visual flower-visual--stage-${stage}${isStageChanging ? " is-stage-changing" : ""}`} style={{ "--stage-progress": stageProgress } as CSSProperties} aria-label={`Стадия: ${STAGE_NAMES[stage]}`}>
         <span className="flower-visual__glow" aria-hidden="true" />
         {isPetalJoining ? <span className="flower-joining-petal" aria-hidden="true" /> : null}
-        <div className="flower-visual__bloom"><FlowerIllustration stage={stage} /></div>
+        <div className="flower-visual__bloom"><FlowerIllustration stage={stage} stageProgress={stageProgress} /></div>
         <strong>{STAGE_NAMES[stage]}</strong>
         <small>{state.petals} лепестков · серия {state.streak} дн.</small>
+      </div>
+
+      <div className="flower-stage-path" aria-label={`Этап ${stage + 1} из ${STAGE_NAMES.length}`}>
+        <div className="flower-stage-path__line" aria-hidden="true"><i style={{ width: `${((stage + (nextStage === null ? 0 : stageProgress)) / (STAGE_NAMES.length - 1)) * 100}%` }} /></div>
+        <ol>
+          {STAGE_NAMES.map((name, index) => (
+            <li className={index < stage ? "is-complete" : index === stage ? "is-current" : ""} key={name}>
+              <span aria-hidden="true">{index < stage ? "✓" : index + 1}</span>
+              <small>{name}</small>
+            </li>
+          ))}
+        </ol>
+        <p>{nextStage === null ? "Цветок полностью расцвёл" : `До стадии «${STAGE_NAMES[nextStage]}» — ${petalsToNextStage} лепестков`}</p>
       </div>
 
       {!state.checked_in_today ? (
