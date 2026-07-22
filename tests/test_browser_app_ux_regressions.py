@@ -46,6 +46,21 @@ def test_mature_flower_has_joined_petals_and_no_scattered_daily_emoji() -> None:
     assert "transform-box" not in petal_rule
 
 
+def test_flower_has_five_thresholds_and_visible_growth_feedback() -> None:
+    flower = read("components/FlowerGame.tsx")
+    styles = read("styles.css")
+
+    assert "const STAGE_STARTS = [0, 5, 12, 22, 35]" in flower
+    assert "getStageProgress(state.petals, stage)" in flower
+    assert "flower-illustration__seed-crack" in flower
+    assert "flower-illustration__cotyledons" in flower
+    assert "flower-stage-path" in flower
+    assert "До стадии" in flower
+    assert "is-stage-changing" in flower
+    assert "@keyframes bloom-stage-rise" in styles
+    assert "prefers-reduced-motion: reduce" in styles
+
+
 def test_partner_detail_hero_uses_contain_in_final_override() -> None:
     styles = read("styles.css")
     final_rule = styles.rsplit(".partner-gallery__main .partner-detail__image {", 1)[1].split("}", 1)[0]
