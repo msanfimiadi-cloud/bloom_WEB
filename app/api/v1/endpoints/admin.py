@@ -3,6 +3,7 @@ from __future__ import annotations
 from datetime import date, datetime, timedelta, timezone
 from decimal import Decimal
 from io import BytesIO
+from uuid import uuid4
 
 from fastapi import APIRouter, Depends, File, Form, HTTPException, Query, UploadFile, status
 from fastapi.responses import StreamingResponse
@@ -27,6 +28,7 @@ from app.models.engagement import (
     BloomSpecialQuestion,
     BloomSpecialSubmission,
     BloomSpecialTask,
+    BloomPetalEvent,
     PartnerBotAccess,
 )
 from app.models.lead import LeadClick
@@ -68,6 +70,8 @@ from app.schemas.admin import (
 from app.schemas.auth import AdminUserRead
 from app.schemas.giveaway import GiveawayRead, GiveawayWrite, GiveawayPrizeRead, GiveawayPrizeWrite
 from app.schemas.engagement import (
+    AdminPetalAwardRead,
+    AdminPetalAwardWrite,
     BloomTaskPatch,
     BloomTaskRead,
     BloomTaskWrite,
@@ -103,6 +107,7 @@ from app.services.privilege_verifications import (
 )
 from app.services.social_subscriptions import recheck_giveaway_social_subscriptions, is_number_active
 from app.services.engagement import club_today, garden_settings, settle_flower_leaderboard
+from app.services.engagement import month_start_for
 from app.services.qr_links import (
     generate_qr_slug,
     is_valid_qr_slug,
@@ -223,6 +228,51 @@ def update_flower_settings(payload: BloomGardenSettingsPatch, admin: AdminUser =
     db.commit()
     db.refresh(settings_row)
     return BloomGardenSettingsRead.model_validate(settings_row, from_attributes=True)
+
+
+@router.post("/flower/petals/award", response_model=AdminPetalAwardRead, status_code=status.HTTP_201_CREATED)
+def award_flower_petals(
+    payload: AdminPetalAwardWrite,
+    admin: AdminUser = Depends(require_admin),
+    db: Session = Depends(get_db),
+) -> AdminPetalAwardRead:
+    profile = db.execute(
+        select(ClientProfile).where(ClientProfile.user_id == payload.user_id)
+    ).scalar_one_or_none()
+    if profile is None:
+        raise HTTPException(status_code=404, detail="Client profile not found")
+
+    today = club_today()
+    month_start = month_start_for(today)
+    event = BloomPetalEvent(
+        client_id=profile.id,
+        event_date=today,
+        month_start=month_start,
+        source="admin",
+        idempotency_key=f"admin:{admin.id}:{uuid4().hex}",
+        petals=payload.petals,
+        awarded_by_admin_id=admin.id,
+        note=payload.note,
+    )
+    db.add(event)
+    db.flush()
+    total_petals = db.execute(
+        select(func.coalesce(func.sum(BloomPetalEvent.petals), 0)).where(
+            BloomPetalEvent.client_id == profile.id,
+            BloomPetalEvent.month_start == month_start,
+        )
+    ).scalar_one()
+    db.commit()
+    db.refresh(event)
+    return AdminPetalAwardRead(
+        event_id=event.id,
+        user_id=payload.user_id,
+        client_id=profile.id,
+        petals=event.petals,
+        total_petals=int(total_petals or 0),
+        note=event.note or "",
+        created_at=event.created_at,
+    )
 
 
 def _special_task_read(db: Session, task: BloomSpecialTask) -> BloomSpecialTaskRead:
