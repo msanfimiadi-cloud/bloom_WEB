@@ -21,7 +21,7 @@ from app.models.partner import Partner, PartnerOffer
 from app.models.payment import Subscription, SubscriptionStatus
 from app.models.user import AdminUser, User, UserRole
 from app.models.verification import PrivilegeVerificationSession, PrivilegeVerificationStatus
-from app.models.engagement import BloomDailyTask, PartnerBotAccess
+from app.models.engagement import BloomDailyTask, BloomPetalEvent, BloomSpecialTask, PartnerBotAccess
 from app.models.giveaway import Giveaway, GiveawayNumber
 from app.core.config import settings
 
@@ -315,6 +315,62 @@ def test_flower_checkin_and_task_are_idempotent_per_day(verification_client: Tes
     assert duplicate_task.status_code == 200 and duplicate_task.json()["awarded"] is False
     assert duplicate_task.json()["state"]["petals"] == 4
     assert duplicate_task.json()["state"]["rank"] == 1
+
+
+def test_admin_can_revoke_petals_without_making_balance_negative(verification_client: TestClient) -> None:
+    admin_headers = _auth_headers(_admin_token(verification_client))
+    award = verification_client.post(
+        "/api/v1/admin/flower/petals/award",
+        json={"user_id": 1, "petals": 8, "note": "Contest reward"},
+        headers=admin_headers,
+    )
+    assert award.status_code == 201
+
+    revoke = verification_client.post(
+        "/api/v1/admin/flower/petals/revoke",
+        json={"user_id": 1, "petals": 3, "note": "Award correction"},
+        headers=admin_headers,
+    )
+    assert revoke.status_code == 201
+    assert revoke.json()["petals_removed"] == 3
+    assert revoke.json()["total_petals"] == 5
+
+    rejected = verification_client.post(
+        "/api/v1/admin/flower/petals/revoke",
+        json={"user_id": 1, "petals": 6, "note": "Too many"},
+        headers=admin_headers,
+    )
+    assert rejected.status_code == 409
+    with _session(verification_client) as session:
+        events = session.execute(select(BloomPetalEvent).where(BloomPetalEvent.client_id == 1)).scalars().all()
+        assert [event.petals for event in events] == [8, -3]
+        assert events[-1].source == "admin_revoke"
+
+
+def test_admin_can_delete_special_task(verification_client: TestClient) -> None:
+    headers = _auth_headers(_admin_token(verification_client))
+    created = verification_client.post(
+        "/api/v1/admin/flower/special-tasks",
+        json={
+            "title": "Temporary survey",
+            "description": "Will be deleted",
+            "petals": 5,
+            "starts_on": "2030-01-01",
+            "ends_on": "2030-01-07",
+            "is_active": True,
+        },
+        headers=headers,
+    )
+    assert created.status_code == 201
+    task_id = created.json()["id"]
+
+    deleted = verification_client.delete(f"/api/v1/admin/flower/special-tasks/{task_id}", headers=headers)
+    assert deleted.status_code == 204
+    with _session(verification_client) as session:
+        assert session.get(BloomSpecialTask, task_id) is None
+
+    missing = verification_client.delete(f"/api/v1/admin/flower/special-tasks/{task_id}", headers=headers)
+    assert missing.status_code == 404
 
 
 def test_vk_partner_bot_checks_and_confirms_client_code(verification_client: TestClient, monkeypatch: pytest.MonkeyPatch) -> None:

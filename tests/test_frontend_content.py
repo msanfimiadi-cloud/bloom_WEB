@@ -763,6 +763,20 @@ def test_frontend_contains_admin_payment_requests_ui_markers() -> None:
         else:
             assert preserved_marker in source or preserved_marker in styles
 
+
+def test_frontend_contains_flower_revoke_and_task_delete_controls() -> None:
+    source = _frontend_main()
+
+    for expected in (
+        "Забрать лепестки у участницы",
+        'data-admin-form="flowerPetalRevoke"',
+        "/api/v1/admin/flower/petals/revoke",
+        "data-special-task-delete",
+        "/api/v1/admin/flower/special-tasks/",
+        "Действие нельзя отменить",
+    ):
+        assert expected in source
+
 def test_frontend_contains_admin_cabinet_endpoint_strings() -> None:
     source = _frontend_main()
 

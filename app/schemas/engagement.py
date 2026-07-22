@@ -299,6 +299,27 @@ class AdminPetalAwardRead(BaseModel):
     created_at: datetime
 
 
+class AdminPetalRevokeWrite(BaseModel):
+    user_id: int = Field(gt=0)
+    petals: int = Field(ge=1, le=1000)
+    note: str = Field(min_length=2, max_length=1000)
+
+    @field_validator("note", mode="before")
+    @classmethod
+    def normalize_note(cls, value: object) -> object:
+        return value.strip() if isinstance(value, str) else value
+
+
+class AdminPetalRevokeRead(BaseModel):
+    event_id: int
+    user_id: int
+    client_id: int
+    petals_removed: int
+    total_petals: int
+    note: str
+    created_at: datetime
+
+
 class FlowerLeaderboardSettleRequest(BaseModel):
     month: date
     giveaway_id: int
