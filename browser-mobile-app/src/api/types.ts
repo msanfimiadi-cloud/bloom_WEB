@@ -373,6 +373,17 @@ export interface LinkingConfirmResponse extends AuthResponse {
   detail?: unknown;
 }
 
+export interface SubscriptionPlan {
+  id: number;
+  code: string;
+  name: string;
+  price: number | string;
+  currency: string;
+  duration_days: number;
+  is_active: boolean;
+  updated_at?: BackendText;
+}
+
 export interface AcquiringPayment {
   payment_id: string;
   status: "created" | "pending" | "authorized" | "approved" | "failed" | "expired" | "refund_pending" | "partially_refunded" | "refunded" | "cancelled";
