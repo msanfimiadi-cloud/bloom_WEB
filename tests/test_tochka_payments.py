@@ -16,6 +16,7 @@ from app.models.client import ClientProfile
 from app.models.payment import Subscription
 from app.models.user import User, UserRole
 from app.services.payment_fulfillment import PaymentFulfillmentService, apply_provider_state
+from app.schemas.acquiring import SubscriptionPlanUpdate
 from app.services.tochka_payments import TochkaWebhookSignatureError, verify_webhook
 
 
@@ -58,3 +59,11 @@ def test_fulfillment_is_idempotent_and_uses_database_plan_price():
         assert second.subscription_id == subscription_id
         assert db.query(Subscription).count() == 1
         assert second.fulfilled_at is not None
+
+
+def test_subscription_plan_price_validation():
+    assert SubscriptionPlanUpdate(price=Decimal("499.90")).price == Decimal("499.90")
+    with pytest.raises(ValueError):
+        SubscriptionPlanUpdate(price=Decimal("0"))
+    with pytest.raises(ValueError):
+        SubscriptionPlanUpdate(price=Decimal("349.999"))

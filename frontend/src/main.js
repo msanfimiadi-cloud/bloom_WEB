@@ -506,6 +506,7 @@ const adminState = {
   flowerCalendarMonth: new Date().toISOString().slice(0, 7),
   paymentRequests: [],
   acquiringPayments: [],
+  subscriptionPlans: [],
   acquiringPaymentStatusFilter: '',
   selectedAcquiringPayment: null,
   paymentRequestsLoading: false,
@@ -4076,6 +4077,10 @@ const loadAcquiringPayments = async () => {
   adminState.acquiringPayments = await apiFetch(`/api/v1/admin/payments${query}`);
 };
 
+const loadSubscriptionPlans = async () => {
+  adminState.subscriptionPlans = await apiFetch('/api/v1/admin/subscription-plans');
+};
+
 const renderAcquiringPaymentsTab = () => {
   const rows = adminState.acquiringPayments.map((item) => [
     formatDate(item.created_at),
@@ -4089,9 +4094,25 @@ const renderAcquiringPaymentsTab = () => {
     item.subscription_id ? `#${formatValue(item.subscription_id)}` : '—',
     `<button type="button" class="ui-button ui-button--secondary" data-payment-details="${escapeHtml(item.id)}">История</button><button type="button" class="ui-button ui-button--secondary" data-payment-sync="${escapeHtml(item.id)}">Проверить статус</button><form class="admin-form admin-form--inline" data-admin-form="paymentRefund"><input type="hidden" name="payment_id" value="${escapeHtml(item.id)}"><input name="amount" type="number" min="0.01" step="0.01" max="${escapeHtml(Number(item.amount) - Number(item.refunded_amount || 0))}" placeholder="Сумма" required><input name="reason" minlength="3" placeholder="Причина возврата" required><button type="submit" ${['approved','partially_refunded'].includes(item.status) ? '' : 'disabled'}>Вернуть</button></form>`,
   ]);
+  const planCards = adminState.subscriptionPlans.map((plan) => `
+    <form class="admin-form admin-form--inline ui-card" data-admin-form="subscriptionPlanPrice">
+      <input type="hidden" name="plan_id" value="${escapeHtml(plan.id)}">
+      <div>
+        <p class="section-eyebrow section-kicker">Тариф подписки</p>
+        <h4>${escapeHtml(plan.name)}</h4>
+        <p>${escapeHtml(plan.duration_days)} дней · ${plan.is_active ? 'активен' : 'неактивен'}</p>
+      </div>
+      <label>Цена, ₽
+        <input name="price" type="number" min="0.01" max="1000000" step="0.01" value="${escapeHtml(Number(plan.price).toFixed(2))}" required>
+      </label>
+      <button type="submit">Сохранить цену</button>
+      <p class="form-message" data-form-message="subscriptionPlanPrice">${escapeHtml(adminState.formMessages.subscriptionPlanPrice || '')}</p>
+    </form>
+  `).join('');
+  const planSettingsHtml = `<section class="stack"><div class="admin-section-heading"><div><h4>Стоимость подписки</h4><p>Новая цена применяется только к новым платежам. Уже созданные платежи сохраняют прежнюю сумму.</p></div></div>${planCards || '<p>Тарифы пока не созданы.</p>'}</section>`;
   const detail = adminState.selectedAcquiringPayment;
   const detailHtml = detail ? `<section class="ui-card"><div class="admin-section-heading"><h4>История платежа #${escapeHtml(detail.payment.id)}</h4><p>${escapeHtml(detail.payment.public_id)}</p></div>${renderTable(['Источник','Событие','Статус Точки','Обработка','Получено'], (detail.events || []).map((event) => [escapeHtml(event.source), escapeHtml(event.event_type), escapeHtml(event.provider_status || '—'), `${escapeHtml(event.processing_status)}${event.processing_error ? `<br><small>${escapeHtml(event.processing_error)}</small>` : ''}`, formatDate(event.received_at)]), true, '', 'Событий пока нет.')}</section>` : '';
-  return `<div class="stack"><div class="admin-section-heading admin-page-heading"><div><p class="section-eyebrow section-kicker">Точка Банк</p><h3>Платежи</h3><p>Эквайринг, статусы, связанные подписки и возвраты.</p></div><label>Статус<select data-acquiring-payment-status><option value="">Все</option>${['created','pending','authorized','approved','failed','expired','refund_pending','partially_refunded','refunded','cancelled'].map((value) => `<option value="${value}" ${adminState.acquiringPaymentStatusFilter === value ? 'selected' : ''}>${value}</option>`).join('')}</select></label></div>${renderTable(['Дата','Пользователь','Тариф','Сумма','Статус','Способ','Operation / Link ID','Оплата','Подписка','Действия'], rows, true, '', 'Платежей пока нет.')}${detailHtml}</div>`;
+  return `<div class="stack"><div class="admin-section-heading admin-page-heading"><div><p class="section-eyebrow section-kicker">Точка Банк</p><h3>Платежи</h3><p>Эквайринг, статусы, связанные подписки и возвраты.</p></div><label>Статус<select data-acquiring-payment-status><option value="">Все</option>${['created','pending','authorized','approved','failed','expired','refund_pending','partially_refunded','refunded','cancelled'].map((value) => `<option value="${value}" ${adminState.acquiringPaymentStatusFilter === value ? 'selected' : ''}>${value}</option>`).join('')}</select></label></div>${planSettingsHtml}${renderTable(['Дата','Пользователь','Тариф','Сумма','Статус','Способ','Operation / Link ID','Оплата','Подписка','Действия'], rows, true, '', 'Платежей пока нет.')}${detailHtml}</div>`;
 };
 
 const loadPartnerAccesses = async () => {
@@ -5756,7 +5777,7 @@ const loadActiveTabData = async () => {
     } else if (adminState.activeTab === 'paymentRequests') {
       await loadAdminPaymentRequests();
     } else if (adminState.activeTab === 'payments') {
-      await loadAcquiringPayments();
+      await Promise.all([loadSubscriptionPlans(), loadAcquiringPayments()]);
     } else if (adminState.activeTab === 'qr') {
       await Promise.all([ensureAdminDictionaries(), loadLeads()]);
       if (!adminState.selectedPartnerIdForQr && adminState.partners[0]) {
@@ -6578,6 +6599,16 @@ const handleAdminFormSubmit = async (form) => {
       await postJson(`/api/v1/admin/payments/${Number(data.get('payment_id'))}/refund`, { amount, reason });
       await loadAcquiringPayments();
       successMessage = 'Возврат отправлен в Точку и записан в аудит.';
+    } else if (formType === 'subscriptionPlanPrice') {
+      const data = new FormData(form);
+      const planId = Number(data.get('plan_id'));
+      const price = Number(data.get('price'));
+      if (!Number.isFinite(price) || price <= 0) {
+        throw new Error('Укажите цену больше 0 ₽.');
+      }
+      await patchJson(`/api/v1/admin/subscription-plans/${planId}`, { price });
+      await loadSubscriptionPlans();
+      successMessage = `Цена подписки изменена на ${price.toLocaleString('ru-RU', { maximumFractionDigits: 2 })} ₽.`;
     } else if (formType === 'flowerGardenSettings') {
       const data = new FormData(form);
       adminState.flowerSettings = await patchJson('/api/v1/admin/flower/settings', {
