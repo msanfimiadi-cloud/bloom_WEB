@@ -7,7 +7,7 @@ from uuid import uuid4
 
 from fastapi import APIRouter, Depends, File, Form, HTTPException, Query, UploadFile, status
 from fastapi.responses import StreamingResponse
-from sqlalchemy import func, or_, select
+from sqlalchemy import delete, func, or_, select, update
 from sqlalchemy.exc import IntegrityError
 from sqlalchemy.orm import Session, selectinload
 
@@ -72,6 +72,8 @@ from app.schemas.giveaway import GiveawayRead, GiveawayWrite, GiveawayPrizeRead,
 from app.schemas.engagement import (
     AdminPetalAwardRead,
     AdminPetalAwardWrite,
+    AdminPetalRevokeRead,
+    AdminPetalRevokeWrite,
     BloomTaskPatch,
     BloomTaskRead,
     BloomTaskWrite,
@@ -206,6 +208,17 @@ def update_flower_task(task_id: int, payload: BloomTaskPatch, admin: AdminUser =
     return task
 
 
+@router.delete("/flower/tasks/{task_id}", status_code=status.HTTP_204_NO_CONTENT)
+def delete_flower_task(task_id: int, admin: AdminUser = Depends(require_admin), db: Session = Depends(get_db)) -> None:
+    _ = admin
+    task = db.get(BloomDailyTask, task_id)
+    if task is None:
+        raise HTTPException(status_code=404, detail="Flower task not found")
+    db.execute(update(BloomPetalEvent).where(BloomPetalEvent.task_id == task_id).values(task_id=None))
+    db.delete(task)
+    db.commit()
+
+
 @router.get("/flower/settings", response_model=BloomGardenSettingsRead)
 def read_flower_settings(admin: AdminUser = Depends(require_admin), db: Session = Depends(get_db)) -> BloomGardenSettingsRead:
     _ = admin
@@ -275,6 +288,56 @@ def award_flower_petals(
     )
 
 
+@router.post("/flower/petals/revoke", response_model=AdminPetalRevokeRead, status_code=status.HTTP_201_CREATED)
+def revoke_flower_petals(
+    payload: AdminPetalRevokeWrite,
+    admin: AdminUser = Depends(require_admin),
+    db: Session = Depends(get_db),
+) -> AdminPetalRevokeRead:
+    profile = db.execute(
+        select(ClientProfile).where(ClientProfile.user_id == payload.user_id).with_for_update()
+    ).scalar_one_or_none()
+    if profile is None:
+        raise HTTPException(status_code=404, detail="Client profile not found")
+
+    today = club_today()
+    month_start = month_start_for(today)
+    total_petals = int(db.execute(
+        select(func.coalesce(func.sum(BloomPetalEvent.petals), 0)).where(
+            BloomPetalEvent.client_id == profile.id,
+            BloomPetalEvent.month_start == month_start,
+        )
+    ).scalar_one() or 0)
+    if payload.petals > total_petals:
+        raise HTTPException(
+            status_code=status.HTTP_409_CONFLICT,
+            detail=f"Нельзя забрать {payload.petals} лепестков: у участницы только {total_petals}",
+        )
+
+    event = BloomPetalEvent(
+        client_id=profile.id,
+        event_date=today,
+        month_start=month_start,
+        source="admin_revoke",
+        idempotency_key=f"admin-revoke:{admin.id}:{uuid4().hex}",
+        petals=-payload.petals,
+        awarded_by_admin_id=admin.id,
+        note=payload.note,
+    )
+    db.add(event)
+    db.commit()
+    db.refresh(event)
+    return AdminPetalRevokeRead(
+        event_id=event.id,
+        user_id=payload.user_id,
+        client_id=profile.id,
+        petals_removed=payload.petals,
+        total_petals=total_petals - payload.petals,
+        note=event.note or "",
+        created_at=event.created_at,
+    )
+
+
 def _special_task_read(db: Session, task: BloomSpecialTask) -> BloomSpecialTaskRead:
     count = db.execute(select(func.count(BloomSpecialSubmission.id)).where(BloomSpecialSubmission.task_id == task.id)).scalar_one()
     result = BloomSpecialTaskRead.model_validate(task, from_attributes=True)
@@ -333,6 +396,22 @@ def update_special_task(task_id: int, payload: BloomSpecialTaskPatch, admin: Adm
     db.commit()
     db.refresh(task)
     return _special_task_read(db, task)
+
+
+@router.delete("/flower/special-tasks/{task_id}", status_code=status.HTTP_204_NO_CONTENT)
+def delete_special_task(task_id: int, admin: AdminUser = Depends(require_admin), db: Session = Depends(get_db)) -> None:
+    _ = admin
+    if db.get(BloomSpecialTask, task_id) is None:
+        raise HTTPException(status_code=404, detail="Special task not found")
+
+    submission_ids = select(BloomSpecialSubmission.id).where(BloomSpecialSubmission.task_id == task_id)
+    question_ids = select(BloomSpecialQuestion.id).where(BloomSpecialQuestion.task_id == task_id)
+    db.execute(delete(BloomSpecialAnswer).where(BloomSpecialAnswer.submission_id.in_(submission_ids)))
+    db.execute(delete(BloomSpecialSubmission).where(BloomSpecialSubmission.task_id == task_id))
+    db.execute(delete(BloomSpecialOption).where(BloomSpecialOption.question_id.in_(question_ids)))
+    db.execute(delete(BloomSpecialQuestion).where(BloomSpecialQuestion.task_id == task_id))
+    db.execute(delete(BloomSpecialTask).where(BloomSpecialTask.id == task_id))
+    db.commit()
 
 
 @router.post("/flower/special-tasks/{task_id}/questions", response_model=BloomSpecialTaskRead, status_code=status.HTTP_201_CREATED)
