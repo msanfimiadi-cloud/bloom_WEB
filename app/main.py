@@ -78,8 +78,14 @@ def _vk_mini_app_index() -> FileResponse:
     return FileResponse(index_path)
 
 
-def _health_payload() -> dict[str, str]:
-    return {"status": "ok", "service": SERVICE_NAME, "version": APP_VERSION}
+def _health_payload() -> dict[str, str | bool]:
+    return {
+        "status": "ok",
+        "service": SERVICE_NAME,
+        "version": APP_VERSION,
+        "payments_provider_enabled": settings.TOCHKA_PAYMENTS_ENABLED,
+        "payments_provider_configured": settings.tochka_configured,
+    }
 
 
 def _database_health_payload() -> dict[str, str]:
@@ -165,12 +171,12 @@ async def runtime_config(request: Request) -> JSONResponse:
 
 
 @app.get("/health", tags=["health"])
-async def health_check() -> dict[str, str]:
+async def health_check() -> dict[str, str | bool]:
     return _health_payload()
 
 
 @app.get("/api/v1/health", tags=["health"])
-async def api_health_check() -> dict[str, str]:
+async def api_health_check() -> dict[str, str | bool]:
     return _health_payload()
 
 

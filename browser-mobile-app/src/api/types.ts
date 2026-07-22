@@ -85,6 +85,7 @@ export interface ClientProfile {
   last_name?: BackendText;
   phone?: BackendText;
   email?: BackendText;
+  contact_email?: BackendText;
   city?: BackendText | City;
   city_id?: ApiId;
   avatar_url?: BackendText;
@@ -370,6 +371,18 @@ export interface LinkingConfirmResponse extends AuthResponse {
   client?: ClientProfile | null;
   subscription?: Subscription | null;
   detail?: unknown;
+}
+
+export interface AcquiringPayment {
+  payment_id: string;
+  status: "created" | "pending" | "authorized" | "approved" | "failed" | "expired" | "refund_pending" | "partially_refunded" | "refunded" | "cancelled";
+  provider_status?: BackendText;
+  amount: number | string;
+  currency: string;
+  payment_url?: BackendText;
+  expires_at?: BackendText;
+  paid_at?: BackendText;
+  subscription_activated?: boolean;
 }
 
 
