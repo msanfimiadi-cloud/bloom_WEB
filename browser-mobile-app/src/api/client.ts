@@ -15,6 +15,7 @@ import type {
   ReferralSummary,
   ProviderIdentityMergePreview,
   AcquiringPayment,
+  SubscriptionPlan,
 } from "./types";
 import { traceStartup } from "../diagnostics/startupTrace";
 
@@ -1799,10 +1800,14 @@ export function createPaymentRequest(): Promise<PaymentRequest> {
   });
 }
 
-export function createAcquiringPayment(receiptEmail: string, paymentModes: Array<"sbp" | "card"> = ["sbp", "card"]): Promise<AcquiringPayment> {
+export function getSubscriptionPlans(): Promise<SubscriptionPlan[]> {
+  return request<SubscriptionPlan[]>("/clients/subscription-plans");
+}
+
+export function createAcquiringPayment(subscriptionPlanId: number, receiptEmail: string, paymentModes: Array<"sbp" | "card"> = ["sbp", "card"]): Promise<AcquiringPayment> {
   return request<AcquiringPayment>("/clients/payments", {
     method: "POST",
-    body: JSON.stringify({ subscription_plan_id: 1, receipt_email: receiptEmail, receipt_phone: null, payment_modes: paymentModes }),
+    body: JSON.stringify({ subscription_plan_id: subscriptionPlanId, receipt_email: receiptEmail, receipt_phone: null, payment_modes: paymentModes }),
   });
 }
 
