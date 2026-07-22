@@ -44,6 +44,21 @@ class RefundCreate(BaseModel):
     reason: str = Field(min_length=3, max_length=500)
 
 
+class SubscriptionPlanRead(BaseModel):
+    id: int
+    code: str
+    name: str
+    price: Decimal
+    currency: str
+    duration_days: int
+    is_active: bool
+    updated_at: datetime | None = None
+
+
+class SubscriptionPlanUpdate(BaseModel):
+    price: Decimal = Field(gt=0, le=1_000_000, decimal_places=2)
+
+
 class AdminPaymentRead(BaseModel):
     id: int
     public_id: str
