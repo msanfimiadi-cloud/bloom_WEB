@@ -139,6 +139,10 @@ class BloomPetalEvent(Base):
     source: Mapped[str] = mapped_column(String(32), nullable=False, index=True)
     idempotency_key: Mapped[str] = mapped_column(String(96), nullable=False)
     petals: Mapped[int] = mapped_column(Integer, nullable=False)
+    awarded_by_admin_id: Mapped[int | None] = mapped_column(
+        ForeignKey("admin_users.id", ondelete="SET NULL"), nullable=True, index=True
+    )
+    note: Mapped[str | None] = mapped_column(Text, nullable=True)
     created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), nullable=False, server_default=func.now())
 
     task: Mapped["BloomDailyTask | None"] = relationship("BloomDailyTask")
