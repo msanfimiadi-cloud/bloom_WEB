@@ -32,6 +32,7 @@ from app.models.engagement import (
 )
 from app.models.partner import OfferPhoto, Partner, PartnerOffer, PartnerPhoto, PartnerQrLink
 from app.models.payment import PaymentReceipt, PaymentRequest, PaymentRequestStatus, Subscription, SubscriptionStatus
+from app.models.acquiring import Payment, PaymentEvent, PaymentRefund, PaymentStatus, SubscriptionPlan
 from app.models.user import AdminUser, User, UserRole
 from app.models.verification import PrivilegeVerificationSession, PrivilegeVerificationStatus
 
@@ -83,6 +84,11 @@ __all__ = [
     "PaymentReceipt",
     "PaymentRequest",
     "PaymentRequestStatus",
+    "Payment",
+    "PaymentEvent",
+    "PaymentRefund",
+    "PaymentStatus",
+    "SubscriptionPlan",
     "PrivilegeVerificationSession",
     "PrivilegeVerificationStatus",
     "Subscription",

@@ -14,6 +14,7 @@ import type {
   Verification,
   ReferralSummary,
   ProviderIdentityMergePreview,
+  AcquiringPayment,
 } from "./types";
 import { traceStartup } from "../diagnostics/startupTrace";
 
@@ -1796,6 +1797,21 @@ export function createPaymentRequest(): Promise<PaymentRequest> {
   return request<PaymentRequest>("/clients/me/payment-requests", {
     method: "POST",
   });
+}
+
+export function createAcquiringPayment(receiptEmail: string, paymentModes: Array<"sbp" | "card"> = ["sbp", "card"]): Promise<AcquiringPayment> {
+  return request<AcquiringPayment>("/clients/payments", {
+    method: "POST",
+    body: JSON.stringify({ subscription_plan_id: 1, receipt_email: receiptEmail, receipt_phone: null, payment_modes: paymentModes }),
+  });
+}
+
+export function getAcquiringPayment(paymentId: string): Promise<AcquiringPayment> {
+  return request<AcquiringPayment>(`/clients/payments/${encodeURIComponent(paymentId)}`);
+}
+
+export function refreshAcquiringPayment(paymentId: string): Promise<AcquiringPayment> {
+  return request<AcquiringPayment>(`/clients/payments/${encodeURIComponent(paymentId)}/refresh`, { method: "POST" });
 }
 
 export function markPaymentRequestPaid(

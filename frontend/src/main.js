@@ -466,7 +466,8 @@ const adminTabs = [
   { id: 'overview', label: 'Главная', group: 'Обзор' },
   { id: 'partners', label: 'Партнёры', group: 'Ежедневная работа' },
   { id: 'contentReview', label: 'На проверке', group: 'Ежедневная работа' },
-  { id: 'paymentRequests', label: 'Оплаты', group: 'Ежедневная работа' },
+  { id: 'payments', label: 'Платежи', group: 'Ежедневная работа' },
+  { id: 'paymentRequests', label: 'Ручные заявки', group: 'Ежедневная работа' },
   { id: 'verifications', label: 'Подтверждения', group: 'Ежедневная работа' },
   { id: 'partnerAccess', label: 'Партнёрский доступ', group: 'Ежедневная работа' },
   { id: 'offers', label: 'Привилегии', group: 'Продвижение' },
@@ -504,6 +505,9 @@ const adminState = {
   flowerAnalytics: null,
   flowerCalendarMonth: new Date().toISOString().slice(0, 7),
   paymentRequests: [],
+  acquiringPayments: [],
+  acquiringPaymentStatusFilter: '',
+  selectedAcquiringPayment: null,
   paymentRequestsLoading: false,
   paymentRequestsError: '',
   paymentRequestsStatusFilter: '',
@@ -4043,6 +4047,8 @@ const renderAdminTabContent = () => {
       return renderContentReviewTab();
     case 'paymentRequests':
       return renderAdminPaymentRequestsTab();
+    case 'payments':
+      return renderAcquiringPaymentsTab();
     case 'qr':
       return renderQrTab();
     case 'verifications':
@@ -4063,6 +4069,29 @@ const renderAdminTabContent = () => {
 
 const loadGiveaways = async () => {
   adminState.giveaways = await apiFetch('/api/v1/admin/giveaways');
+};
+
+const loadAcquiringPayments = async () => {
+  const query = adminState.acquiringPaymentStatusFilter ? `?status=${encodeURIComponent(adminState.acquiringPaymentStatusFilter)}` : '';
+  adminState.acquiringPayments = await apiFetch(`/api/v1/admin/payments${query}`);
+};
+
+const renderAcquiringPaymentsTab = () => {
+  const rows = adminState.acquiringPayments.map((item) => [
+    formatDate(item.created_at),
+    `${escapeHtml(item.client_name || `Клиент #${item.client_profile_id}`)}<br><small>${item.telegram_user_id ? `TG ${escapeHtml(item.telegram_user_id)}` : ''} ${item.vk_user_id ? `VK ${escapeHtml(item.vk_user_id)}` : ''}</small>`,
+    escapeHtml(item.plan_name),
+    `${formatValue(item.amount)} ${escapeHtml(item.currency)}`,
+    `<strong>${escapeHtml(item.status)}</strong><br><small>${escapeHtml(item.provider_status || '—')}</small>`,
+    escapeHtml(item.payment_method || '—'),
+    `<small>${escapeHtml(item.provider_operation_id || '—')}<br>${escapeHtml(item.payment_link_id)}</small>`,
+    item.paid_at ? formatDate(item.paid_at) : '—',
+    item.subscription_id ? `#${formatValue(item.subscription_id)}` : '—',
+    `<button type="button" class="ui-button ui-button--secondary" data-payment-details="${escapeHtml(item.id)}">История</button><button type="button" class="ui-button ui-button--secondary" data-payment-sync="${escapeHtml(item.id)}">Проверить статус</button><form class="admin-form admin-form--inline" data-admin-form="paymentRefund"><input type="hidden" name="payment_id" value="${escapeHtml(item.id)}"><input name="amount" type="number" min="0.01" step="0.01" max="${escapeHtml(Number(item.amount) - Number(item.refunded_amount || 0))}" placeholder="Сумма" required><input name="reason" minlength="3" placeholder="Причина возврата" required><button type="submit" ${['approved','partially_refunded'].includes(item.status) ? '' : 'disabled'}>Вернуть</button></form>`,
+  ]);
+  const detail = adminState.selectedAcquiringPayment;
+  const detailHtml = detail ? `<section class="ui-card"><div class="admin-section-heading"><h4>История платежа #${escapeHtml(detail.payment.id)}</h4><p>${escapeHtml(detail.payment.public_id)}</p></div>${renderTable(['Источник','Событие','Статус Точки','Обработка','Получено'], (detail.events || []).map((event) => [escapeHtml(event.source), escapeHtml(event.event_type), escapeHtml(event.provider_status || '—'), `${escapeHtml(event.processing_status)}${event.processing_error ? `<br><small>${escapeHtml(event.processing_error)}</small>` : ''}`, formatDate(event.received_at)]), true, '', 'Событий пока нет.')}</section>` : '';
+  return `<div class="stack"><div class="admin-section-heading admin-page-heading"><div><p class="section-eyebrow section-kicker">Точка Банк</p><h3>Платежи</h3><p>Эквайринг, статусы, связанные подписки и возвраты.</p></div><label>Статус<select data-acquiring-payment-status><option value="">Все</option>${['created','pending','authorized','approved','failed','expired','refund_pending','partially_refunded','refunded','cancelled'].map((value) => `<option value="${value}" ${adminState.acquiringPaymentStatusFilter === value ? 'selected' : ''}>${value}</option>`).join('')}</select></label></div>${renderTable(['Дата','Пользователь','Тариф','Сумма','Статус','Способ','Operation / Link ID','Оплата','Подписка','Действия'], rows, true, '', 'Платежей пока нет.')}${detailHtml}</div>`;
 };
 
 const loadPartnerAccesses = async () => {
@@ -5726,6 +5755,8 @@ const loadActiveTabData = async () => {
       await Promise.all([ensureAdminDictionaries(), loadContentReview()]);
     } else if (adminState.activeTab === 'paymentRequests') {
       await loadAdminPaymentRequests();
+    } else if (adminState.activeTab === 'payments') {
+      await loadAcquiringPayments();
     } else if (adminState.activeTab === 'qr') {
       await Promise.all([ensureAdminDictionaries(), loadLeads()]);
       if (!adminState.selectedPartnerIdForQr && adminState.partners[0]) {
@@ -6539,6 +6570,14 @@ const handleAdminFormSubmit = async (form) => {
       });
       await loadPartnerAccesses();
       form.reset();
+    } else if (formType === 'paymentRefund') {
+      const data = new FormData(form);
+      const amount = Number(data.get('amount'));
+      const reason = String(data.get('reason') || '').trim();
+      if (!window.confirm(`Вернуть ${amount} ₽? Причина: ${reason}`)) return;
+      await postJson(`/api/v1/admin/payments/${Number(data.get('payment_id'))}/refund`, { amount, reason });
+      await loadAcquiringPayments();
+      successMessage = 'Возврат отправлен в Точку и записан в аудит.';
     } else if (formType === 'flowerGardenSettings') {
       const data = new FormData(form);
       adminState.flowerSettings = await patchJson('/api/v1/admin/flower/settings', {
@@ -7029,6 +7068,23 @@ root.addEventListener('click', async (event) => {
       await loadPartnerAccesses();
       setPanelMessage('Партнёрский доступ обновлён.', 'success');
     } catch (error) { setPanelMessage(error.message || 'Не удалось обновить доступ.', 'error'); }
+    renderAdminLayout(); return;
+  }
+
+  const paymentSync = event.target.closest('[data-payment-sync]');
+  if (paymentSync) {
+    try {
+      await postJson(`/api/v1/admin/payments/${paymentSync.dataset.paymentSync}/sync`, {});
+      await loadAcquiringPayments();
+      setPanelMessage('Статус платежа обновлён.', 'success');
+    } catch (error) { setPanelMessage(error.message || 'Не удалось проверить платёж.', 'error'); }
+    renderAdminLayout(); return;
+  }
+
+  const paymentDetails = event.target.closest('[data-payment-details]');
+  if (paymentDetails) {
+    try { adminState.selectedAcquiringPayment = await apiFetch(`/api/v1/admin/payments/${paymentDetails.dataset.paymentDetails}`); }
+    catch (error) { setPanelMessage(error.message || 'Не удалось загрузить историю платежа.', 'error'); }
     renderAdminLayout(); return;
   }
 
@@ -7925,6 +7981,12 @@ const handlePartnerOfferPhotoFormSubmit = async (form) => {
 };
 
 root.addEventListener('change', (event) => {
+  const acquiringPaymentStatus = event.target.closest('[data-acquiring-payment-status]');
+  if (acquiringPaymentStatus) {
+    adminState.acquiringPaymentStatusFilter = acquiringPaymentStatus.value || '';
+    void loadAcquiringPayments().then(renderAdminLayout).catch((error) => { setPanelMessage(error.message || 'Не удалось загрузить платежи.', 'error'); renderAdminLayout(); });
+    return;
+  }
   const bloomCalendarMonth = event.target.closest('[data-bloom-calendar-month]');
   if (bloomCalendarMonth) {
     adminState.flowerCalendarMonth = bloomCalendarMonth.value || new Date().toISOString().slice(0, 7);

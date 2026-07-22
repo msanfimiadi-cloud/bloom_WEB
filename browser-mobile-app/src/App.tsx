@@ -2,7 +2,7 @@ import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import {
   activateTrialSubscription,
   loginWithCode,
-  createPaymentRequest,
+  createAcquiringPayment,
   getCities,
   getLinkingStatus,
   getReferralSummary,
@@ -56,6 +56,7 @@ import { PrivilegesPage } from "./pages/PrivilegesPage";
 import { ProfilePage } from "./pages/ProfilePage";
 import { SavingsPage } from "./pages/SavingsPage";
 import { SubscriptionPage } from "./pages/SubscriptionPage";
+import { PaymentResultScreen } from "./components/PaymentResultScreen";
 import { ContentProvider } from "./content/ContentContext";
 import {
   createDiagnostic,
@@ -104,7 +105,8 @@ export type PageId =
   | "privileges"
   | "savings"
   | "profile"
-  | "subscription";
+  | "subscription"
+  | "payment-result";
 type AsyncStatus =
   | "idle"
   | "loading"
@@ -784,6 +786,7 @@ function getStartupPage(): PageId {
     return "home";
   }
 
+  if (window.location.pathname === "/payment/success" || window.location.pathname === "/payment/fail") return "payment-result";
   return window.location.hash === "#catalog" ? "catalog" : "home";
 }
 
@@ -800,6 +803,7 @@ function isKnownPage(page: string): page is PageId {
     "savings",
     "profile",
     "subscription",
+    "payment-result",
   ].includes(page);
 }
 
@@ -2438,21 +2442,22 @@ export default function App() {
     [],
   );
 
-  const openPayment = useCallback(async () => {
-    if (requireRegisteredUser()) return;
+  const openPayment = useCallback(async (receiptEmail: string) => {
+    if (requireRegisteredUser()) return null;
     setIsCreatingPayment(true);
     setPaymentMessage(null);
 
     try {
-      const request = await createPaymentRequest();
-      setPaymentRequest(request);
-      setPaymentMessage("Запрос на продление создан.");
+      const payment = await createAcquiringPayment(receiptEmail);
+      setPaymentMessage("Ссылка на оплату создана.");
+      return payment;
     } catch (caughtError) {
       setPaymentMessage(
         isTimeoutError(caughtError)
           ? RETRYABLE_LOAD_ERROR_MESSAGE
           : "Не удалось подготовить продление. Попробуйте ещё раз.",
       );
+      throw caughtError;
     } finally {
       setIsCreatingPayment(false);
     }
@@ -2581,7 +2586,7 @@ export default function App() {
       return "catalog";
     }
 
-    if (page === "subscription") {
+    if (page === "subscription" || page === "payment-result") {
       return "profile";
     }
 
@@ -3054,6 +3059,12 @@ export default function App() {
             onCreatePayment={openPayment}
             onActivateTrial={activateTrial}
             onBack={() => setPage("profile")}
+          />
+        ) : null}
+        {activePage === "payment-result" ? (
+          <PaymentResultScreen
+            onDone={async () => { await refreshProfileAndSubscription(); }}
+            onBack={() => { window.history.replaceState({}, '', '/'); setPage('profile'); }}
           />
         ) : null}
 

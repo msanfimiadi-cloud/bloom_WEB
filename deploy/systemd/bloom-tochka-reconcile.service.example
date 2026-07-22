@@ -1,0 +1,11 @@
+[Unit]
+Description=Bloom Club Tochka payment reconciliation
+After=network-online.target womenclub.service
+
+[Service]
+Type=oneshot
+WorkingDirectory=/opt/fed_women_club_WEB
+EnvironmentFile=/opt/fed_women_club_WEB/.env
+ExecStart=/opt/fed_women_club_WEB/.venv/bin/python -m app.cli.tochka_reconcile
+User=www-data
+Group=www-data
