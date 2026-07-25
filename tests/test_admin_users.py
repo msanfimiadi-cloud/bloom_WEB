@@ -94,6 +94,12 @@ def admin_users_client() -> Generator[TestClient, None, None]:
                     telegram_user_id="998877",
                     telegram_username="anna_bloom",
                     trial_subscription_used_at=datetime.now(timezone.utc),
+                    source="browser",
+                    utm_source="vk_ads",
+                    utm_medium="cpc",
+                    utm_campaign="summer_massage",
+                    utm_content="creative_2",
+                    referral_code="ANNA2026",
                 ),
                 ClientProfile(
                     user_id=client_user.id,
@@ -320,6 +326,34 @@ def test_admin_users_list_returns_vk_and_display_fields(admin_users_client: Test
     assert partner["subscription_active_until"] is not None
     assert partner["display_name"] == "Анна Иванова"
     assert partner["is_synthetic_email"] is False
+    assert partner["attribution_kind"] == "advertising"
+    assert partner["attribution_summary"] == "Реклама: vk_ads / summer_massage / creative_2"
+
+
+def test_admin_users_list_shows_exact_referrer(admin_users_client: TestClient, admin_token: str) -> None:
+    with next(app.dependency_overrides[get_db]()) as session:
+        referrer = session.query(ClientProfile).filter(ClientProfile.vk_user_id == "1234567").one()
+        referred = session.query(ClientProfile).join(User).filter(User.email == "existing-client@example.com").one()
+        referral = ClientReferral(
+            referrer_client_id=referrer.id,
+            referred_client_id=referred.id,
+            referral_code="ANNA2026",
+            reward_entries_count=1,
+        )
+        session.add(referral)
+        session.flush()
+        referred.referred_by_referral_id = referral.id
+        session.commit()
+
+    response = admin_users_client.get("/api/v1/admin/users", headers=_auth_headers(admin_token))
+
+    assert response.status_code == 200
+    data = response.json()
+    referred = next(user for user in data if user["email"] == "existing-client@example.com")
+    assert referred["attribution_kind"] == "referral"
+    assert referred["referrer_name"] == "Анна Иванова"
+    assert referred["used_referral_code"] == "ANNA2026"
+    assert referred["attribution_summary"] == "Реферал от Анна Иванова (код ANNA2026)"
 
 
 def test_admin_users_list_vk_url_is_null_without_vk_id(admin_users_client: TestClient, admin_token: str) -> None:

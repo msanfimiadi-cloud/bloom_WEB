@@ -636,7 +636,7 @@ def test_client_referral_summary_counts_single_active_trial_referral(client_cabi
     assert data["referrals_count"] == 1
     assert data["activated_count"] == 1
     assert data["activated_referrals_count"] == 1
-    assert data["earned_giveaway_entries_count"] == 5
+    assert data["earned_giveaway_entries_count"] == 1
 
 
 def test_client_referral_summary_counts_reregistered_deleted_referral_rewards(
@@ -686,7 +686,7 @@ def test_client_referral_summary_counts_reregistered_deleted_referral_rewards(
     assert data["referrals_count"] == 1
     assert data["activated_count"] == 1
     assert data["activated_referrals_count"] == 1
-    assert data["earned_giveaway_entries_count"] == 10
+    assert data["earned_giveaway_entries_count"] == 2
     with next(app.dependency_overrides[get_db]()) as session:
         referrer = session.execute(select(ClientProfile).where(ClientProfile.user_id == referrer_user_id)).scalar_one()
         assert session.query(ClientReferral).filter_by(referrer_client_id=referrer.id).count() == 1

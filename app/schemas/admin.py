@@ -52,6 +52,19 @@ class AdminManagedUserRead(BaseModel):
     active_subscription_type: str | None = None
     display_name: str | None = None
     is_synthetic_email: bool = False
+    registration_source: str | None = None
+    attribution_kind: str | None = None
+    attribution_summary: str | None = None
+    utm_source: str | None = None
+    utm_medium: str | None = None
+    utm_campaign: str | None = None
+    utm_content: str | None = None
+    utm_term: str | None = None
+    acquisition_landing_url: str | None = None
+    referrer_client_id: int | None = None
+    referrer_user_id: int | None = None
+    referrer_name: str | None = None
+    used_referral_code: str | None = None
 
     model_config = {"from_attributes": True}
 

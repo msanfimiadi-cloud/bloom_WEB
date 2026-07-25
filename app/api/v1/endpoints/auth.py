@@ -57,6 +57,29 @@ router = APIRouter(prefix="/auth", tags=["auth"])
 VK_MINIAPP_LOGIN_HANDLER = "vk-miniapp-login-v2"
 VK_MINIAPP_ENTRYPOINT = "fed_women_club_WEB"
 PASSWORD_SETUP_PURPOSE = "vk_onboarding_password_setup"
+ACQUISITION_FIELDS = (
+    "utm_source",
+    "utm_medium",
+    "utm_campaign",
+    "utm_content",
+    "utm_term",
+    "acquisition_landing_url",
+)
+
+
+def _apply_acquisition_attribution(profile: ClientProfile, payload: Any) -> bool:
+    if isinstance(payload, dict):
+        values = payload
+    else:
+        values = {field: getattr(payload, field, None) for field in ACQUISITION_FIELDS}
+    changed = False
+    for field in ACQUISITION_FIELDS:
+        value = values.get(field)
+        normalized = value.strip() if isinstance(value, str) else None
+        if normalized and not getattr(profile, field):
+            setattr(profile, field, normalized)
+            changed = True
+    return changed
 
 
 @router.post("/login", response_model=LoginResponse)
@@ -181,6 +204,7 @@ def _get_or_create_vk_client_profile(
         source="vk-miniapp",
         is_active=True,
     )
+    _apply_acquisition_attribution(profile, params)
     db.add(profile)
     db.flush()
     ensure_referral_code(db, profile)
@@ -331,10 +355,13 @@ def telegram_miniapp_login(
     if referral_code is None:
         referral_code = params.get("start_param") or params.get("startapp")
     try:
-        profile, _ = _get_or_create_telegram_client_profile(db, telegram_user, referral_code=referral_code)
+        profile, created = _get_or_create_telegram_client_profile(db, telegram_user, referral_code=referral_code)
     except ReferralError as exc:
         db.rollback()
         raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail=exc.detail) from exc
+    if created and _apply_acquisition_attribution(profile, payload):
+        db.commit()
+        db.refresh(profile)
     return _build_client_auth_response(db, profile)
 
 
@@ -379,6 +406,8 @@ def browser_login_code_login(
     except ReferralError as exc:
         db.rollback()
         raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail=exc.detail) from exc
+    if resolved.created_client_profile:
+        _apply_acquisition_attribution(resolved.client_profile, payload)
     response = _build_client_auth_response(db, resolved.client_profile)
     service.mark_used(code_record)
     db.commit()

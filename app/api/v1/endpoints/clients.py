@@ -20,7 +20,7 @@ from app.core.security import create_access_token
 from app.db.session import get_db
 from app.models.city import City
 from app.models.category import Category
-from app.models.client import AccountLinkingChallenge, BrowserLoginCode, ClientIdentityLink, ClientProfile, ClientReferral, GiveawayEntry, VkLinkCode, VkLinkCodeStatus
+from app.models.client import AccountLinkingChallenge, BrowserLoginCode, ClientIdentityLink, ClientProfile, ClientReferral, GiveawayEntry, ReferralSubscriptionReward, VkLinkCode, VkLinkCodeStatus
 from app.models.giveaway import Giveaway, GiveawayNumber
 from app.models.partner import OfferPhoto, Partner, PartnerOffer, PartnerPhoto
 from app.models.payment import PaymentReceipt, PaymentRequest, PaymentRequestStatus, Subscription, SubscriptionStatus
@@ -70,6 +70,7 @@ from app.schemas.vk import VkLinkCodeRead
 from app.services.activity_feed import build_client_activity_feed
 from app.services.browser_login_codes import BrowserLoginCodeService
 from app.services.referrals import REWARD_ENTRIES_PER_REFERRAL, activated_referrals_count, ensure_referral_code, referral_counts, referral_link
+from app.services.referral_subscription_rewards import PAID_REFERRALS_PER_REWARD, REFERRAL_REWARD_DAYS
 from app.services.giveaways import ensure_user_numbers, get_active_giveaway
 from app.services.engagement import award_petals, club_today, flower_state, month_start_for
 from app.services.social_subscriptions import check_and_apply, social_task_settings, is_number_active
@@ -687,6 +688,26 @@ def read_client_referral(
         ).scalar_one()
         or 0
     )
+    paid_referrals_count = int(
+        db.execute(
+            select(func.count(ClientReferral.id)).where(
+                ClientReferral.referrer_client_id == profile.id,
+                ClientReferral.paid_qualified_at.is_not(None),
+            )
+        ).scalar_one()
+        or 0
+    )
+    subscription_rewards_granted = int(
+        db.execute(
+            select(func.count(ReferralSubscriptionReward.id)).where(
+                ReferralSubscriptionReward.referrer_client_id == profile.id
+            )
+        ).scalar_one()
+        or 0
+    )
+    paid_referrals_until_next_reward = PAID_REFERRALS_PER_REWARD - (
+        paid_referrals_count % PAID_REFERRALS_PER_REWARD
+    )
     logger.info(
         "[BLOOM_REFERRAL_STATS_TRACE] backend_summary",
         extra={
@@ -711,6 +732,11 @@ def read_client_referral(
         earned_entries_count=earned_entries_count,
         earned_giveaway_entries_count=earned_entries_count,
         reward_entries_per_referral=REWARD_ENTRIES_PER_REFERRAL,
+        paid_referrals_count=paid_referrals_count,
+        subscription_rewards_granted=subscription_rewards_granted,
+        paid_referrals_until_next_reward=paid_referrals_until_next_reward,
+        subscription_reward_threshold=PAID_REFERRALS_PER_REWARD,
+        subscription_reward_days=REFERRAL_REWARD_DAYS,
         referrals=[ClientReferralSummaryItem(id=r.id, referred_client_id=r.referred_client_id, first_name=c.telegram_first_name, username=c.telegram_username, created_at=r.created_at, reward_entries_count=r.reward_entries_count) for r, c in rows],
     )
 

@@ -1,4 +1,13 @@
 const root = document.querySelector('#root');
+const browserAppUrl = (() => {
+  const url = new URL('https://app.bloomclub.ru/');
+  const currentParams = new URLSearchParams(window.location.search);
+  ['utm_source', 'utm_medium', 'utm_campaign', 'utm_content', 'utm_term', 'startapp', 'ref', 'referral', 'referral_code'].forEach((field) => {
+    const value = currentParams.get(field);
+    if (value) url.searchParams.set(field, value);
+  });
+  return url.toString();
+})();
 
 const cities = [
   'Новосибирск',
@@ -314,7 +323,7 @@ const renderPublicApp = () => {
       </nav>
       <div class="editorial-header__actions">
         <a class="editorial-login-link" href="#login">Войти</a>
-        <a class="editorial-button editorial-button--small" href="https://app.bloomclub.ru/">Стать участницей</a>
+        <a class="editorial-button editorial-button--small" href="${browserAppUrl}">Стать участницей</a>
         <div class="landing-menu editorial-mobile-menu">
           <button class="landing-menu-toggle" type="button" data-landing-menu-toggle aria-expanded="false" aria-controls="landing-menu-panel">Меню</button>
           <div class="landing-menu-panel" id="landing-menu-panel" data-landing-menu-panel hidden>
@@ -331,7 +340,7 @@ const renderPublicApp = () => {
         <h1 id="hero-title">Выгодные<br><em>привилегии</em></h1>
         <p class="editorial-hero__lead">Красота, забота, отдых и вдохновение — специальные предложения у лучших партнёров города.</p>
         <div class="editorial-hero__actions">
-          <a class="editorial-button" href="https://app.bloomclub.ru/">Стать участницей <span aria-hidden="true">→</span></a>
+          <a class="editorial-button" href="${browserAppUrl}">Стать участницей <span aria-hidden="true">→</span></a>
           <a class="editorial-text-link" href="#landing-partners">Смотреть партнёров</a>
         </div>
         <dl class="editorial-stats hero-proof-grid" aria-label="Показатели клуба">
@@ -397,7 +406,7 @@ const renderPublicApp = () => {
           <li>Продление выполняется вручную</li>
         </ul>
         <div class="editorial-subscription__actions">
-          <a class="editorial-button" href="https://app.bloomclub.ru/">Оформить подписку <span aria-hidden="true">→</span></a>
+          <a class="editorial-button" href="${browserAppUrl}">Оформить подписку <span aria-hidden="true">→</span></a>
         </div>
       </div>
     </section>
@@ -2216,7 +2225,7 @@ const renderLandingPartnerModal = () => {
           <span>Партнёр ${hasPartners ? safePartnerIndex + 1 : 0} / ${hasPartners ? partners.length : 0}</span>
           <button class="landing-carousel-button" type="button" data-landing-carousel-next ${partners.length > 1 ? '' : 'disabled'}>→</button>
         </div>
-        <a class="primary-button" href="https://app.bloomclub.ru/" data-landing-modal-cta>${hasPartners ? 'Получить привилегию' : 'Вступить в клуб'}</a>
+        <a class="primary-button" href="${browserAppUrl}" data-landing-modal-cta>${hasPartners ? 'Получить привилегию' : 'Вступить в клуб'}</a>
       </div>
     </div>
   `;
@@ -4691,6 +4700,15 @@ const renderUsersTab = () => {
     'trial_status',
     'paid_subscription_status',
     'active_subscription_type',
+    'registration_source',
+    'attribution_kind',
+    'attribution_summary',
+    'utm_source',
+    'utm_medium',
+    'utm_campaign',
+    'utm_content',
+    'referrer_name',
+    'used_referral_code',
     'role',
     (item) => item.display_name,
     (item) => formatRole(item.role),
@@ -4702,10 +4720,11 @@ const renderUsersTab = () => {
         <div class="admin-section-heading"><h4>Пользователи</h4><p>Unified users для клиентских, партнёрских и административных кабинетов.</p></div>
         ${renderAdminSearch('users', 'Поиск по пользователям')}
         ${renderTable(
-          ['Пользователь', 'Контакты', 'Роль', 'Статус', 'Подписка', 'Действия'],
+          ['Пользователь', 'Контакты', 'Источник', 'Роль', 'Статус', 'Подписка', 'Действия'],
           users.map((item) => [
             `<strong>${formatValue(item.display_name || item.full_name)}</strong><br><small class="muted-text">ID: ${formatValue(item.id)}</small>${item.selected_city_name ? `<br><small class="muted-text">${formatValue(item.selected_city_name)}</small>` : ''}`,
             `<div><strong>Login:</strong> ${item.is_synthetic_email ? `<span class="muted-text">${formatValue(item.email)}</span>` : formatValue(item.email)}</div><div><strong>Email:</strong> ${formatValue(item.contact_email)}</div><div><strong>Телефон:</strong> ${formatValue(item.phone)}</div><div><strong>VK:</strong> ${item.vk_url ? `<a href="${escapeHtml(item.vk_url)}" target="_blank" rel="noopener noreferrer">Открыть</a>${item.vk_user_id ? ` <small class="muted-text">(id: ${escapeHtml(item.vk_user_id)})</small>` : ''}${item.vk_username ? ` <small class="muted-text">@${escapeHtml(item.vk_username)}</small>` : ''}` : (item.vk_user_id ? `ID: ${escapeHtml(item.vk_user_id)}${item.vk_username ? ` <small class="muted-text">@${escapeHtml(item.vk_username)}</small>` : ''}` : '—')}</div><div><strong>TG:</strong> ${item.telegram_url ? `<a href="${escapeHtml(item.telegram_url)}" target="_blank" rel="noopener noreferrer">Открыть</a>${item.telegram_user_id ? ` <small class="muted-text">(id: ${escapeHtml(item.telegram_user_id)})</small>` : ''}` : (item.telegram_user_id ? `ID: ${escapeHtml(item.telegram_user_id)} <small class="muted-text">(username не указан)</small>` : '—')}</div>`,
+            `<div><strong>${formatValue(item.attribution_summary)}</strong></div>${item.utm_medium ? `<div><small class="muted-text">Канал: ${formatValue(item.utm_medium)}</small></div>` : ''}${item.utm_term ? `<div><small class="muted-text">Метка: ${formatValue(item.utm_term)}</small></div>` : ''}${item.referrer_client_id ? `<div><small class="muted-text">Client ID пригласившего: ${formatValue(item.referrer_client_id)}</small></div>` : ''}`,
             formatValue(formatRole(item.role)),
             renderBoolStatusBadge(item.is_active),
             `<div><strong>Trial:</strong> ${formatValue(item.trial_status)}</div><div><strong>Платная:</strong> ${formatValue(item.paid_subscription_status)}</div><div><strong>Тип:</strong> ${formatValue(item.active_subscription_type)}</div><div><strong>До:</strong> ${formatDateTime(item.subscription_active_until ?? item.active_subscription_until)}</div>`,

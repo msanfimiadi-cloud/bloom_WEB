@@ -14,6 +14,7 @@ from app.models.acquiring import Payment, PaymentEvent, PaymentStatus, Subscript
 from app.models.giveaway import GiveawayNumber
 from app.models.payment import Subscription, SubscriptionStatus
 from app.services.giveaways import ensure_user_numbers, get_active_giveaway
+from app.services.referral_subscription_rewards import process_paid_referral_reward
 
 
 logger = logging.getLogger("app.payments.fulfillment")
@@ -125,6 +126,13 @@ class PaymentFulfillmentService:
             self.db.add(subscription)
             self.db.flush()
         payment.subscription_id = subscription.id
+        process_paid_referral_reward(
+            self.db,
+            referred_client_id=payment.client_profile_id,
+            paid_amount=payment.amount,
+            qualification_source=f"tochka:{payment.id}",
+            now=now,
+        )
         payment.fulfilled_at = now
         active_giveaway = get_active_giveaway(self.db, now)
         if active_giveaway is not None:

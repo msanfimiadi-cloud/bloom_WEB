@@ -308,7 +308,18 @@ def test_new_telegram_login_code_user_with_valid_referral_preserves_telegram_dat
     )
     db_session.commit()
 
-    response = client.post("/api/v1/auth/login-code", json={"code": code, "referral_code": "VALID123"})
+    response = client.post(
+        "/api/v1/auth/login-code",
+        json={
+            "code": code,
+            "referral_code": "VALID123",
+            "utm_source": "vk_ads",
+            "utm_medium": "cpc",
+            "utm_campaign": "summer_massage",
+            "utm_content": "creative_2",
+            "acquisition_landing_url": "https://app.bloomclub.ru/?utm_source=vk_ads",
+        },
+    )
 
     assert response.status_code == 200
     profile = db_session.query(ClientProfile).filter_by(telegram_user_id="tg-new-ref").one()
@@ -316,6 +327,11 @@ def test_new_telegram_login_code_user_with_valid_referral_preserves_telegram_dat
     assert profile.telegram_first_name == "Telegram"
     assert profile.telegram_last_name == "New"
     assert profile.telegram_photo_url == "https://example.com/avatar.jpg"
+    assert profile.utm_source == "vk_ads"
+    assert profile.utm_medium == "cpc"
+    assert profile.utm_campaign == "summer_massage"
+    assert profile.utm_content == "creative_2"
+    assert profile.acquisition_landing_url == "https://app.bloomclub.ru/?utm_source=vk_ads"
     referral = db_session.query(ClientReferral).filter_by(referred_client_id=profile.id).one()
     assert referral.referrer_client_id == referrer.id
     assert profile.referred_by_referral_id == referral.id

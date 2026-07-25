@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+from collections import Counter
 from datetime import datetime, timezone
 
 from sqlalchemy import func, select
@@ -45,7 +46,7 @@ def desired_number_sources(db: Session, client_id: int, now: datetime | None = N
     sources: list[str] = []
     if has_active_access(db, client_id, now):
         sources.append("subscription")
-    sources.extend(["referral"] * (activated_referrals_count(db, client_id, now) * 5))
+    sources.extend(["referral"] * activated_referrals_count(db, client_id, now))
     return sources
 
 
@@ -53,13 +54,41 @@ def ensure_user_numbers(db: Session, giveaway_id: int, client_id: int) -> list[G
     sources = desired_number_sources(db, client_id)
     existing = db.execute(select(GiveawayNumber).where(GiveawayNumber.giveaway_id == giveaway_id, GiveawayNumber.client_id == client_id).order_by(GiveawayNumber.id)).scalars().all()
     managed_existing = [number for number in existing if number.source in {"subscription", "referral"}]
-    missing = len(sources) - len(managed_existing)
-    if missing > 0:
-        for idx in range(missing):
-            source = sources[len(managed_existing) + idx]
-            create_bonus_number(db, giveaway_id=giveaway_id, client_id=client_id, source=source)
-        db.flush()
-        existing = db.execute(select(GiveawayNumber).where(GiveawayNumber.giveaway_id == giveaway_id, GiveawayNumber.client_id == client_id).order_by(GiveawayNumber.id)).scalars().all()
+    desired_counts = Counter(sources)
+    now = datetime.now(timezone.utc)
+
+    for source in ("subscription", "referral"):
+        source_numbers = [number for number in managed_existing if number.source == source]
+        active_numbers = [number for number in source_numbers if is_number_active(number)]
+        inactive_numbers = [number for number in source_numbers if not is_number_active(number)]
+        target_count = desired_counts[source]
+
+        while len(active_numbers) < target_count and inactive_numbers:
+            number = inactive_numbers.pop(0)
+            number.is_active = True
+            number.status = "active"
+            number.deactivated_at = None
+            number.deactivation_reason = None
+            number.reactivated_at = now
+            active_numbers.append(number)
+
+        while len(active_numbers) < target_count:
+            active_numbers.append(
+                create_bonus_number(db, giveaway_id=giveaway_id, client_id=client_id, source=source)
+            )
+
+        for number in active_numbers[target_count:]:
+            number.is_active = False
+            number.status = "revoked"
+            number.deactivated_at = now
+            number.deactivation_reason = (
+                "referral_reward_rule_reduced"
+                if source == "referral"
+                else "subscription_access_not_active"
+            )
+
+    db.flush()
+    existing = db.execute(select(GiveawayNumber).where(GiveawayNumber.giveaway_id == giveaway_id, GiveawayNumber.client_id == client_id).order_by(GiveawayNumber.id)).scalars().all()
     return [n for n in existing if is_number_active(n)]
 
 

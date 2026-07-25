@@ -53,6 +53,12 @@ class BrowserLoginCodeRequest(BaseModel):
     login_code: str | None = Field(default=None, min_length=1, max_length=32)
     provider: str | None = Field(default=None, max_length=32)
     referral_code: str | None = Field(default=None, max_length=32)
+    utm_source: str | None = Field(default=None, max_length=255)
+    utm_medium: str | None = Field(default=None, max_length=255)
+    utm_campaign: str | None = Field(default=None, max_length=255)
+    utm_content: str | None = Field(default=None, max_length=255)
+    utm_term: str | None = Field(default=None, max_length=255)
+    acquisition_landing_url: str | None = Field(default=None, max_length=1024)
 
     @model_validator(mode="after")
     def normalize_code(self) -> "BrowserLoginCodeRequest":
