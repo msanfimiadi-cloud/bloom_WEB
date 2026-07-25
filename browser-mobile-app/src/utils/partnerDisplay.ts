@@ -309,7 +309,7 @@ function normalizeCategory(category: unknown): string {
     restaurants: 'Еда и напитки',
   };
 
-  const prepared = toText(category);
+  const prepared = toText(category).replace(/\s+/g, ' ').trim();
 
   if (!prepared) {
     return '';
