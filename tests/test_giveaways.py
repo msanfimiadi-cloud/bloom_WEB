@@ -63,19 +63,45 @@ def test_user_with_active_subscription_gets_one_base_number() -> None:
     assert [(n.number, n.source) for n in numbers] == [("000001", "subscription")]
 
 
-def test_user_with_one_activated_referral_gets_six_numbers_total() -> None:
+def test_user_with_one_activated_referral_gets_two_numbers_total() -> None:
     db = _session()
     referrer = _client(db, "referrer@example.com")
     referred = _client(db, "referred@example.com")
     _active_subscription(db, referrer.id)
     _active_subscription(db, referred.id)
-    db.add(ClientReferral(referrer_client_id=referrer.id, referred_client_id=referred.id, referral_code="referrer", reward_entries_count=5))
+    db.add(ClientReferral(referrer_client_id=referrer.id, referred_client_id=referred.id, referral_code="referrer", reward_entries_count=1))
     giveaway = Giveaway(title="active", is_active=True, winners_count=1)
     db.add(giveaway)
     db.commit()
     numbers = ensure_user_numbers(db, giveaway.id, referrer.id)
-    assert len(numbers) == 6
-    assert [n.source for n in numbers].count("referral") == 5
+    assert len(numbers) == 2
+    assert [n.source for n in numbers].count("referral") == 1
+
+
+def test_legacy_extra_referral_numbers_are_revoked_under_one_number_rule() -> None:
+    db = _session()
+    referrer = _client(db, "legacy-referrer@example.com")
+    referred = _client(db, "legacy-referred@example.com")
+    _active_subscription(db, referrer.id)
+    _active_subscription(db, referred.id)
+    db.add(ClientReferral(referrer_client_id=referrer.id, referred_client_id=referred.id, referral_code="legacy", reward_entries_count=1))
+    giveaway = Giveaway(title="active", is_active=True, winners_count=1)
+    db.add(giveaway)
+    db.flush()
+    db.add_all(
+        [
+            GiveawayNumber(giveaway_id=giveaway.id, client_id=referrer.id, number=f"{index:06d}", source="referral")
+            for index in range(1, 6)
+        ]
+    )
+    db.commit()
+
+    numbers = ensure_user_numbers(db, giveaway.id, referrer.id)
+
+    assert [number.source for number in numbers].count("referral") == 1
+    revoked = db.query(GiveawayNumber).filter_by(source="referral", status="revoked").all()
+    assert len(revoked) == 4
+    assert all(number.deactivation_reason == "referral_reward_rule_reduced" for number in revoked)
 
 
 def test_numbers_are_not_duplicated_on_repeated_requests() -> None:

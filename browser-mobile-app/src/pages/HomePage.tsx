@@ -278,6 +278,8 @@ export function HomePage({
         <p className="eyebrow">Реферальная программа</p>
         <strong>Реферальный код</strong>
         <p>Отправьте ваш код тому, кого хотите пригласить.</p>
+        <p>За каждого приглашённого, который активирует подписку, вы получите 1 дополнительный номер в розыгрыше.</p>
+        <p>За каждые 5 приглашённых, оплативших подписку за 349 ₽, вы получите 30 дней Bloom Club бесплатно.</p>
         {referralCode ? (
           <button className="button button--primary referral-code-button" type="button" onClick={() => void copyReferralCode()}>
             {referralCode}
@@ -289,6 +291,8 @@ export function HomePage({
         <div className="referral-banner__stats" aria-label="Статистика реферальной программы">
           <span>Приглашено: {referralSummary?.invited_count ?? referralSummary?.referrals_count ?? 0}</span>
           <span>Активировали тестовый период: {referralSummary?.activated_count ?? referralSummary?.activated_referrals_count ?? 0}</span>
+          <span>Оплатили подписку: {referralSummary?.paid_referrals_count ?? 0}</span>
+          <span>До бесплатного месяца: {referralSummary?.paid_referrals_until_next_reward ?? 5}</span>
           <span>Дополнительных номеров в розыгрыше: {referralSummary?.earned_giveaway_entries_count ?? referralSummary?.earned_entries_count ?? 0}</span>
         </div>
       </div>

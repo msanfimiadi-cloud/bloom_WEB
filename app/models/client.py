@@ -95,6 +95,12 @@ class ClientProfile(Base):
     telegram_last_name: Mapped[str | None] = mapped_column(String(255), nullable=True)
     telegram_photo_url: Mapped[str | None] = mapped_column(String(512), nullable=True)
     source: Mapped[str | None] = mapped_column(String(64), nullable=True)
+    utm_source: Mapped[str | None] = mapped_column(String(255), nullable=True, index=True)
+    utm_medium: Mapped[str | None] = mapped_column(String(255), nullable=True)
+    utm_campaign: Mapped[str | None] = mapped_column(String(255), nullable=True, index=True)
+    utm_content: Mapped[str | None] = mapped_column(String(255), nullable=True)
+    utm_term: Mapped[str | None] = mapped_column(String(255), nullable=True)
+    acquisition_landing_url: Mapped[str | None] = mapped_column(String(1024), nullable=True)
     trial_subscription_used_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
     referral_code: Mapped[str | None] = mapped_column(String(32), nullable=True, unique=True, index=True)
     referred_by_referral_id: Mapped[int | None] = mapped_column(ForeignKey("client_referrals.id"), nullable=True, unique=True)
@@ -240,13 +246,30 @@ class ClientReferral(Base):
     referrer_client_id: Mapped[int] = mapped_column(ForeignKey("client_profiles.id"), nullable=False, index=True)
     referred_client_id: Mapped[int] = mapped_column(ForeignKey("client_profiles.id"), nullable=False, unique=True, index=True)
     referral_code: Mapped[str] = mapped_column(String(32), nullable=False, index=True)
-    reward_entries_count: Mapped[int] = mapped_column(Integer, nullable=False, default=5)
+    reward_entries_count: Mapped[int] = mapped_column(Integer, nullable=False, default=1)
     reward_granted_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
+    paid_qualified_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True, index=True)
+    paid_qualification_source: Mapped[str | None] = mapped_column(String(96), nullable=True, unique=True)
     created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), nullable=False, server_default=func.now())
 
     referrer: Mapped["ClientProfile"] = relationship("ClientProfile", foreign_keys=[referrer_client_id], back_populates="referrals_made")
     referred: Mapped["ClientProfile"] = relationship("ClientProfile", foreign_keys=[referred_client_id])
     giveaway_entry: Mapped["GiveawayEntry | None"] = relationship("GiveawayEntry", back_populates="related_referral", uselist=False)
+
+
+class ReferralSubscriptionReward(Base):
+    __tablename__ = "referral_subscription_rewards"
+    __table_args__ = (
+        UniqueConstraint("referrer_client_id", "reward_period", name="uq_referral_subscription_rewards_period"),
+    )
+
+    id: Mapped[int] = mapped_column(Integer, primary_key=True)
+    referrer_client_id: Mapped[int] = mapped_column(ForeignKey("client_profiles.id"), nullable=False, index=True)
+    reward_period: Mapped[int] = mapped_column(Integer, nullable=False)
+    qualified_referrals_count: Mapped[int] = mapped_column(Integer, nullable=False)
+    reward_days: Mapped[int] = mapped_column(Integer, nullable=False, default=30)
+    subscription_id: Mapped[int] = mapped_column(ForeignKey("subscriptions.id"), nullable=False)
+    granted_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), nullable=False, server_default=func.now())
 
 
 class GiveawayEntry(Base):

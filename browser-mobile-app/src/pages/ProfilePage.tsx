@@ -102,6 +102,8 @@ export function ProfilePage({ profile, subscription, cities, onOpenSubscription,
   const invited = referralSummary?.invited_count ?? referralSummary?.referrals_count ?? 0;
   const activated = referralSummary?.activated_count ?? referralSummary?.activated_referrals_count ?? 0;
   const additionalEntries = referralSummary?.earned_giveaway_entries_count ?? referralSummary?.earned_entries_count ?? 0;
+  const paidReferrals = referralSummary?.paid_referrals_count ?? 0;
+  const referralsUntilReward = referralSummary?.paid_referrals_until_next_reward ?? 5;
   const [copyMessage, setCopyMessage] = useState('');
   const addToHomeScreen = useAddToHomeScreen();
 
@@ -318,6 +320,7 @@ export function ProfilePage({ profile, subscription, cities, onOpenSubscription,
       <div className="info-panel info-panel--soft referral-profile-card">
         <ContentText as="strong" textKey="profile.referral.title" fallback="Реферальный код" />
         <p>Отправьте ваш код тому, кого хотите пригласить.</p>
+        <p>1 активировавший подписку приглашённый = 1 номер в розыгрыше. Каждые 5 оплативших подписку за 349 ₽ = 30 дней клуба бесплатно.</p>
         {referralCode ? (
           <button className="button button--primary referral-code-button" type="button" onClick={() => void copyReferralCode()}>
             {referralCode}
@@ -329,6 +332,8 @@ export function ProfilePage({ profile, subscription, cities, onOpenSubscription,
         <div className="referral-stats" aria-label="Реферальная программа">
           <span>Приглашено: {invited}</span>
           <span>Активировали тестовый период: {activated}</span>
+          <span>Оплатили подписку: {paidReferrals}</span>
+          <span>До бесплатного месяца: {referralsUntilReward}</span>
           <span>Дополнительных номеров в розыгрыше: {additionalEntries}</span>
         </div>
       </div>

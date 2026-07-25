@@ -1,6 +1,6 @@
 from app.models.category import Category
 from app.models.city import City
-from app.models.client import AccountLinkingChallenge, BrowserLoginCode, BrowserLoginToken, ClientIdentityLink, ClientPasswordSetupToken, ClientProfile, ClientReferral, GiveawayEntry, VkLinkCode
+from app.models.client import AccountLinkingChallenge, BrowserLoginCode, BrowserLoginToken, ClientIdentityLink, ClientPasswordSetupToken, ClientProfile, ClientReferral, GiveawayEntry, ReferralSubscriptionReward, VkLinkCode
 from app.models.content import (
     ContentBanner,
     ContentBlock,
@@ -47,6 +47,7 @@ __all__ = [
     "ClientIdentityLink",
     "ClientPasswordSetupToken",
     "ClientReferral",
+    "ReferralSubscriptionReward",
     "GiveawayEntry",
     "Giveaway",
     "GiveawayPrize",

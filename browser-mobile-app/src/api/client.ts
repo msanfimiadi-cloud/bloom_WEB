@@ -127,6 +127,50 @@ const CLIENT_API_PROXY_PREFIX = "/api/v1";
 const TELEGRAM_LOGIN_RETRY_ATTEMPTS = 1;
 const GET_RETRY_ATTEMPTS = 1;
 let telegramLoginInFlight: Promise<string> | null = null;
+const ACQUISITION_STORAGE_KEY = "bloom.acquisitionAttribution";
+
+type AcquisitionAttribution = {
+  utm_source?: string;
+  utm_medium?: string;
+  utm_campaign?: string;
+  utm_content?: string;
+  utm_term?: string;
+  acquisition_landing_url?: string;
+};
+
+function getAcquisitionAttribution(): AcquisitionAttribution {
+  if (typeof window === "undefined") return {};
+  const params = new URLSearchParams(window.location.search);
+  const current: AcquisitionAttribution = {};
+  for (const field of ["utm_source", "utm_medium", "utm_campaign", "utm_content", "utm_term"] as const) {
+    const value = params.get(field)?.trim();
+    if (value) current[field] = value;
+  }
+  if (Object.keys(current).length > 0) {
+    current.acquisition_landing_url = window.location.href.slice(0, 1024);
+    try {
+      window.localStorage.setItem(ACQUISITION_STORAGE_KEY, JSON.stringify(current));
+    } catch {
+      // Attribution must never block login when browser storage is unavailable.
+    }
+    return current;
+  }
+  try {
+    const saved = JSON.parse(window.localStorage.getItem(ACQUISITION_STORAGE_KEY) || "{}") as AcquisitionAttribution;
+    return saved && typeof saved === "object" ? saved : {};
+  } catch {
+    return {};
+  }
+}
+
+function clearAcquisitionAttribution(): void {
+  if (typeof window === "undefined") return;
+  try {
+    window.localStorage.removeItem(ACQUISITION_STORAGE_KEY);
+  } catch {
+    // Login success must not depend on browser storage availability.
+  }
+}
 
 export type TelegramLoginReason = "initial" | "retry" | "manual" | "resume";
 export type TelegramLoginInFlightState = "idle" | "in_flight" | "force_reset";
@@ -933,7 +977,12 @@ async function loginWithTelegramAttempt(
         Accept: "application/json",
         "Content-Type": "application/json",
       },
-      body: JSON.stringify({ init_data: telegramLaunchPayload, referral_code: options.referralCode || undefined, start_param: options.startParam || options.referralCode || undefined }),
+      body: JSON.stringify({
+        init_data: telegramLaunchPayload,
+        referral_code: options.referralCode || undefined,
+        start_param: options.startParam || options.referralCode || undefined,
+        ...getAcquisitionAttribution(),
+      }),
       signal: controller.signal,
     });
 
@@ -992,6 +1041,7 @@ async function loginWithTelegramAttempt(
       );
     }
 
+    clearAcquisitionAttribution();
     setStoredToken(token);
     return token;
   } catch (caughtError) {
@@ -1033,14 +1083,21 @@ export interface LoginCodeResponse extends AuthResponse {
 }
 
 export async function loginWithCode(provider: "telegram" | "vk", code: string, referralCode?: string | null): Promise<LoginCodeResponse> {
-  return request<LoginCodeResponse>(
+  const response = await request<LoginCodeResponse>(
     LOGIN_CODE_PATH,
     {
       method: "POST",
-      body: JSON.stringify({ provider, login_code: code, referral_code: referralCode?.trim() || undefined }),
+      body: JSON.stringify({
+        provider,
+        login_code: code,
+        referral_code: referralCode?.trim() || undefined,
+        ...getAcquisitionAttribution(),
+      }),
     },
     "same-origin",
   );
+  clearAcquisitionAttribution();
+  return response;
 }
 
 export async function loginWithTelegram(

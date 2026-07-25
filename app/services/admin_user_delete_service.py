@@ -13,6 +13,7 @@ from app.models.client import (
     ClientProfile,
     ClientReferral,
     GiveawayEntry,
+    ReferralSubscriptionReward,
     VkLinkCode,
 )
 from app.models.lead import LeadClick
@@ -46,6 +47,7 @@ def delete_user_with_relations(*, db: Session, admin: AdminUser, user_id: int) -
         "client_identity_links": 0,
         "client_password_setup_tokens": 0,
         "client_referrals": 0,
+        "referral_subscription_rewards": 0,
         "giveaway_entries": 0,
         "client_profile": 0,
         "partner_profile": 0,
@@ -123,6 +125,15 @@ def delete_user_with_relations(*, db: Session, admin: AdminUser, user_id: int) -
                 deleted["payment_receipts"] += db.execute(
                     delete(PaymentReceipt).where(PaymentReceipt.payment_request_id.in_(payment_request_ids))
                 ).rowcount or 0
+            subscription_ids = db.execute(
+                select(Subscription.id).where(Subscription.client_id == client.id)
+            ).scalars().all()
+            reward_filters = [ReferralSubscriptionReward.referrer_client_id == client.id]
+            if subscription_ids:
+                reward_filters.append(ReferralSubscriptionReward.subscription_id.in_(subscription_ids))
+            deleted["referral_subscription_rewards"] += db.execute(
+                delete(ReferralSubscriptionReward).where(or_(*reward_filters))
+            ).rowcount or 0
             deleted["subscriptions"] += db.execute(delete(Subscription).where(Subscription.client_id == client.id)).rowcount or 0
             deleted["payment_requests"] += db.execute(
                 delete(PaymentRequest).where(PaymentRequest.client_id == client.id)

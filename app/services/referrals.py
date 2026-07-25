@@ -24,7 +24,7 @@ class ReferralError(ValueError):
         self.detail = detail
 
 
-REWARD_ENTRIES_PER_REFERRAL = 5
+REWARD_ENTRIES_PER_REFERRAL = 1
 REFERRAL_SOURCE = "referral"
 _REFERRAL_CODE_ALPHABET = string.ascii_uppercase + string.digits
 
@@ -104,6 +104,8 @@ def referral_counts(db: Session, client_id: int, now: datetime | None = None) ->
                     GiveawayNumber.giveaway_id == active_giveaway_id,
                     GiveawayNumber.client_id == client_id,
                     GiveawayNumber.source == REFERRAL_SOURCE,
+                    GiveawayNumber.is_active.is_(True),
+                    GiveawayNumber.status == "active",
                 )
             ).scalar_one()
             or 0

@@ -9,7 +9,7 @@ from fastapi import APIRouter, Depends, File, Form, HTTPException, Query, Upload
 from fastapi.responses import StreamingResponse
 from sqlalchemy import delete, func, or_, select, update
 from sqlalchemy.exc import IntegrityError
-from sqlalchemy.orm import Session, selectinload
+from sqlalchemy.orm import Session, aliased, selectinload
 
 from app.api.deps import require_admin
 from app.core.categories import WOMEN_CLUB_CATEGORY_SLUGS
@@ -18,7 +18,7 @@ from app.core.security import hash_password
 from app.db.session import get_db
 from app.models.category import Category
 from app.models.city import City
-from app.models.client import ClientProfile
+from app.models.client import ClientProfile, ClientReferral
 from app.models.giveaway import Giveaway, GiveawayNumber, GiveawayPrize
 from app.models.engagement import (
     BloomDailyTask,
@@ -37,6 +37,7 @@ from app.models.partner import Partner, PartnerOffer, PartnerPhoto, PartnerQrLin
 from app.models.payment import PaymentRequest, PaymentRequestStatus, Subscription, SubscriptionStatus
 from app.models.user import AdminUser, User, UserRole
 from app.models.verification import PrivilegeVerificationSession
+from app.services.referral_subscription_rewards import process_paid_referral_reward
 from app.schemas.activity import ActivityFeedRead
 from app.schemas.admin import (
     AdminManagedUserCreate,
@@ -901,8 +902,7 @@ def approve_admin_payment_request(
     payment_request.access_until = subscription_ends_at
     _append_admin_payment_request_comment(payment_request, payload.comment, prefix="Admin approval comment")
 
-    db.add(
-        Subscription(
+    subscription = Subscription(
             client_id=payment_request.client_id,
             status=SubscriptionStatus.active.value,
             starts_at=subscription_starts_at,
@@ -910,6 +910,14 @@ def approve_admin_payment_request(
             source_payment_request_id=payment_request.id,
             source="paid",
         )
+    db.add(subscription)
+    db.flush()
+    process_paid_referral_reward(
+        db,
+        referred_client_id=payment_request.client_id,
+        paid_amount=payment_request.amount,
+        qualification_source=f"manual:{payment_request.id}",
+        now=now,
     )
     db.commit()
     payment_request = _get_admin_payment_request_or_404(db, payment_request.id)
@@ -1014,6 +1022,13 @@ def list_admin_users(
             ClientProfile.telegram_user_id.label("telegram_user_id"),
             ClientProfile.telegram_username.label("telegram_username"),
             ClientProfile.trial_subscription_used_at.label("trial_subscription_used_at"),
+            ClientProfile.source.label("registration_source"),
+            ClientProfile.utm_source.label("utm_source"),
+            ClientProfile.utm_medium.label("utm_medium"),
+            ClientProfile.utm_campaign.label("utm_campaign"),
+            ClientProfile.utm_content.label("utm_content"),
+            ClientProfile.utm_term.label("utm_term"),
+            ClientProfile.acquisition_landing_url.label("acquisition_landing_url"),
         )
         .outerjoin(ClientProfile, ClientProfile.user_id == User.id)
         .outerjoin(City, City.id == ClientProfile.selected_city_id)
@@ -1028,9 +1043,41 @@ def list_admin_users(
         search = q.strip()
         if search:
             pattern = f"%{search}%"
-            statement = statement.where(or_(User.email.ilike(pattern), User.phone.ilike(pattern), ClientProfile.full_name.ilike(pattern), ClientProfile.contact_email.ilike(pattern), City.name.ilike(pattern), ClientProfile.vk_user_id.ilike(pattern), ClientProfile.vk_username.ilike(pattern), ClientProfile.telegram_user_id.ilike(pattern), ClientProfile.telegram_username.ilike(pattern)))
+            statement = statement.where(or_(User.email.ilike(pattern), User.phone.ilike(pattern), ClientProfile.full_name.ilike(pattern), ClientProfile.contact_email.ilike(pattern), City.name.ilike(pattern), ClientProfile.vk_user_id.ilike(pattern), ClientProfile.vk_username.ilike(pattern), ClientProfile.telegram_user_id.ilike(pattern), ClientProfile.telegram_username.ilike(pattern), ClientProfile.source.ilike(pattern), ClientProfile.utm_source.ilike(pattern), ClientProfile.utm_campaign.ilike(pattern), ClientProfile.utm_content.ilike(pattern)))
 
     rows = db.execute(statement).all()
+    client_profile_ids = [row.client_profile_id for row in rows if row.client_profile_id is not None]
+    referral_by_referred_client_id: dict[int, dict[str, object]] = {}
+    if client_profile_ids:
+        referrer_profile = aliased(ClientProfile)
+        referrer_user = aliased(User)
+        referral_rows = db.execute(
+            select(
+                ClientReferral,
+                referrer_profile.full_name,
+                referrer_profile.telegram_username,
+                referrer_profile.vk_username,
+                referrer_user.id,
+                referrer_user.email,
+            )
+            .join(referrer_profile, referrer_profile.id == ClientReferral.referrer_client_id)
+            .join(referrer_user, referrer_user.id == referrer_profile.user_id)
+            .where(ClientReferral.referred_client_id.in_(client_profile_ids))
+        ).all()
+        for referral, referrer_full_name, referrer_telegram_username, referrer_vk_username, referrer_user_id, referrer_email in referral_rows:
+            referrer_name = (
+                referrer_full_name
+                or (f"@{referrer_telegram_username}" if referrer_telegram_username else None)
+                or (f"@{referrer_vk_username}" if referrer_vk_username else None)
+                or referrer_email
+                or f"Пользователь #{referrer_user_id}"
+            )
+            referral_by_referred_client_id[referral.referred_client_id] = {
+                "referrer_client_id": referral.referrer_client_id,
+                "referrer_user_id": referrer_user_id,
+                "referrer_name": referrer_name,
+                "used_referral_code": referral.referral_code,
+            }
     result: list[AdminManagedUserRead] = []
     now = datetime.now(timezone.utc)
     for (
@@ -1045,6 +1092,13 @@ def list_admin_users(
         telegram_user_id,
         telegram_username,
         trial_subscription_used_at,
+        registration_source,
+        utm_source,
+        utm_medium,
+        utm_campaign,
+        utm_content,
+        utm_term,
+        acquisition_landing_url,
     ) in rows:
         normalized_email = (user.email or "").strip().lower()
         is_synthetic_email = normalized_email.startswith("vk_") and normalized_email.endswith("@vk.local") or normalized_email.endswith("@vk.local")
@@ -1074,6 +1128,20 @@ def list_admin_users(
             or (user.email.strip() if isinstance(user.email, str) and user.email.strip() else None)
             or f"Пользователь #{user.id}"
         )
+        referral_attribution = referral_by_referred_client_id.get(client_profile_id)
+        if referral_attribution is not None:
+            attribution_kind = "referral"
+            attribution_summary = (
+                f"Реферал от {referral_attribution['referrer_name']} "
+                f"(код {referral_attribution['used_referral_code']})"
+            )
+        elif utm_source or utm_campaign:
+            attribution_kind = "advertising"
+            advertising_parts = [part for part in (utm_source, utm_campaign, utm_content) if part]
+            attribution_summary = f"Реклама: {' / '.join(advertising_parts)}"
+        else:
+            attribution_kind = "organic"
+            attribution_summary = f"Источник: {registration_source or 'прямой вход'}"
         result.append(
             AdminManagedUserRead.model_validate(
                 {
@@ -1098,6 +1166,16 @@ def list_admin_users(
                     "active_subscription_type": active_subscription_type,
                     "display_name": display_name,
                     "is_synthetic_email": is_synthetic_email,
+                    "registration_source": registration_source,
+                    "attribution_kind": attribution_kind,
+                    "attribution_summary": attribution_summary,
+                    "utm_source": utm_source,
+                    "utm_medium": utm_medium,
+                    "utm_campaign": utm_campaign,
+                    "utm_content": utm_content,
+                    "utm_term": utm_term,
+                    "acquisition_landing_url": acquisition_landing_url,
+                    **(referral_attribution or {}),
                 }
             )
         )

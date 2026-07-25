@@ -339,6 +339,11 @@ export interface ReferralSummary {
   earned_giveaway_entries_count?: number;
   reward_entries_count?: number;
   reward_entries_per_referral?: number;
+  paid_referrals_count?: number;
+  subscription_rewards_granted?: number;
+  paid_referrals_until_next_reward?: number;
+  subscription_reward_threshold?: number;
+  subscription_reward_days?: number;
 }
 
 export interface GiveawayEntry {
