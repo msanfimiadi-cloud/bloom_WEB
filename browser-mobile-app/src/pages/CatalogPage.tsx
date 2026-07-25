@@ -42,20 +42,6 @@ interface CatalogPageProps {
   onOpenPartner: (partner: Partner) => void;
 }
 
-const LIFESTYLE_CATEGORIES = [
-  "Все",
-  "Красота",
-  "Здоровье",
-  "Спорт",
-  "Кафе",
-  "Рестораны",
-  "Образование",
-  "Фитнес",
-  "Стиль",
-  "Отдых",
-];
-
-
 function getPartnerSearchText(partner: Partner): string {
   return [
     getPartnerName(partner),
@@ -124,13 +110,9 @@ export function CatalogPage({
   onOpenPartner,
 }: CatalogPageProps) {
   const safePartners = Array.isArray(partners) ? partners : [];
-  const dataCategories = useMemo(
+  const categories = useMemo(
     () => buildCatalogCategories(safePartners),
     [safePartners],
-  );
-  const categories = useMemo(
-    () => Array.from(new Set([...LIFESTYLE_CATEGORIES, ...dataCategories])),
-    [dataCategories],
   );
   const [selectedCategory, setSelectedCategory] = useState("Все");
   const [searchQuery, setSearchQuery] = useState("");

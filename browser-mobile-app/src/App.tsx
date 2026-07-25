@@ -2332,12 +2332,31 @@ export default function App() {
     (partner: Partner) => {
       lifecycleTrace("partner_open", { hasPartner: Boolean(partner) });
       traceStart("partner_open_start", { hasPartner: Boolean(partner) });
+      scrollAppToTop();
       setSelectedPartner(partner);
       setPage("partner");
       void loadPartnerOffers(partner);
     },
     [loadPartnerOffers],
   );
+
+  useEffect(() => {
+    if (page !== "partner" || !selectedPartner) {
+      return;
+    }
+
+    let secondFrameId = 0;
+    const firstFrameId = window.requestAnimationFrame(() => {
+      secondFrameId = window.requestAnimationFrame(scrollAppToTop);
+    });
+
+    return () => {
+      window.cancelAnimationFrame(firstFrameId);
+      if (secondFrameId) {
+        window.cancelAnimationFrame(secondFrameId);
+      }
+    };
+  }, [page, selectedPartner]);
 
   const retryPartnerOffers = useCallback(() => {
     lifecycleTrace("recovery_action", { action: "retry_partner_offers" });

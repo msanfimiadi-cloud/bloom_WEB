@@ -7045,3 +7045,98 @@ small,
 .flower-game--loading { display: flex; align-items: center; gap: .8rem; min-height: 5rem; }.flower-game__sprout { font-size: 2rem; }
 @media (prefers-reduced-motion: reduce) { .flower-visual__bloom, .flower-visual__glow, .flower-progress i, .flower-stage-path__line i, .flower-stage-path li > span, .flower-illustration__stem, .flower-illustration__seed-crack, .flower-illustration__cotyledons, .flower-illustration__bud { transition: none; } .flower-joining-petal, .flower-illustration__seed, .flower-illustration__new-leaves, .flower-illustration__bud, .flower-illustration__flower, .flower-visual.is-stage-changing .flower-visual__bloom, .flower-visual.is-stage-changing .flower-visual__glow { animation: none; } }
 @media (prefers-reduced-transparency: reduce) { .flower-leaderboard { background: #fff; backdrop-filter: none; } }
+
+/* Mobile auth and safe-area guardrails. Keep these final so later theme passes cannot
+   reintroduce iOS input zoom or place content underneath the floating navigation. */
+.welcome-auth-screen {
+  min-height: 100svh;
+  align-items: center;
+  justify-content: center;
+  padding:
+    max(16px, env(safe-area-inset-top))
+    max(16px, env(safe-area-inset-right))
+    max(16px, env(safe-area-inset-bottom))
+    max(16px, env(safe-area-inset-left));
+  overflow-y: auto;
+  overscroll-behavior-y: contain;
+}
+
+.welcome-auth-screen__card {
+  width: min(100%, 510px);
+  margin: auto;
+  text-align: center;
+  -webkit-overflow-scrolling: touch;
+}
+
+.welcome-auth-screen__brand,
+.welcome-auth-screen__card > h1,
+.welcome-auth-screen__card > p,
+.welcome-auth-screen__card .login-code-legal-text,
+.welcome-auth-screen__card .auth-actions {
+  width: 100%;
+  margin-inline: auto;
+  text-align: center;
+}
+
+.welcome-auth-screen__brand {
+  align-items: center;
+}
+
+.welcome-auth-screen__card > h1 {
+  max-width: 100%;
+}
+
+.welcome-auth-screen__card .auth-code-input,
+.welcome-auth-screen__card .auth-code-input:focus,
+.welcome-auth-screen__card .auth-code-input:active,
+.welcome-auth-screen__card .auth-code-input:-webkit-autofill {
+  font-size: 16px;
+  text-align: center;
+}
+
+.welcome-auth-screen__card .auth-actions {
+  justify-content: center;
+}
+
+.app-shell {
+  padding-bottom: calc(
+    var(--bottom-nav-reserved-height, 98px) +
+    env(safe-area-inset-bottom) +
+    16px
+  );
+}
+
+.app-shell__content {
+  min-width: 0;
+  padding-bottom: 8px;
+  scroll-padding-bottom: calc(
+    var(--bottom-nav-reserved-height, 98px) +
+    env(safe-area-inset-bottom) +
+    16px
+  );
+}
+
+@media (max-width: 390px) {
+  .welcome-auth-screen {
+    align-items: center;
+    padding:
+      max(12px, env(safe-area-inset-top))
+      max(12px, env(safe-area-inset-right))
+      max(12px, env(safe-area-inset-bottom))
+      max(12px, env(safe-area-inset-left));
+  }
+
+  .welcome-auth-screen__card {
+    max-height: calc(100svh - 24px);
+  }
+}
+
+@media (max-height: 680px) {
+  .welcome-auth-screen {
+    align-items: flex-start;
+  }
+
+  .welcome-auth-screen__card {
+    max-height: none;
+  }
+}
