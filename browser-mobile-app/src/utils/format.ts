@@ -63,6 +63,32 @@ export function formatDate(value?: unknown): string {
   }).format(date);
 }
 
+const MAP_PROVIDER_HOSTS = [
+  /(^|\\.)yandex\\.(ru|com|kz|by|uz|com\\.tr)$/i,
+  /(^|\\.)2gis\\.(ru|com|kz|kg|uz|ae|cl)$/i,
+];
+
+export function normalizePartnerMapUrl(value: unknown): string | null {
+  const mapUrl = toText(value);
+
+  if (!mapUrl) {
+    return null;
+  }
+
+  const preparedUrl = /^[a-z][a-z\\d+.-]*:\/\//i.test(mapUrl) ? mapUrl : `https://${mapUrl}`;
+
+  try {
+    const parsedUrl = new URL(preparedUrl);
+    const hostname = parsedUrl.hostname.toLowerCase().replace(/\\.$/, "");
+    const isHttp = parsedUrl.protocol === "https:" || parsedUrl.protocol === "http:";
+    const isSupportedProvider = MAP_PROVIDER_HOSTS.some((pattern) => pattern.test(hostname));
+
+    return isHttp && isSupportedProvider ? parsedUrl.toString() : null;
+  } catch {
+    return null;
+  }
+}
+
 export function buildYandexMapsUrl(options: {
   latitude?: string | number;
   longitude?: string | number;
@@ -81,4 +107,13 @@ export function buildYandexMapsUrl(options: {
   }
 
   return null;
+}
+
+export function buildPartnerMapsUrl(options: {
+  mapUrl?: unknown;
+  latitude?: string | number;
+  longitude?: string | number;
+  address?: unknown;
+}): string | null {
+  return normalizePartnerMapUrl(options.mapUrl) ?? buildYandexMapsUrl(options);
 }
