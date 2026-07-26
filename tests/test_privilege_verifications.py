@@ -1797,3 +1797,67 @@ def test_partner_scan_session_without_offer_does_not_show_random_partner_offer_p
     assert data["regular_price"] is None
     assert data["club_price"] is None
     assert data["estimated_saving_amount"] == "0.00"
+
+
+def test_percentage_offer_without_price_requires_order_amount(verification_client: TestClient) -> None:
+    with _session(verification_client) as session:
+        offer = session.get(PartnerOffer, 2)
+        assert offer is not None
+        offer.base_price = None
+        offer.discount_percent = 10
+        session.commit()
+
+    response = verification_client.post(
+        "/api/v1/clients/partners/1/verify",
+        json={"privilege_id": 2},
+        headers=_auth_headers(_client_token(verification_client)),
+    )
+
+    assert response.status_code == 422
+    assert response.json()["detail"] == "order_amount_required"
+
+
+def test_dynamic_order_saving_is_preserved_and_counted_after_confirmation(
+    verification_client: TestClient,
+) -> None:
+    with _session(verification_client) as session:
+        offer = session.get(PartnerOffer, 2)
+        assert offer is not None
+        offer.base_price = None
+        offer.discount_percent = 10
+        session.commit()
+
+    client_headers = _auth_headers(_client_token(verification_client))
+    created = verification_client.post(
+        "/api/v1/clients/partners/1/verify",
+        json={"privilege_id": 2, "order_amount": "1000.00"},
+        headers=client_headers,
+    )
+
+    assert created.status_code == 200
+    verification = created.json()
+    assert verification["base_price"] == "1000.00"
+    assert verification["final_price"] == "900.00"
+    assert verification["discount_percent"] == "10.00"
+    assert verification["saving_amount"] == "100.00"
+
+    before_confirmation = verification_client.get("/api/v1/clients/me/savings", headers=client_headers)
+    assert before_confirmation.status_code == 200
+    assert before_confirmation.json()["total_saving_amount"] == "0.00"
+
+    confirmed = verification_client.post(
+        "/api/v1/partner/privileges/confirm",
+        json={"session_id": verification["id"]},
+        headers=_auth_headers(_partner_token(verification_client)),
+    )
+    assert confirmed.status_code == 200
+    assert confirmed.json()["saving_amount"] == "100.00"
+
+    savings = verification_client.get("/api/v1/clients/me/savings", headers=client_headers)
+    assert savings.status_code == 200
+    data = savings.json()
+    assert data["total_saving_amount"] == "100.00"
+    assert len(data["items"]) == 1
+    assert data["items"][0]["base_price"] == "1000.00"
+    assert data["items"][0]["final_price"] == "900.00"
+    assert data["items"][0]["saving_amount"] == "100.00"
