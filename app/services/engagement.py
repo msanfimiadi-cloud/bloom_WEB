@@ -145,15 +145,16 @@ def confirm_verification(
     if not has_active_access(db, locked.client_id, now):
         raise HTTPException(status_code=status.HTTP_409_CONFLICT, detail="subscription_inactive")
 
-    saving = calculate_offer_saving_snapshot(locked.offer)
+    saving = calculate_offer_saving_snapshot(locked.offer) if locked.saving_amount is None else None
     locked.status = PrivilegeVerificationStatus.confirmed.value
     locked.confirmed_at = now
     locked.confirmed_by_partner_id = partner.id
     locked.confirmed_by_bot_access_id = bot_access.id if bot_access is not None else None
-    locked.saving_base_price = saving.regular_price
-    locked.saving_final_price = saving.club_price
-    locked.saving_discount_percent = saving.discount_percent
-    locked.saving_amount = saving.saving_amount
+    if saving is not None:
+        locked.saving_base_price = saving.regular_price
+        locked.saving_final_price = saving.club_price
+        locked.saving_discount_percent = saving.discount_percent
+        locked.saving_amount = saving.saving_amount
     locked.saving_partner_name = locked.partner.name if locked.partner is not None else partner.name
     locked.saving_offer_title = locked.offer.title if locked.offer is not None else None
     locked.saving_used_at = now
