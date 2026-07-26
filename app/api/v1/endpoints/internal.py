@@ -76,7 +76,7 @@ def check_internal_partner_code(
             code=session.code,
             partner_name=access.partner.name,
             privilege_title=session.offer.title if session.offer is not None else None,
-            saving_amount=saving.saving_amount,
+            saving_amount=session.saving_amount if session.saving_amount is not None else saving.saving_amount,
             expires_at=session.expires_at,
         )
         db.commit()
