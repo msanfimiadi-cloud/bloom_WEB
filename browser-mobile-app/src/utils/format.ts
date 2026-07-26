@@ -64,8 +64,8 @@ export function formatDate(value?: unknown): string {
 }
 
 const MAP_PROVIDER_HOSTS = [
-  /(^|\\.)yandex\\.(ru|com|kz|by|uz|com\\.tr)$/i,
-  /(^|\\.)2gis\\.(ru|com|kz|kg|uz|ae|cl)$/i,
+  /(^|\.)yandex\.(ru|com|kz|by|uz|com\.tr)$/i,
+  /(^|\.)2gis\.(ru|com|kz|kg|uz|ae|cl)$/i,
 ];
 
 export function normalizePartnerMapUrl(value: unknown): string | null {
@@ -75,11 +75,11 @@ export function normalizePartnerMapUrl(value: unknown): string | null {
     return null;
   }
 
-  const preparedUrl = /^[a-z][a-z\\d+.-]*:\/\//i.test(mapUrl) ? mapUrl : `https://${mapUrl}`;
+  const preparedUrl = /^[a-z][a-z\d+.-]*:\/\//i.test(mapUrl) ? mapUrl : `https://${mapUrl}`;
 
   try {
     const parsedUrl = new URL(preparedUrl);
-    const hostname = parsedUrl.hostname.toLowerCase().replace(/\\.$/, "");
+    const hostname = parsedUrl.hostname.toLowerCase().replace(/\.$/, "");
     const isHttp = parsedUrl.protocol === "https:" || parsedUrl.protocol === "http:";
     const isSupportedProvider = MAP_PROVIDER_HOSTS.some((pattern) => pattern.test(hostname));
 
