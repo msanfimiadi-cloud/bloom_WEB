@@ -1551,7 +1551,13 @@ def test_partner_can_confirm_own_qr_and_stats_update(verification_client: TestCl
         headers=_auth_headers(_partner_token(verification_client)),
     )
     assert stats.status_code == 200
-    assert stats.json()["stats"] == {"confirmed_today": 1, "confirmed_month": 1, "savings_month": "200.00"}
+    assert stats.json()["stats"] == {
+        "confirmed_today": 1,
+        "confirmed_month": 1,
+        "confirmed_total": 1,
+        "unique_clients_total": 1,
+        "savings_month": "200.00",
+    }
 
 
 def test_partner_confirm_missing_offer_prices_uses_zero_saving(verification_client: TestClient) -> None:

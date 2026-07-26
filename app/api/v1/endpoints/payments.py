@@ -64,9 +64,8 @@ def _plan_read(plan: SubscriptionPlan) -> SubscriptionPlanRead:
 
 @router.get("/clients/subscription-plans", response_model=list[SubscriptionPlanRead], tags=["client-payments"])
 def list_client_subscription_plans(
-    current_user: User = Depends(require_client), db: Session = Depends(get_db),
+    db: Session = Depends(get_db),
 ):
-    _ = current_user
     plans = db.execute(
         select(SubscriptionPlan)
         .where(SubscriptionPlan.is_active.is_(True))
