@@ -213,6 +213,13 @@ class ClientCreateVerificationRequest(BaseModel):
     offer_id: int | None = None
     privilege_id: int | None = None
     source: str | None = "web"
+    order_amount: Decimal | None = Field(
+        default=None,
+        gt=Decimal("0.00"),
+        le=Decimal("1000000.00"),
+        max_digits=12,
+        decimal_places=2,
+    )
 
 
 class ClientVerificationRead(BaseModel):
