@@ -14,7 +14,7 @@ assert(
   "partner map links must be normalized before they are opened",
 );
 assert(
-  /2gis\\\\\.\\(ru\\|com\\|kz\\|kg\\|uz\\|ae\\|cl\\)/.test(format),
+  format.includes("/(^|\\\\.)2gis\\\\.(ru|com|kz|kg|uz|ae|cl)$/i"),
   "2GIS domains must be accepted explicitly",
 );
 assert(
