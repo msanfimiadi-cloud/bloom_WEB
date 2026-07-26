@@ -1836,18 +1836,24 @@ export function activateTrialSubscription(): Promise<Subscription> {
 export function verifyPartnerOffer(
   partnerId: string | number,
   offerId: string | number,
+  orderAmount?: number,
 ): Promise<Verification> {
+  const payload = {
+    privilege_id: offerId,
+    ...(orderAmount === undefined ? {} : { order_amount: orderAmount }),
+  };
+
   if (TG_LOCAL_CATALOG_ENABLED) {
     return request<Verification>(
       `/api/tg/partners/${partnerId}/offers/${offerId}/verify`,
-      { method: "POST" },
+      { method: "POST", body: JSON.stringify(payload) },
       "tg",
     );
   }
 
   return request<Verification>(`/clients/partners/${partnerId}/verify`, {
     method: "POST",
-    body: JSON.stringify({ privilege_id: offerId }),
+    body: JSON.stringify(payload),
   });
 }
 
