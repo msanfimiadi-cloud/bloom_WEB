@@ -1,4 +1,4 @@
-import { FormEvent, useCallback, useEffect, useState } from "react";
+import { useCallback, useEffect, useState, type FormEvent } from "react";
 
 import { removeEntryFallbackOverlay } from "./main";
 
@@ -71,15 +71,12 @@ function storePartnerToken(token: string): void {
 }
 
 async function partnerRequest<T>(path: string, init: RequestInit = {}, token = getStoredPartnerToken()): Promise<T> {
-  const response = await fetch(`/api/v1/partner${path}`, {
-    ...init,
-    headers: {
-      Accept: "application/json",
-      ...(init.body ? { "Content-Type": "application/json" } : {}),
-      ...(token ? { Authorization: `Bearer ${token}` } : {}),
-      ...init.headers,
-    },
-  });
+  const headers = new Headers(init.headers);
+  headers.set("Accept", "application/json");
+  if (init.body) headers.set("Content-Type", "application/json");
+  if (token) headers.set("Authorization", `Bearer ${token}`);
+
+  const response = await fetch(`/api/v1/partner${path}`, { ...init, headers });
   const payload = await response.json().catch(() => ({}));
   if (!response.ok) {
     const detail = typeof payload?.detail === "string" ? payload.detail : "Не удалось выполнить запрос";
@@ -235,22 +232,10 @@ export default function PartnerPortalApp() {
           <form className="partner-login-form" onSubmit={handleLogin}>
             <label>
               <span>Код партнёра</span>
-              <input
-                value={loginCode}
-                onChange={(event) => setLoginCode(event.target.value)}
-                autoComplete="off"
-                autoCapitalize="characters"
-                spellCheck={false}
-                placeholder="Например, BLOOM-CAFE-01"
-                minLength={8}
-                maxLength={64}
-                required
-              />
+              <input value={loginCode} onChange={(event) => setLoginCode(event.target.value)} autoComplete="off" autoCapitalize="characters" spellCheck={false} placeholder="Например, BLOOM-CAFE-01" minLength={8} maxLength={64} required />
             </label>
             {error ? <p className="partner-portal__error" role="alert">{error}</p> : null}
-            <button className="partner-portal__primary" type="submit" disabled={isSubmitting}>
-              {isSubmitting ? "Проверяем…" : "Войти в кабинет"}
-            </button>
+            <button className="partner-portal__primary" type="submit" disabled={isSubmitting}>{isSubmitting ? "Проверяем…" : "Войти в кабинет"}</button>
           </form>
           <a className="partner-portal__client-link" href="/">Вернуться в приложение для участниц</a>
         </section>
@@ -264,31 +249,18 @@ export default function PartnerPortalApp() {
         <div><p className="partner-portal__eyebrow">Кабинет партнёра</p><h1>{partner.display_name}</h1></div>
         <button className="partner-portal__logout" type="button" onClick={logout}>Выйти</button>
       </header>
-
       <section className="partner-confirm-hero">
         <p>Клиентка показывает код в приложении Bloom Club</p>
-        <button className="partner-confirm-hero__button" type="button" onClick={() => { setShowConfirmForm(true); setMessage(""); setError(""); }}>
-          Подтвердить привилегию
-        </button>
+        <button className="partner-confirm-hero__button" type="button" onClick={() => { setShowConfirmForm(true); setMessage(""); setError(""); }}>Подтвердить привилегию</button>
       </section>
-
       {showConfirmForm ? (
         <section className="partner-code-card" aria-labelledby="partner-code-title">
           <div className="partner-code-card__heading"><div><p className="partner-portal__eyebrow">Проверка</p><h2 id="partner-code-title">Введите код клиента</h2></div><button type="button" onClick={() => { setShowConfirmForm(false); setScan(null); setError(""); }}>Закрыть</button></div>
           <form className="partner-code-form" onSubmit={handleScan}>
-            <input
-              value={clientCode}
-              onChange={(event) => setClientCode(event.target.value.replace(/\s/g, ""))}
-              inputMode="numeric"
-              autoComplete="one-time-code"
-              placeholder="Код привилегии"
-              maxLength={12}
-              required
-            />
+            <input value={clientCode} onChange={(event) => setClientCode(event.target.value.replace(/\s/g, ""))} inputMode="numeric" autoComplete="one-time-code" placeholder="Код привилегии" maxLength={12} required />
             <button type="submit" disabled={isSubmitting}>{isSubmitting ? "Проверяем…" : "Проверить код"}</button>
           </form>
           {error ? <p className="partner-portal__error" role="alert">{error}</p> : null}
-
           {scan ? (
             <article className="partner-privilege-review">
               <p className="partner-privilege-review__client">Клиент: <strong>{scan.client.display_name || "Участница Bloom Club"}</strong></p>
@@ -306,10 +278,8 @@ export default function PartnerPortalApp() {
           ) : null}
         </section>
       ) : null}
-
       {message ? <p className="partner-portal__success" role="status">{message}</p> : null}
       {!showConfirmForm && error ? <p className="partner-portal__error" role="alert">{error}</p> : null}
-
       <section className="partner-stats" aria-labelledby="partner-stats-title">
         <div className="partner-stats__heading"><p className="partner-portal__eyebrow">Статистика</p><h2 id="partner-stats-title">Использование привилегий</h2></div>
         <div className="partner-stats__grid">
