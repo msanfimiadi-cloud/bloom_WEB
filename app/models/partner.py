@@ -24,6 +24,8 @@ class Partner(Base):
     id: Mapped[int] = mapped_column(Integer, primary_key=True)
     city_id: Mapped[int] = mapped_column(ForeignKey("cities.id"), nullable=False, index=True)
     owner_user_id: Mapped[int | None] = mapped_column(ForeignKey("users.id"), nullable=True)
+    access_code_digest: Mapped[str | None] = mapped_column(String(64), nullable=True, unique=True, index=True)
+    access_code_hash: Mapped[str | None] = mapped_column(String(255), nullable=True)
     category_slug: Mapped[str | None] = mapped_column(String(120), nullable=True, index=True)
     name: Mapped[str] = mapped_column(String(255), nullable=False)
     description: Mapped[str | None] = mapped_column(Text, nullable=True)
