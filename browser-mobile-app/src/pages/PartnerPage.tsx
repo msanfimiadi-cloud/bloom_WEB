@@ -6,7 +6,7 @@ import type { PartnerOffersDiagnostic } from "../App";
 import { AppImage } from "../components/AppImage";
 import { EmptyState } from "../components/EmptyState";
 import { useContentText } from "../content/ContentContext";
-import { buildYandexMapsUrl, formatMoney } from "../utils/format";
+import { buildPartnerMapsUrl, formatMoney } from "../utils/format";
 import { getSubscriptionEnd, isSubscriptionActive, isTrialEligible } from "../utils/subscription";
 import { toText } from "../utils/text";
 import {
@@ -289,7 +289,8 @@ export function PartnerPage({
   }
 
   const currentPartner = partner;
-  const mapsUrl = buildYandexMapsUrl({
+  const mapsUrl = buildPartnerMapsUrl({
+    mapUrl: currentPartner.map_url,
     latitude: currentPartner.latitude ?? currentPartner.lat,
     longitude: currentPartner.longitude ?? currentPartner.lon,
     address: getPartnerAddress(currentPartner),
