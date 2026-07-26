@@ -42,7 +42,7 @@ def resolve_offer_discount_percent(offer: PartnerOffer | None) -> Decimal | None
         return None
 
     explicit_percent = _decimal_or_none(offer.discount_percent)
-    if explicit_percent is not None and ZERO_MONEY < explicit_percent <= PERCENT_BASE:
+    if explicit_percent is not None:
         return explicit_percent
 
     return extract_discount_percent_from_text(
@@ -84,7 +84,7 @@ def offer_requires_order_amount(offer: PartnerOffer | None) -> bool:
         return False
 
     discount_percent = resolve_offer_discount_percent(offer)
-    if discount_percent is None:
+    if discount_percent is None or discount_percent <= ZERO_MONEY or discount_percent > PERCENT_BASE:
         return False
 
     # Persist the normalized fallback during verification creation so the existing
