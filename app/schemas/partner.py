@@ -238,6 +238,8 @@ class PublicLandingPartnerListResponse(BaseModel):
 class PartnerStats(BaseModel):
     confirmed_today: int
     confirmed_month: int
+    confirmed_total: int
+    unique_clients_total: int
     savings_month: Decimal
 
 
@@ -257,6 +259,10 @@ class PartnerMeResponse(BaseModel):
 class PartnerLoginRequest(BaseModel):
     login: str
     password: str
+
+
+class PartnerCodeLoginRequest(BaseModel):
+    code: str = Field(min_length=8, max_length=64)
 
 
 class PartnerLoginResponse(BaseModel):
@@ -309,3 +315,11 @@ class PartnerPrivilegeConfirmResponse(BaseModel):
     status: str
     confirmed_at: datetime | None
     saving_amount: Decimal | None
+
+
+class PartnerPrivilegeRejectRequest(BaseModel):
+    session_id: int
+
+
+class PartnerPrivilegeRejectResponse(BaseModel):
+    status: str

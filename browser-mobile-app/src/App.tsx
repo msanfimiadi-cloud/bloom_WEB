@@ -2865,6 +2865,7 @@ export default function App() {
             <>
               <button className="button button--primary" type="button" onClick={() => { writeBrowserGuestMode(false); setBrowserGuestMode(false); pendingBrowserLoginRef.current = true; setIsLoginCodeFormOpen(true); }}>Войти по коду</button>
               <button className="button button--secondary" type="button" onClick={() => { pendingBrowserLoginRef.current = false; writeBrowserGuestMode(true); setBrowserGuestMode(true); setBrowserLoginRequired(false); setAuthRestoreStatus("unauthenticated"); setLastAuthDecisionReason("guest_mode_selected"); setIsBootstrapDone(true); setIsLoading(false); resetPartnerFlowState("home"); loadPartners(true).catch(() => undefined); }}>Продолжить без регистрации</button>
+              <a className="button button--ghost partner-login-link" href="/partner">Вход для партнёров</a>
             </>
           )}
         </div>

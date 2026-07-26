@@ -102,6 +102,7 @@ from app.services.admin_user_delete_service import delete_user_with_relations
 from app.services.landing_settings import build_admin_landing_settings_read, get_or_create_landing_settings, normalize_giveaway_items
 from app.services.image_uploads import save_partner_image_upload, save_partner_offer_image_upload, save_partner_photo_image_upload, validate_image_kind
 from app.services.partner_analytics import build_partner_analytics
+from app.services.partner_access_codes import prepare_partner_access_code
 from app.services.privilege_verifications import (
     apply_verification_status_filter,
     as_aware_utc,
@@ -508,6 +509,25 @@ PARTNER_TEXT_FIELDS = (
     "cover_url",
 )
 PARTNER_OFFER_TEXT_FIELDS = ("description", "benefit_text", "conditions", "image_url")
+
+
+def _set_partner_access_code(db: Session, partner: Partner, raw_code: str | None) -> None:
+    if raw_code is None:
+        partner.access_code_digest = None
+        partner.access_code_hash = None
+        return
+    try:
+        digest, password_hash = prepare_partner_access_code(raw_code)
+    except ValueError as error:
+        raise HTTPException(status_code=status.HTTP_422_UNPROCESSABLE_ENTITY, detail=str(error)) from error
+    conditions = [Partner.access_code_digest == digest]
+    if partner.id is not None:
+        conditions.append(Partner.id != partner.id)
+    duplicate_id = db.execute(select(Partner.id).where(*conditions)).scalar_one_or_none()
+    if duplicate_id is not None:
+        raise HTTPException(status_code=status.HTTP_409_CONFLICT, detail="Partner access code is already in use")
+    partner.access_code_digest = digest
+    partner.access_code_hash = password_hash
 
 
 def require_legacy_content_write_enabled() -> None:
@@ -1476,6 +1496,8 @@ def create_admin_partner(
     )
     for field in PARTNER_TEXT_FIELDS:
         setattr(partner, field, _normalize_optional_text(getattr(payload, field)))
+    if payload.access_code is not None:
+        _set_partner_access_code(db, partner, payload.access_code)
 
     db.add(partner)
     if category_ids is not None:
@@ -1522,6 +1544,10 @@ def update_admin_partner(
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Partner not found")
 
     update_data = payload.model_dump(exclude_unset=True)
+    access_code_supplied = "access_code" in update_data
+    access_code = update_data.pop("access_code", None)
+    if access_code_supplied:
+        _set_partner_access_code(db, partner, access_code)
     if "city_id" in update_data:
         city_id = update_data["city_id"]
         if city_id is None:
@@ -2325,6 +2351,7 @@ def _partner_to_read(partner: Partner, city_name: str | None, owner_email: str |
             "sort_order": partner.sort_order,
             "city_name": city_name,
             "owner_email": owner_email,
+            "access_code_configured": bool(partner.access_code_hash),
         }
     )
 

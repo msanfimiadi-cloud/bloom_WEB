@@ -4969,6 +4969,7 @@ const renderPartnerEditForm = () => {
               <label>Город${renderSelect('city_id', adminState.cities.map((city) => [city.id, city.name]), true, partner.city_id, null, { label: 'Город', data: { adminPartnerField: 'city' } })}</label>
               <fieldset class="partner-multicategory"><legend>Категории</legend><div class="partner-category-chips">${activeCategories.map((category) => `<label class="checkbox-row"><input type="checkbox" name="category_ids" value="${escapeHtml(category.id)}" data-category-id="${escapeHtml(category.id)}" data-category-slug="${escapeHtml(category.slug || '')}" data-category-title="${escapeHtml(category.title || category.name || '')}" ${selectedCategoryIds.has(String(category.id)) ? 'checked' : ''}/> ${escapeHtml(category.title)}</label>`).join('')}</div></fieldset>
               <label>Владелец / аккаунт партнёра${renderSelect('owner_user_id', adminState.users.filter((item) => item.role === 'partner').map((item) => [item.id, item.email || item.phone || `Партнёр #${item.id}`]), false, partner.owner_user_id || '', 'Без владельца', { label: 'Владелец', data: { adminPartnerField: 'owner' } })}</label>
+              <label>Постоянный код для ЛК партнёра<input name="access_code" type="text" minlength="8" maxlength="64" autocomplete="new-password" placeholder="${partner.access_code_configured ? 'Оставьте пустым, чтобы сохранить текущий код' : 'Например, BLOOM-CAFE-01'}" /><small class="helper-text">${partner.access_code_configured ? 'Код уже установлен. Введите новый только для замены.' : 'Выдайте этот код партнёру для входа на app.bloomclub.ru/partner.'}</small></label>
               <label>Название<input name="name" required value="${escapeHtml(partner.name || '')}" /></label>
               <label>Описание<textarea name="description" rows="3">${escapeHtml(partner.description || '')}</textarea></label>
               <label>Адрес<input name="address" value="${escapeHtml(partner.address || '')}" /></label>
@@ -5078,6 +5079,7 @@ const renderPartnerForm = () => {
           <div class="admin-form-section-heading"><span>4</span><div><h4>Доступ и публикация</h4><p>Новый партнёр по умолчанию сохраняется скрытым — его можно спокойно заполнить и проверить.</p></div></div>
           <div class="admin-form-grid">
             <label>Аккаунт владельца${renderSelect('owner_user_id', adminState.users.filter((item) => item.role === 'partner').map((item) => [item.id, item.email || item.phone || `Партнёр #${item.id}`]), false, '', 'Подключить позже', { label: 'Аккаунт владельца', data: { adminPartnerField: 'owner' } })}<small class="helper-text">Если аккаунта ещё нет, сохраните карточку и создайте его позже в разделе «Пользователи».</small></label>
+            <label>Постоянный код для ЛК партнёра<input name="access_code" type="text" minlength="8" maxlength="64" autocomplete="new-password" placeholder="Например, BLOOM-CAFE-01" /><small class="helper-text">Код можно задать позже. Telegram или VK ID для входа не нужен.</small></label>
             <label>Порядок в каталоге<input name="sort_order" type="number" value="0" /></label>
           </div>
           <div class="admin-publish-options">
@@ -6260,6 +6262,7 @@ const getAdminPartnerPayloadCategoryIds = (formData, selectedCategoryIds = null)
 };
 
 const buildAdminPartnerPayload = (formData, selectedCategoryIds = null) => ({
+  ...(String(formData.get('access_code') || '').trim() ? { access_code: String(formData.get('access_code')).trim() } : {}),
   city_id: Number(formData.get('city_id')),
   category_slug: getOptionalText(formData, 'category_slug'),
   owner_user_id: formData.get('owner_user_id') ? Number(formData.get('owner_user_id')) : null,

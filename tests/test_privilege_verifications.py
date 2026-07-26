@@ -24,6 +24,7 @@ from app.models.verification import PrivilegeVerificationSession, PrivilegeVerif
 from app.models.engagement import BloomDailyTask, BloomPetalEvent, BloomSpecialTask, PartnerBotAccess
 from app.models.giveaway import Giveaway, GiveawayNumber
 from app.core.config import settings
+from app.services.partner_access_codes import prepare_partner_access_code
 
 
 @pytest.fixture()
@@ -101,9 +102,14 @@ def verification_client() -> Generator[TestClient, None, None]:
         session.add_all([client_profile, other_client_profile])
         session.flush()
 
+        partner_code_digest, partner_code_hash = prepare_partner_access_code("BLOOM-PARTNER-01")
+        other_code_digest, other_code_hash = prepare_partner_access_code("BLOOM-PARTNER-02")
+        inactive_code_digest, inactive_code_hash = prepare_partner_access_code("BLOOM-PARTNER-03")
         partner = Partner(
             city_id=city.id,
             owner_user_id=partner_user.id,
+            access_code_digest=partner_code_digest,
+            access_code_hash=partner_code_hash,
             category_slug="beauty",
             name="Alpha Beauty",
             is_active=True,
@@ -113,6 +119,8 @@ def verification_client() -> Generator[TestClient, None, None]:
         other_partner = Partner(
             city_id=other_city.id,
             owner_user_id=other_partner_user.id,
+            access_code_digest=other_code_digest,
+            access_code_hash=other_code_hash,
             category_slug="fitness",
             name="Beta Yoga",
             is_active=True,
@@ -122,6 +130,8 @@ def verification_client() -> Generator[TestClient, None, None]:
         inactive_partner = Partner(
             city_id=city.id,
             owner_user_id=inactive_partner_user.id,
+            access_code_digest=inactive_code_digest,
+            access_code_hash=inactive_code_hash,
             name="Hidden Partner",
             is_active=False,
             is_verified=False,
@@ -1263,9 +1273,33 @@ def test_partner_login_valid_credentials_returns_partner_access_token(verificati
     assert data["access_token"]
     assert data["token_type"] == "bearer"
     assert data["partner"] == {"id": 1, "name": "Alpha Beauty", "display_name": "Alpha Beauty", "is_active": True}
-    assert data["stats"] == {"confirmed_today": 0, "confirmed_month": 0, "savings_month": "0.00"}
+    assert data["stats"] == {"confirmed_today": 0, "confirmed_month": 0, "confirmed_total": 0, "unique_clients_total": 0, "savings_month": "0.00"}
     assert "password" not in str(data).lower()
     assert "password_hash" not in str(data).lower()
+
+
+def test_partner_static_code_login_does_not_require_social_identity(verification_client: TestClient) -> None:
+    response = verification_client.post(
+        "/api/v1/partner/code-login",
+        json={"code": "bloom-partner-01"},
+    )
+
+    assert response.status_code == 200
+    data = response.json()
+    assert data["access_token"]
+    assert data["partner"]["id"] == 1
+    assert data["stats"]["confirmed_total"] == 0
+    assert data["stats"]["unique_clients_total"] == 0
+
+
+def test_partner_static_code_login_rejects_unknown_code(verification_client: TestClient) -> None:
+    response = verification_client.post(
+        "/api/v1/partner/code-login",
+        json={"code": "BLOOM-UNKNOWN-01"},
+    )
+
+    assert response.status_code == 401
+    assert response.json()["detail"] == "Invalid partner credentials"
 
 
 def test_partner_login_invalid_password_returns_controlled_401(verification_client: TestClient) -> None:
@@ -1377,7 +1411,7 @@ def test_partner_singular_me_partner_returns_partner_and_stats(verification_clie
     data = response.json()
     assert data["is_partner"] is True
     assert data["partner"] == {"id": 1, "name": "Alpha Beauty", "display_name": "Alpha Beauty", "is_active": True}
-    assert data["stats"] == {"confirmed_today": 0, "confirmed_month": 0, "savings_month": "0.00"}
+    assert data["stats"] == {"confirmed_today": 0, "confirmed_month": 0, "confirmed_total": 0, "unique_clients_total": 0, "savings_month": "0.00"}
 
 
 def test_non_partner_cannot_scan_or_confirm_singular_partner_qr(verification_client: TestClient) -> None:
@@ -1861,3 +1895,65 @@ def test_dynamic_order_saving_is_preserved_and_counted_after_confirmation(
     assert data["items"][0]["base_price"] == "1000.00"
     assert data["items"][0]["final_price"] == "900.00"
     assert data["items"][0]["saving_amount"] == "100.00"
+
+
+def test_partner_can_reject_accidentally_selected_privilege(verification_client: TestClient) -> None:
+    login = verification_client.post(
+        "/api/v1/partner/code-login",
+        json={"code": "BLOOM-PARTNER-01"},
+    )
+    token = str(login.json()["access_token"])
+    verification_id = _create_verification(
+        verification_client,
+        partner_id=1,
+        offer_id=1,
+        status=PrivilegeVerificationStatus.active.value,
+        code="898989",
+    )
+
+    scan = verification_client.post(
+        "/api/v1/partner/privileges/scan",
+        json={"code": "898989"},
+        headers=_auth_headers(token),
+    )
+    assert scan.status_code == 200
+    assert scan.json()["privilege"]["title"] == "Active Discount"
+    assert scan.json()["regular_price"] == "2000.00"
+    assert scan.json()["club_price"] == "1800.00"
+
+    rejected = verification_client.post(
+        "/api/v1/partner/privileges/reject",
+        json={"session_id": verification_id},
+        headers=_auth_headers(token),
+    )
+    assert rejected.status_code == 200
+    assert rejected.json() == {"status": "cancelled"}
+
+    with _session(verification_client) as session:
+        stored = session.get(PrivilegeVerificationSession, verification_id)
+        assert stored is not None
+        assert stored.status == PrivilegeVerificationStatus.cancelled.value
+        assert stored.confirmed_at is None
+
+
+def test_partner_dashboard_counts_confirmed_uses_and_unique_clients(verification_client: TestClient) -> None:
+    login = verification_client.post(
+        "/api/v1/partner/code-login",
+        json={"code": "BLOOM-PARTNER-01"},
+    )
+    token = str(login.json()["access_token"])
+    first_id = _create_verification(verification_client, client_id=1, partner_id=1, offer_id=1, code="717171")
+    second_id = _create_verification(verification_client, client_id=1, partner_id=1, offer_id=1, code="727272")
+
+    for session_id in (first_id, second_id):
+        response = verification_client.post(
+            "/api/v1/partner/privileges/confirm",
+            json={"session_id": session_id},
+            headers=_auth_headers(token),
+        )
+        assert response.status_code == 200
+
+    dashboard = verification_client.get("/api/v1/partner/me", headers=_auth_headers(token))
+    assert dashboard.status_code == 200
+    assert dashboard.json()["stats"]["confirmed_total"] == 2
+    assert dashboard.json()["stats"]["unique_clients_total"] == 1

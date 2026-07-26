@@ -17,6 +17,7 @@ from app.models.payment import Subscription, SubscriptionStatus
 from app.models.user import User, UserRole
 from app.models.verification import PrivilegeVerificationSession, PrivilegeVerificationStatus
 from app.schemas.partner import (
+    PartnerCodeLoginRequest,
     PartnerLoginRequest,
     PartnerLoginResponse,
     PartnerMePartnerRead,
@@ -26,11 +27,14 @@ from app.schemas.partner import (
     PartnerPrivilegeConfirmResponse,
     PartnerPrivilegePartnerRead,
     PartnerPrivilegeRead,
+    PartnerPrivilegeRejectRequest,
+    PartnerPrivilegeRejectResponse,
     PartnerPrivilegeScanRequest,
     PartnerPrivilegeScanResponse,
     PartnerStats,
 )
 from app.services.offer_savings import calculate_offer_saving_snapshot
+from app.services.partner_access_codes import partner_access_code_digest, verify_partner_access_code
 from app.services.privilege_verifications import as_aware_utc, normalize_expired_verifications
 from app.services.engagement import confirm_verification
 
@@ -64,6 +68,38 @@ def partner_login(payload: PartnerLoginRequest, db: Session = Depends(get_db)) -
 
     token = create_access_token(
         f"user:{user.id}",
+        additional_claims={
+            "typ": PARTNER_ACCESS_TOKEN_TYPE,
+            "role": UserRole.PARTNER.value,
+            "partner_id": partner.id,
+        },
+    )
+    return PartnerLoginResponse(access_token=token, partner=_partner_me_read(partner), stats=_partner_stats(db, partner.id))
+
+
+@router.post("/code-login", response_model=PartnerLoginResponse)
+def partner_code_login(payload: PartnerCodeLoginRequest, db: Session = Depends(get_db)) -> PartnerLoginResponse:
+    unauthorized = HTTPException(
+        status_code=status.HTTP_401_UNAUTHORIZED,
+        detail=INVALID_PARTNER_CREDENTIALS_DETAIL,
+        headers={"WWW-Authenticate": "Bearer"},
+    )
+    try:
+        digest = partner_access_code_digest(payload.code)
+    except ValueError:
+        raise unauthorized from None
+    partner = db.execute(
+        select(Partner).where(Partner.access_code_digest == digest)
+    ).scalar_one_or_none()
+    if partner is None or not partner.access_code_hash:
+        raise unauthorized
+    if not verify_partner_access_code(payload.code, partner.access_code_hash):
+        raise unauthorized
+    if not partner.is_active:
+        raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail=PARTNER_INACTIVE_DETAIL)
+
+    token = create_access_token(
+        f"partner:{partner.id}",
         additional_claims={
             "typ": PARTNER_ACCESS_TOKEN_TYPE,
             "role": UserRole.PARTNER.value,
@@ -128,6 +164,24 @@ def confirm_partner_privilege(
         confirmed_at=session.confirmed_at,
         saving_amount=session.saving_amount,
     )
+
+
+@router.post("/privileges/reject", response_model=PartnerPrivilegeRejectResponse)
+def reject_partner_privilege(
+    payload: PartnerPrivilegeRejectRequest,
+    credentials: HTTPAuthorizationCredentials | None = Depends(bearer_scheme),
+    db: Session = Depends(get_db),
+) -> PartnerPrivilegeRejectResponse:
+    partner = _require_partner_from_credentials(db, credentials)
+    now = datetime.now(timezone.utc)
+    normalize_expired_verifications(db, now=now)
+    session = db.execute(
+        select(PrivilegeVerificationSession).where(PrivilegeVerificationSession.id == payload.session_id)
+    ).scalar_one_or_none()
+    _validate_session_for_partner_action(db, session, partner.id, now=now)
+    session.status = PrivilegeVerificationStatus.cancelled.value
+    db.commit()
+    return PartnerPrivilegeRejectResponse(status=session.status)
 
 
 def _authenticate_partner_user(db: Session, payload: PartnerLoginRequest) -> User:
@@ -242,7 +296,7 @@ def _partner_stats(db: Session, partner_id: int) -> PartnerStats:
             PrivilegeVerificationSession.confirmed_at >= today_start,
         )
     ).scalar_one()
-    row = db.execute(
+    month_row = db.execute(
         select(
             func.count(PrivilegeVerificationSession.id),
             func.coalesce(func.sum(PrivilegeVerificationSession.saving_amount), 0),
@@ -251,10 +305,18 @@ def _partner_stats(db: Session, partner_id: int) -> PartnerStats:
             PrivilegeVerificationSession.confirmed_at >= month_start,
         )
     ).one()
+    total_row = db.execute(
+        select(
+            func.count(PrivilegeVerificationSession.id),
+            func.count(func.distinct(PrivilegeVerificationSession.client_id)),
+        ).where(*confirmed_filters)
+    ).one()
     return PartnerStats(
         confirmed_today=int(confirmed_today or 0),
-        confirmed_month=int(row[0] or 0),
-        savings_month=row[1] or Decimal("0.00"),
+        confirmed_month=int(month_row[0] or 0),
+        confirmed_total=int(total_row[0] or 0),
+        unique_clients_total=int(total_row[1] or 0),
+        savings_month=month_row[1] or Decimal("0.00"),
     )
 
 
