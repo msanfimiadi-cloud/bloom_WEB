@@ -19,26 +19,36 @@ class OfferSavingSnapshot:
 
 
 def calculate_offer_saving_snapshot(offer: PartnerOffer | None) -> OfferSavingSnapshot:
-    """Calculate savings from backend offer pricing fields.
-
-    PartnerOffer currently stores a regular/base price in ``base_price`` and the
-    member price is derived from ``discount_percent``. Missing price data yields
-    a zero saving amount.
-    """
+    """Calculate savings from backend offer pricing fields."""
     if offer is None:
         return OfferSavingSnapshot(None, None, None, ZERO_MONEY)
+    return calculate_percentage_saving_snapshot(offer.base_price, offer.discount_percent)
 
-    regular_price = _money_or_none(offer.base_price)
-    discount_percent = _decimal_or_none(offer.discount_percent)
+
+def calculate_percentage_saving_snapshot(
+    order_amount: Decimal | int | str | None,
+    discount_percent: Decimal | int | str | None,
+) -> OfferSavingSnapshot:
+    """Calculate a monetary snapshot for a percentage privilege."""
+    regular_price = _money_or_none(order_amount)
+    normalized_percent = _decimal_or_none(discount_percent)
     if regular_price is None:
-        return OfferSavingSnapshot(None, None, discount_percent, ZERO_MONEY)
-    if discount_percent is None:
-        return OfferSavingSnapshot(regular_price, None, discount_percent, ZERO_MONEY)
+        return OfferSavingSnapshot(None, None, normalized_percent, ZERO_MONEY)
+    if normalized_percent is None:
+        return OfferSavingSnapshot(regular_price, None, None, ZERO_MONEY)
 
-    saving_amount = (regular_price * discount_percent / PERCENT_BASE).quantize(MONEY_QUANT)
+    saving_amount = (regular_price * normalized_percent / PERCENT_BASE).quantize(MONEY_QUANT)
     saving_amount = max(saving_amount, ZERO_MONEY)
     club_price = max((regular_price - saving_amount).quantize(MONEY_QUANT), ZERO_MONEY)
-    return OfferSavingSnapshot(regular_price, club_price, discount_percent, saving_amount)
+    return OfferSavingSnapshot(regular_price, club_price, normalized_percent, saving_amount)
+
+
+def offer_requires_order_amount(offer: PartnerOffer | None) -> bool:
+    """Return True when a percentage offer has no fixed base price."""
+    if offer is None or _money_or_none(offer.base_price) is not None:
+        return False
+    discount_percent = _decimal_or_none(offer.discount_percent)
+    return discount_percent is not None and discount_percent > ZERO_MONEY
 
 
 def calculate_offer_saving_amount(offer: PartnerOffer | None) -> Decimal:
