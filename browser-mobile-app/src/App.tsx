@@ -2426,9 +2426,9 @@ export default function App() {
   }, [refreshProfileAndSubscription, requireRegisteredUser]);
 
   const createVerification = useCallback(
-    async (partnerId: string | number, offerId: string | number) => {
+    async (partnerId: string | number, offerId: string | number, orderAmount?: number) => {
       try {
-        const verification = await verifyPartnerOffer(partnerId, offerId);
+        const verification = await verifyPartnerOffer(partnerId, offerId, orderAmount);
         setData((current) =>
           normalizeAppData({
             ...current,
