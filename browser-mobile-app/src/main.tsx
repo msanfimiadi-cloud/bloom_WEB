@@ -556,7 +556,7 @@ traceOkSafe("pre_react_handlers_installed");
 
 async function importApplicationModules(): Promise<{
   RuntimeErrorBoundary: typeof import('./components/RuntimeErrorBoundary').RuntimeErrorBoundary;
-  App: typeof import('./App').default;
+  App: React.ComponentType;
 }> {
   lifecycleTraceSafe("boundary_import_start", { module: "RuntimeErrorBoundary" });
   traceStartSafe("import_boundary_start");
@@ -565,8 +565,11 @@ async function importApplicationModules(): Promise<{
     const { RuntimeErrorBoundary } = await import("./components/RuntimeErrorBoundary");
     earlyStartupTrace("runtime_boundary_import_ok");
     earlyStartupTrace("app_import_start");
-    const { default: App } = await import("./App");
-    earlyStartupTrace("app_import_ok");
+    const isPartnerPortal = window.location.pathname === "/partner" || window.location.pathname.startsWith("/partner/");
+    const { default: App } = isPartnerPortal
+      ? await import("./PartnerPortalApp")
+      : await import("./App");
+    earlyStartupTrace("app_import_ok", { app: isPartnerPortal ? "partner_portal" : "client_app" });
     lifecycleTraceSafe("boundary_import_ok", { module: "RuntimeErrorBoundary" });
     traceOkSafe("import_boundary_ok");
     return { RuntimeErrorBoundary, App };
