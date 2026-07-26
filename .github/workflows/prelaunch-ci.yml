@@ -1,0 +1,76 @@
+name: Prelaunch CI
+
+on:
+  pull_request:
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: prelaunch-${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  backend:
+    name: Backend, migrations and tests
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    env:
+      ENV: test
+      DATABASE_URL: sqlite+aiosqlite:///./prelaunch.db
+      CONTENT_DATABASE_URL: sqlite+aiosqlite:///./prelaunch-content.db
+      JWT_SECRET_KEY: prelaunch-ci-jwt-secret
+      SECRET_KEY: prelaunch-ci-secret
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+          cache: pip
+      - name: Install Python dependencies
+        run: python -m pip install --upgrade pip && python -m pip install -r requirements.txt aiosqlite
+      - name: Compile backend
+        run: python -m compileall app -q
+      - name: Apply all migrations on a clean database
+        run: python -m alembic upgrade head
+      - name: Run complete backend test suite
+        run: python -m pytest -q
+
+  browser-app:
+    name: Browser app build and regressions
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "22"
+          cache: npm
+          cache-dependency-path: browser-mobile-app/package-lock.json
+      - name: Install browser app dependencies
+        run: npm --prefix browser-mobile-app ci
+      - name: Typecheck and build browser app
+        run: npm --prefix browser-mobile-app run build
+      - name: Check partner gallery
+        run: npm --prefix browser-mobile-app run test:partner-gallery
+      - name: Check map links
+        run: npm --prefix browser-mobile-app run test:map-links
+
+  web-frontend:
+    name: Web frontend build
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "22"
+          cache: npm
+          cache-dependency-path: frontend/package-lock.json
+      - name: Install web frontend dependencies
+        run: npm --prefix frontend ci
+      - name: Build web frontend
+        run: npm --prefix frontend run build
+      - name: Check giveaway layout regression
+        run: npm --prefix frontend run check:giveaway-overflow
