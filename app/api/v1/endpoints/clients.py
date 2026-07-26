@@ -1161,14 +1161,15 @@ def create_client_partner_verification(
     partner, _city_name = _get_active_partner_row_or_404(db, partner_id)
     request_payload = payload or ClientCreateVerificationRequest()
     offer = _resolve_partner_offer_for_verification(db, partner.id, request_payload.offer_id, request_payload.privilege_id)
-    if offer_requires_order_amount(offer) and request_payload.order_amount is None:
+    requires_order_amount = offer_requires_order_amount(offer)
+    if requires_order_amount and request_payload.order_amount is None:
         raise HTTPException(
             status_code=status.HTTP_422_UNPROCESSABLE_ENTITY,
             detail="order_amount_required",
         )
     saving = (
         calculate_percentage_saving_snapshot(request_payload.order_amount, offer.discount_percent)
-        if offer is not None and request_payload.order_amount is not None
+        if requires_order_amount and offer is not None
         else None
     )
 
