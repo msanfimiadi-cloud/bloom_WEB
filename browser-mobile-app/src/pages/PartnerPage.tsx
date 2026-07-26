@@ -15,6 +15,8 @@ import {
   getOfferDescription,
   getOfferPrices,
   getOfferTitle,
+  parseMoney,
+  roundMoney,
   getPartnerAddress,
   getPartnerCategories,
   getPartnerCity,
@@ -152,6 +154,22 @@ function isOfferAvailable(offer: Offer): boolean {
   return !disabledFlags.some((value) => value === false || value === "false" || value === 0 || value === "0");
 }
 
+function getVariableOrderDiscountPercent(offer: Offer): number | null {
+  const prices = getOfferPrices(offer);
+  const discountPercent = parseMoney(offer.discount_percent);
+
+  if (
+    prices.basePrice !== undefined ||
+    discountPercent === null ||
+    discountPercent <= 0 ||
+    discountPercent > 100
+  ) {
+    return null;
+  }
+
+  return discountPercent;
+}
+
 function getOfferAccentBadge(offer: Offer): string | undefined {
   const prices = getOfferPrices(offer);
   const discount = toText(offer.discount);
@@ -176,7 +194,7 @@ interface PartnerPageProps {
   profile: ClientProfile | null;
   subscription: Subscription | null;
   onBack: () => void;
-  onVerifyOffer: (partnerId: ApiId, offerId: ApiId) => Promise<Verification>;
+  onVerifyOffer: (partnerId: ApiId, offerId: ApiId, orderAmount?: number) => Promise<Verification>;
   onOpenSubscription: () => void;
   onActivateTrial: () => Promise<Subscription>;
   onRetryOffers: () => void;
@@ -199,6 +217,9 @@ export function PartnerPage({
   const safeOffers = Array.isArray(offers) ? offers : [];
   const [selectedVerification, setSelectedVerification] = useState<Verification | null>(null);
   const [selectedOffer, setSelectedOffer] = useState<Offer | null>(null);
+  const [pendingAmountOffer, setPendingAmountOffer] = useState<Offer | null>(null);
+  const [orderAmountInput, setOrderAmountInput] = useState("");
+  const [orderAmountError, setOrderAmountError] = useState("");
   const [loadingOfferId, setLoadingOfferId] = useState<ApiId | null>(null);
   const [message, setMessage] = useState("");
   const [isActivatingTrial, setIsActivatingTrial] = useState(false);
@@ -253,7 +274,7 @@ export function PartnerPage({
   }, [safeOffers, selectedOffer]);
 
   useEffect(() => {
-    const hasUserFacingOverlay = galleryIndex !== null || selectedVerification !== null;
+    const hasUserFacingOverlay = galleryIndex !== null || selectedVerification !== null || pendingAmountOffer !== null;
 
     if (!hasUserFacingOverlay) {
       return;
@@ -268,7 +289,7 @@ export function PartnerPage({
       document.documentElement.style.overflow = previousHtmlOverflow;
       document.body.style.overflow = previousOverflow;
     };
-  }, [galleryIndex, selectedVerification]);
+  }, [galleryIndex, pendingAmountOffer, selectedVerification]);
 
   const images = partner ? getPartnerImages(partner).filter((image) => !failedImageUrls.includes(image)) : [];
   const selectedGalleryImage = galleryIndex !== null ? images[galleryIndex] : null;
@@ -323,6 +344,29 @@ export function PartnerPage({
     return "Не удалось получить код привилегии. Попробуйте ещё раз.";
   }
 
+  async function submitVerification(offer: Offer, orderAmount?: number) {
+    if (partnerIdForActions === undefined || !isNumericApiId(offer.id)) {
+      setMessage("Не удалось получить код привилегии для этого предложения. Попробуйте позже.");
+      return;
+    }
+
+    setMessage("");
+    setLoadingOfferId(offer.id);
+
+    try {
+      const verification = await onVerifyOffer(partnerIdForActions, offer.id, orderAmount);
+      setPendingAmountOffer(null);
+      setOrderAmountInput("");
+      setOrderAmountError("");
+      setSelectedVerification(verification);
+      setSelectedOffer(offer);
+    } catch (caughtError) {
+      setMessage(getVerificationErrorMessage(caughtError));
+    } finally {
+      setLoadingOfferId(null);
+    }
+  }
+
   async function handleVerify(offer: Offer) {
     if (partnerIdForActions === undefined) {
       setMessage("Не удалось получить код привилегии. Попробуйте открыть партнёра из каталога ещё раз.");
@@ -334,18 +378,30 @@ export function PartnerPage({
       return;
     }
 
-    setMessage("");
-    setLoadingOfferId(offer.id);
-
-    try {
-      const verification = await onVerifyOffer(partnerIdForActions, offer.id);
-      setSelectedVerification(verification);
-      setSelectedOffer(offer);
-    } catch (caughtError) {
-      setMessage(getVerificationErrorMessage(caughtError));
-    } finally {
-      setLoadingOfferId(null);
+    if (getVariableOrderDiscountPercent(offer) !== null) {
+      setMessage("");
+      setOrderAmountInput("");
+      setOrderAmountError("");
+      setPendingAmountOffer(offer);
+      return;
     }
+
+    await submitVerification(offer);
+  }
+
+  async function handleOrderAmountSubmit() {
+    if (!pendingAmountOffer) {
+      return;
+    }
+
+    const normalizedAmount = Number(orderAmountInput.replace(",", "."));
+    if (!Number.isFinite(normalizedAmount) || normalizedAmount <= 0 || normalizedAmount > 1_000_000) {
+      setOrderAmountError("Введите сумму заказа от 1 до 1 000 000 ₽");
+      return;
+    }
+
+    setOrderAmountError("");
+    await submitVerification(pendingAmountOffer, roundMoney(normalizedAmount));
   }
 
   async function handleActivateTrial() {
@@ -415,6 +471,16 @@ export function PartnerPage({
   }
 
   const code = getVerificationCode(selectedVerification);
+  const pendingDiscountPercent = pendingAmountOffer ? getVariableOrderDiscountPercent(pendingAmountOffer) : null;
+  const parsedOrderAmount = Number(orderAmountInput.replace(",", "."));
+  const hasValidOrderAmount = Number.isFinite(parsedOrderAmount) && parsedOrderAmount > 0 && parsedOrderAmount <= 1_000_000;
+  const previewOrderAmount = hasValidOrderAmount ? roundMoney(parsedOrderAmount) : 0;
+  const previewSaving =
+    hasValidOrderAmount && pendingDiscountPercent !== null
+      ? roundMoney((previewOrderAmount * pendingDiscountPercent) / 100)
+      : 0;
+  const previewFinalAmount = hasValidOrderAmount ? roundMoney(Math.max(previewOrderAmount - previewSaving, 0)) : 0;
+  const verificationPrices = getOfferPrices(selectedVerification);
   const hasGallery = images.length > 0;
   tracePartnerImageDiagnostic("partner_detail_image_mapped", currentPartner, images[0]);
   function handleImageError(image: string) {
@@ -639,6 +705,70 @@ export function PartnerPage({
         ) : null}
       </article>
 
+      {pendingAmountOffer && pendingDiscountPercent !== null ? (
+        <div className="modal" role="dialog" aria-modal="true" aria-labelledby="order-amount-title">
+          <form
+            className="modal__sheet order-amount-modal"
+            onSubmit={(event) => {
+              event.preventDefault();
+              void handleOrderAmountSubmit();
+            }}
+          >
+            <button
+              className="modal__close"
+              type="button"
+              onClick={() => {
+                setPendingAmountOffer(null);
+                setOrderAmountError("");
+              }}
+              aria-label="Закрыть"
+            >
+              ×
+            </button>
+            <p className="eyebrow">Расчёт привилегии</p>
+            <h2 id="order-amount-title">Введите сумму заказа</h2>
+            <p className="modal__subtitle">
+              {getOfferTitle(pendingAmountOffer)} · скидка {pendingDiscountPercent}%
+            </p>
+            <label className="order-amount-field">
+              <span>Сумма заказа</span>
+              <div className="order-amount-field__control">
+                <input
+                  type="text"
+                  inputMode="decimal"
+                  enterKeyHint="done"
+                  value={orderAmountInput}
+                  onChange={(event) => {
+                    setOrderAmountInput(event.target.value.replace(/[^\d.,]/g, ""));
+                    setOrderAmountError("");
+                  }}
+                  placeholder="Например, 1000"
+                  aria-describedby={orderAmountError ? "order-amount-error" : "order-amount-summary"}
+                />
+                <span>₽</span>
+              </div>
+            </label>
+            {orderAmountError ? <p className="error-text" id="order-amount-error">{orderAmountError}</p> : null}
+            {hasValidOrderAmount ? (
+              <div className="order-amount-summary" id="order-amount-summary">
+                <div><span>Сумма заказа</span><strong>{formatMoney(previewOrderAmount)}</strong></div>
+                <div><span>Итого с привилегией</span><strong>{formatMoney(previewFinalAmount)}</strong></div>
+                <div className="order-amount-summary__saving"><span>Ваша экономия</span><strong>{formatMoney(previewSaving)}</strong></div>
+              </div>
+            ) : (
+              <p className="order-amount-hint">Мы рассчитаем итоговую сумму и учтём экономию после подтверждения кода партнёром.</p>
+            )}
+            <button
+              className="button button--primary"
+              type="submit"
+              disabled={!hasValidOrderAmount || loadingOfferId === pendingAmountOffer.id}
+            >
+              {loadingOfferId === pendingAmountOffer.id ? "Получаем код…" : "Получить код привилегии"}
+            </button>
+          </form>
+        </div>
+      ) : null}
+
       {selectedVerification ? (
         <div className="modal" role="dialog" aria-modal="true">
           <div className="modal__sheet">
@@ -648,6 +778,15 @@ export function PartnerPage({
             <p className="eyebrow">Код привилегии</p>
             <h2>Ваш код привилегии</h2>
             {selectedOffer ? <p className="modal__subtitle">{getOfferTitle(selectedOffer)}</p> : null}
+            {verificationPrices.basePrice !== undefined && verificationPrices.hasValidMemberPrice ? (
+              <div className="order-amount-summary order-amount-summary--compact">
+                <div><span>Сумма заказа</span><strong>{formatMoney(verificationPrices.basePrice)}</strong></div>
+                <div><span>Итого с привилегией</span><strong>{formatMoney(verificationPrices.memberPrice)}</strong></div>
+                {verificationPrices.hasValidSaving ? (
+                  <div className="order-amount-summary__saving"><span>Ваша экономия</span><strong>{formatMoney(verificationPrices.saving)}</strong></div>
+                ) : null}
+              </div>
+            ) : null}
             {code ? <p className="verification-code">{code}</p> : <p>Покажите этот экран партнёру.</p>}
             <p>Покажите этот код партнёру</p>
             {code ? (

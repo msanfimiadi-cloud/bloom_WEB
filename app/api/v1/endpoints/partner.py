@@ -331,13 +331,16 @@ def _scan_response(
     client = session.client or db.get(ClientProfile, session.client_id)
     privilege = session.offer or (db.get(PartnerOffer, session.offer_id) if session.offer_id is not None else None)
     saving_snapshot = calculate_offer_saving_snapshot(privilege)
+    saving_amount = session.saving_amount if session.saving_amount is not None else saving_snapshot.saving_amount
+    regular_price = session.saving_base_price if session.saving_amount is not None else saving_snapshot.regular_price
+    club_price = session.saving_final_price if session.saving_amount is not None else saving_snapshot.club_price
     return PartnerPrivilegeScanResponse(
         session_id=session.id,
         status=session.status,
         can_confirm=True,
-        estimated_saving_amount=saving_snapshot.saving_amount,
-        regular_price=saving_snapshot.regular_price,
-        club_price=saving_snapshot.club_price,
+        estimated_saving_amount=saving_amount,
+        regular_price=regular_price,
+        club_price=club_price,
         client=PartnerPrivilegeClientRead(
             display_name=(client.full_name if client is not None else None) or "Client",
             subscription_active=_has_active_subscription(db, session.client_id, now),

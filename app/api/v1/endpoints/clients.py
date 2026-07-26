@@ -74,7 +74,11 @@ from app.services.referral_subscription_rewards import PAID_REFERRALS_PER_REWARD
 from app.services.giveaways import ensure_user_numbers, get_active_giveaway
 from app.services.engagement import award_petals, club_today, flower_state, month_start_for
 from app.services.social_subscriptions import check_and_apply, social_task_settings, is_number_active
-from app.services.offer_savings import calculate_offer_saving_snapshot
+from app.services.offer_savings import (
+    calculate_offer_saving_snapshot,
+    calculate_percentage_saving_snapshot,
+    offer_requires_order_amount,
+)
 from app.services.site_credentials import (
     decrypt_site_password,
     ensure_client_site_credentials,
@@ -1157,6 +1161,17 @@ def create_client_partner_verification(
     partner, _city_name = _get_active_partner_row_or_404(db, partner_id)
     request_payload = payload or ClientCreateVerificationRequest()
     offer = _resolve_partner_offer_for_verification(db, partner.id, request_payload.offer_id, request_payload.privilege_id)
+    requires_order_amount = offer_requires_order_amount(offer)
+    if requires_order_amount and request_payload.order_amount is None:
+        raise HTTPException(
+            status_code=status.HTTP_422_UNPROCESSABLE_ENTITY,
+            detail="order_amount_required",
+        )
+    saving = (
+        calculate_percentage_saving_snapshot(request_payload.order_amount, offer.discount_percent)
+        if requires_order_amount and offer is not None
+        else None
+    )
 
     now = datetime.now(timezone.utc)
     if not _has_active_subscription(db, profile.id, now):
@@ -1177,6 +1192,12 @@ def create_client_partner_verification(
         source=_normalize_optional_text(request_payload.source) or "web",
         expires_at=now + timedelta(seconds=PRIVILEGE_VERIFICATION_TTL_SECONDS),
         created_at=now,
+        saving_base_price=saving.regular_price if saving is not None else None,
+        saving_final_price=saving.club_price if saving is not None else None,
+        saving_discount_percent=saving.discount_percent if saving is not None else None,
+        saving_amount=saving.saving_amount if saving is not None else None,
+        saving_partner_name=partner.name if saving is not None else None,
+        saving_offer_title=offer.title if saving is not None and offer is not None else None,
     )
     db.add(session)
     db.commit()
@@ -1737,13 +1758,13 @@ def _client_verification_prices(
     session: PrivilegeVerificationSession,
     offer: PartnerOffer | str | None,
 ) -> tuple[Decimal | None, Decimal | None, Decimal | None, Decimal | None]:
-    if session.status == PrivilegeVerificationStatus.confirmed.value:
-        base_price = session.saving_base_price
-        final_price = session.saving_final_price
-        discount_percent = session.saving_discount_percent
-        saving_amount = session.saving_amount
-        if saving_amount is not None:
-            return base_price, final_price, discount_percent, saving_amount
+    if session.saving_amount is not None:
+        return (
+            session.saving_base_price,
+            session.saving_final_price,
+            session.saving_discount_percent,
+            session.saving_amount,
+        )
 
     if isinstance(offer, PartnerOffer):
         base_price, final_price, discount_percent, saving_amount = _compute_saving_from_offer(offer)
