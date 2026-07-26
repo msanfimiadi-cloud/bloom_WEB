@@ -140,6 +140,7 @@ class PartnerRead(BaseModel):
     sort_order: int
     city_name: str | None = None
     owner_email: str | None = None
+    access_code_configured: bool = False
 
     model_config = {"from_attributes": True}
 
@@ -147,6 +148,7 @@ class PartnerRead(BaseModel):
 class PartnerCreate(BaseModel):
     city_id: int
     owner_user_id: int | None = None
+    access_code: str | None = Field(default=None, min_length=8, max_length=64)
     category_slug: str | None = None
     category_ids: list[int] | None = Field(default=None, validation_alias=AliasChoices("category_ids", "categories"))
     name: str
@@ -171,6 +173,7 @@ class PartnerCreate(BaseModel):
 class PartnerUpdate(BaseModel):
     city_id: int | None = None
     owner_user_id: int | None = None
+    access_code: str | None = Field(default=None, min_length=8, max_length=64)
     category_slug: str | None = None
     category_ids: list[int] | None = Field(default=None, validation_alias=AliasChoices("category_ids", "categories"))
     name: str | None = None
