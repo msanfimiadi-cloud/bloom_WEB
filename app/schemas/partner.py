@@ -3,7 +3,9 @@ from __future__ import annotations
 from datetime import datetime
 from decimal import Decimal
 
-from pydantic import BaseModel, Field
+from pydantic import BaseModel, Field, model_validator
+
+from app.services.offer_savings import extract_discount_percent_from_text
 
 
 class PartnerProfileRead(BaseModel):
@@ -60,6 +62,17 @@ class PartnerOfferRead(BaseModel):
     image_url: str | None
     is_active: bool
     sort_order: int
+
+    @model_validator(mode="after")
+    def populate_textual_discount_percent(self) -> "PartnerOfferRead":
+        if self.discount_percent is None:
+            self.discount_percent = extract_discount_percent_from_text(
+                self.benefit_text,
+                self.title,
+                self.description,
+                self.conditions,
+            )
+        return self
 
     model_config = {"from_attributes": True}
 
