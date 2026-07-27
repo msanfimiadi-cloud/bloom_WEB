@@ -220,7 +220,7 @@ class PartnerOfferCreate(BaseModel):
     conditions: str | None = None
     base_price: Decimal | None = None
     discount_percent: Decimal | None = None
-    requires_order_amount: bool = false
+    requires_order_amount: bool = False
     image_url: str | None = None
     is_active: bool = True
     sort_order: int = 0
