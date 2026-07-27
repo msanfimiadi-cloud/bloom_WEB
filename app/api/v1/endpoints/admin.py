@@ -1815,13 +1815,14 @@ def create_admin_partner_offer(
     _ = admin
     _ = legacy_content_write
     partner = _ensure_partner_exists(db, partner_id)
-    _validate_offer_amounts(payload.base_price, payload.discount_percent)
+    _validate_offer_amounts(payload.base_price, payload.discount_percent, payload.requires_order_amount)
 
     offer = PartnerOffer(
         partner_id=partner.id,
         title=_strip_offer_title(payload.title),
         base_price=payload.base_price,
         discount_percent=payload.discount_percent,
+        requires_order_amount=payload.requires_order_amount,
         is_active=payload.is_active,
         sort_order=payload.sort_order,
     )
@@ -1879,14 +1880,18 @@ def update_admin_partner_offer(
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Offer not found")
 
     update_data = payload.model_dump(exclude_unset=True)
-    _validate_offer_amounts(update_data.get("base_price"), update_data.get("discount_percent"))
+    _validate_offer_amounts(
+        update_data.get("base_price", offer.base_price),
+        update_data.get("discount_percent", offer.discount_percent),
+        update_data.get("requires_order_amount", offer.requires_order_amount),
+    )
 
     if "title" in update_data:
         offer.title = _strip_offer_title(update_data["title"])
     for field in PARTNER_OFFER_TEXT_FIELDS:
         if field in update_data:
             setattr(offer, field, _normalize_optional_text(update_data[field]))
-    for field in ("base_price", "discount_percent", "is_active", "sort_order"):
+    for field in ("base_price", "discount_percent", "requires_order_amount", "is_active", "sort_order"):
         if field in update_data:
             setattr(offer, field, update_data[field])
 
@@ -2241,6 +2246,7 @@ def _strip_offer_title(value: str | None) -> str:
 def _validate_offer_amounts(
     base_price: Decimal | None = None,
     discount_percent: Decimal | None = None,
+    requires_order_amount: bool = False,
 ) -> None:
     if base_price is not None and base_price < Decimal("0"):
         raise HTTPException(
@@ -2253,6 +2259,13 @@ def _validate_offer_amounts(
         raise HTTPException(
             status_code=status.HTTP_400_BAD_REQUEST,
             detail="discount_percent must be between 0 and 100",
+        )
+    if requires_order_amount and (
+        discount_percent is None or discount_percent <= Decimal("0")
+    ):
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="discount_percent is required when requires_order_amount is true",
         )
 
 
@@ -2280,6 +2293,7 @@ def _partner_offer_to_read(offer: PartnerOffer, partner_name: str | None) -> Par
             "conditions": offer.conditions,
             "base_price": offer.base_price,
             "discount_percent": offer.discount_percent,
+            "requires_order_amount": offer.requires_order_amount,
             "image_url": offer.image_url,
             "is_active": offer.is_active,
             "sort_order": offer.sort_order,
