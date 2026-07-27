@@ -3,7 +3,7 @@ from __future__ import annotations
 from datetime import datetime
 from decimal import Decimal
 
-from pydantic import BaseModel, Field, model_validator
+from pydantic import BaseModel, Field, field_validator, model_validator
 
 from app.services.offer_savings import extract_discount_percent_from_text
 
@@ -63,6 +63,11 @@ class PartnerOfferRead(BaseModel):
     image_url: str | None
     is_active: bool
     sort_order: int
+
+    @field_validator("requires_order_amount", mode="before")
+    @classmethod
+    def normalize_requires_order_amount(cls, value: object) -> bool:
+        return bool(value)
 
     @model_validator(mode="after")
     def populate_textual_discount_percent(self) -> "PartnerOfferRead":
