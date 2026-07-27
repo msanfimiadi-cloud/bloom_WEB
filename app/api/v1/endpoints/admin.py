@@ -702,6 +702,13 @@ def list_admin_giveaway_entries(
     summary = {"total_numbers": len(items), "active_numbers": sum(1 for i in items if i["is_active"]), "unique_participants": len({i["client_id"] for i in items}), "subscription_numbers": sum(1 for i in items if i["source"] == "subscription"), "referral_numbers": sum(1 for i in items if i["source"] == "referral"), "telegram_numbers": sum(1 for i in items if i["source"] == "telegram_subscription"), "vk_numbers": sum(1 for i in items if i["source"] == "vk_subscription")}
     return {"summary": summary, "items": items, "source_labels": SOURCE_LABELS}
 
+def _excel_datetime(value: datetime | None) -> datetime | None:
+    """Return an Excel-compatible datetime while preserving the represented instant."""
+    if value is None or value.tzinfo is None:
+        return value
+    return value.astimezone(timezone.utc).replace(tzinfo=None)
+
+
 @router.get("/giveaways/{giveaway_id}/entries/export.xlsx")
 def export_admin_giveaway_entries(giveaway_id: int, admin: AdminUser = Depends(require_admin), db: Session = Depends(get_db)):
     _ = admin
@@ -716,7 +723,7 @@ def export_admin_giveaway_entries(giveaway_id: int, admin: AdminUser = Depends(r
     ws.append(headers)
     for cell in ws[1]: cell.font = Font(bold=True)
     for item in data:
-        ws.append([item["number"], item["status"], item["source_label"], item["owner_name"], item["client_id"], item["telegram_id"], item["telegram_username"], item["vk_id"], item["phone"], item["email"], item["created_at"], item["deactivated_at"], item["deactivation_reason"]])
+        ws.append([item["number"], item["status"], item["source_label"], item["owner_name"], item["client_id"], item["telegram_id"], item["telegram_username"], item["vk_id"], item["phone"], item["email"], _excel_datetime(item["created_at"]), _excel_datetime(item["deactivated_at"]), item["deactivation_reason"]])
     ws.auto_filter.ref = ws.dimensions; ws.freeze_panes = "A2"
     widths = [14, 14, 34, 28, 12, 18, 22, 18, 18, 28, 22, 22, 32]
     for idx, width in enumerate(widths, 1): ws.column_dimensions[chr(64 + idx)].width = width
