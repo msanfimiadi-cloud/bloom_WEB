@@ -7144,9 +7144,24 @@ body.client-partner-modal-open {
 }
 
 .partner-gallery-card {
+  position: relative;
   display: grid;
   gap: 12px;
   padding: 12px;
+}
+
+.partner-photo-delete-overlay {
+  position: absolute;
+  top: 20px;
+  right: 20px;
+  z-index: 5;
+  min-height: 38px;
+  padding: 8px 12px;
+  border: 1px solid rgba(255, 255, 255, 0.82);
+  border-radius: 999px;
+  box-shadow: 0 8px 22px rgba(91, 46, 51, 0.24);
+  font-size: 0.82rem;
+  font-weight: 800;
 }
 
 .partner-gallery-media {
