@@ -14,6 +14,22 @@ function getStageProgress(petals: number, stage: number) {
   return Math.max(0, Math.min(1, (petals - start) / Math.max(end - start, 1)));
 }
 
+function getMonthProgress(daysInMonth: number, currentDay: number) {
+  const safeDaysInMonth = Math.max(daysInMonth, 1);
+  const elapsedDays = Math.min(safeDaysInMonth, Math.max(currentDay, 1));
+  const remainingDays = Math.max(0, safeDaysInMonth - elapsedDays);
+  const progress = Math.min(100, Math.round((elapsedDays / safeDaysInMonth) * 100));
+  return { progress, remainingDays };
+}
+
+function formatRemainingDays(remainingDays: number) {
+  if (remainingDays === 0) return "Сегодня последний день месяца";
+  const mod100 = remainingDays % 100;
+  const mod10 = remainingDays % 10;
+  const word = mod100 >= 11 && mod100 <= 14 ? "дней" : mod10 === 1 ? "день" : mod10 >= 2 && mod10 <= 4 ? "дня" : "дней";
+  return `До конца месяца осталось ${remainingDays} ${word}`;
+}
+
 function FlowerIllustration({ stage, stageProgress }: { stage: number; stageProgress: number }) {
   const progressStyle = { "--stage-progress": stageProgress } as CSSProperties;
   return (
@@ -180,7 +196,7 @@ export function FlowerGame() {
 
   const stage = Math.min(state.stage, STAGE_NAMES.length - 1);
   const stageProgress = getStageProgress(state.petals, stage);
-  const progress = Math.min(100, Math.round((state.days_grown / Math.max(state.days_in_month, 1)) * 100));
+  const { progress, remainingDays } = getMonthProgress(state.days_in_month, new Date().getDate());
   const specialTask = state.special_task;
   const nextStage = stage < STAGE_NAMES.length - 1 ? stage + 1 : null;
   const petalsToNextStage = nextStage === null ? 0 : Math.max(0, STAGE_STARTS[nextStage] - state.petals);
@@ -223,7 +239,7 @@ export function FlowerGame() {
 
       <div className="flower-progress" aria-label={`Прогресс месяца ${progress}%`}>
         <span><i style={{ width: `${progress}%` }} /></span>
-        <small>{state.days_grown} из {state.days_in_month} дней</small>
+        <small>{formatRemainingDays(remainingDays)}</small>
       </div>
 
       <p className="flower-game__daily-hint">{state.checked_in_today ? "Лепесток сегодня присоединился к цветку" : "Задание дня: добавьте новый лепесток к цветку"}</p>
