@@ -12,7 +12,13 @@ assert.match(source, /data-admin-giveaway-export="\$\{escapeHtml\(selected\.id\)
 assert.match(source, /apiFetchResponse\(`\/api\/v1\/admin\/giveaways\/\$\{encodeURIComponent\(giveawayId\)\}\/entries\/export\.xlsx`/, 'export uses the authenticated admin API client');
 assert.match(source, /await response\.blob\(\)/, 'export downloads the response as a blob');
 assert.match(source, /data-admin-giveaway-recheck="\$\{escapeHtml\(selected\.id\)\}"/, 'recheck button uses the saved giveaway id');
-assert.match(source, /type="button" data-admin-giveaway-recheck/, 'recheck button does not submit the giveaway form');
+assert.match(source, /type="button" data-admin-giveaway-recheck/, 'social recheck button does not submit the giveaway form');
+assert.match(source, /data-admin-giveaway-participant-subscriptions-recheck/, 'participant subscription recheck button is rendered');
+assert.match(source, /participant-subscriptions\/recheck/, 'participant subscriptions use their dedicated backend endpoint');
+assert.match(source, /Подписка Bloom/, 'participant subscription status is visible in the admin table');
+assert.match(source, /subscription_active_until/, 'participant subscription expiry is visible in the admin table');
+assert.match(source, /data-admin-giveaway-delete/, 'giveaway delete action is rendered');
+assert.match(source, /безвозвратно удалены все призы и выданные номера/, 'giveaway deletion requires an explicit destructive warning');
 assert.match(source, /syncGiveawayEntriesSelection\(\{ force: true \}\)/, 'opening or saving a giveaway refreshes entries through the selected giveaway sync');
 assert.match(source, /loadGiveawayEntries\(selectedId\)/, 'selected giveaway sync loads entries');
 assert.match(source, /\[BLOOM_ADMIN_GIVEAWAY_ENTRIES\] request/, 'safe request log is present');

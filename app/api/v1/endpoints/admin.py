@@ -651,6 +651,31 @@ def update_admin_giveaway(giveaway_id: int, payload: GiveawayWrite, admin: Admin
     return _giveaway_to_read(giveaway)
 
 
+@router.delete("/giveaways/{giveaway_id}")
+def delete_admin_giveaway(
+    giveaway_id: int,
+    admin: AdminUser = Depends(require_admin),
+    db: Session = Depends(get_db),
+) -> dict[str, object]:
+    _ = admin
+    giveaway = db.execute(
+        select(Giveaway)
+        .options(selectinload(Giveaway.prizes), selectinload(Giveaway.numbers))
+        .where(Giveaway.id == giveaway_id)
+    ).scalar_one_or_none()
+    if giveaway is None:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Giveaway not found")
+    deleted = {
+        "id": giveaway.id,
+        "title": giveaway.title,
+        "prizes": len(giveaway.prizes),
+        "numbers": len(giveaway.numbers),
+    }
+    db.delete(giveaway)
+    db.commit()
+    return {"deleted": deleted}
+
+
 SOURCE_LABELS = {
     "subscription": "Основной номер за trial/подписку Bloom",
     "referral": "Номер за реферала",
@@ -665,8 +690,44 @@ def _owner_name(client: ClientProfile | None) -> str | None:
     full = client.full_name or " ".join(part for part in [client.telegram_first_name, client.telegram_last_name] if part).strip()
     return full or client.telegram_username or client.vk_username
 
-def _giveaway_number_payload(number: GiveawayNumber, client: ClientProfile | None) -> dict[str, object]:
+def _active_subscriptions_by_client(
+    db: Session,
+    client_ids: set[int],
+    *,
+    now: datetime | None = None,
+) -> dict[int, Subscription]:
+    if not client_ids:
+        return {}
+    current_time = now or datetime.now(timezone.utc)
+    subscriptions = db.execute(
+        select(Subscription)
+        .where(
+            Subscription.client_id.in_(client_ids),
+            Subscription.status == SubscriptionStatus.active.value,
+            Subscription.starts_at <= current_time,
+            Subscription.ends_at > current_time,
+        )
+        .order_by(Subscription.client_id, Subscription.ends_at.desc(), Subscription.id.desc())
+    ).scalars().all()
+    active_by_client: dict[int, Subscription] = {}
+    for subscription in subscriptions:
+        active_by_client.setdefault(subscription.client_id, subscription)
+    return active_by_client
+
+
+def _giveaway_number_payload(
+    number: GiveawayNumber,
+    client: ClientProfile | None,
+    active_subscription: Subscription | None = None,
+) -> dict[str, object]:
     user = client.user if client is not None else None
+    subscription_type = (
+        "trial"
+        if active_subscription is not None and active_subscription.source == "trial"
+        else "paid"
+        if active_subscription is not None
+        else "none"
+    )
     return {
         "id": number.id, "number": number.number, "status": number.status, "is_active": is_number_active(number),
         "source": number.source, "source_label": SOURCE_LABELS.get(number.source, number.source),
@@ -674,6 +735,11 @@ def _giveaway_number_payload(number: GiveawayNumber, client: ClientProfile | Non
         "owner_name": _owner_name(client), "client_id": number.client_id,
         "telegram_id": client.telegram_user_id if client else None, "telegram_username": client.telegram_username if client else None,
         "vk_id": client.vk_user_id if client else None, "phone": user.phone if user else None, "email": client.contact_email or (user.email if user else None),
+        "subscription_is_active": active_subscription is not None,
+        "subscription_status_label": "Активна" if active_subscription is not None else "Неактивна",
+        "subscription_type": subscription_type,
+        "subscription_type_label": {"trial": "Тестовая", "paid": "Оплаченная", "none": "Нет"}[subscription_type],
+        "subscription_active_until": active_subscription.ends_at if active_subscription is not None else None,
     }
 
 @router.get("/giveaways/{giveaway_id}/entries")
@@ -692,7 +758,9 @@ def list_admin_giveaway_entries(
     if date_from: stmt = stmt.where(GiveawayNumber.created_at >= datetime.combine(date_from, datetime.min.time()))
     if date_to: stmt = stmt.where(GiveawayNumber.created_at < datetime.combine(date_to + timedelta(days=1), datetime.min.time()))
     rows = db.execute(stmt).all()
-    items = [_giveaway_number_payload(n, c) for n, c in rows]
+    client_ids = {number.client_id for number, _client in rows if number.client_id is not None}
+    active_subscriptions = _active_subscriptions_by_client(db, client_ids)
+    items = [_giveaway_number_payload(number, client, active_subscriptions.get(number.client_id)) for number, client in rows]
     if search_name: items = [i for i in items if search_name.lower() in str(i.get("owner_name") or "").lower()]
     if search_telegram: items = [i for i in items if search_telegram.lower() in (str(i.get("telegram_id") or "") + " " + str(i.get("telegram_username") or "")).lower()]
     if search_vk: items = [i for i in items if search_vk.lower() in str(i.get("vk_id") or "").lower()]
@@ -719,20 +787,48 @@ def export_admin_giveaway_entries(giveaway_id: int, admin: AdminUser = Depends(r
         raise HTTPException(status_code=500, detail="openpyxl is required for XLSX export") from exc
     data = list_admin_giveaway_entries(giveaway_id, admin=admin, db=db)["items"]
     wb = Workbook(); ws = wb.active; ws.title = "Номера розыгрыша"
-    headers = ["Номер", "Статус", "Источник", "ФИО", "Client ID", "Telegram ID", "Telegram username", "VK ID", "Телефон", "Email", "Дата начисления", "Дата деактивации", "Причина деактивации"]
+    headers = ["Номер", "Статус номера", "Источник", "ФИО", "Client ID", "Telegram ID", "Telegram username", "VK ID", "Телефон", "Email", "Подписка Bloom", "Тип подписки", "Подписка активна до", "Дата начисления", "Дата деактивации", "Причина деактивации"]
     ws.append(headers)
     for cell in ws[1]: cell.font = Font(bold=True)
     for item in data:
-        ws.append([item["number"], item["status"], item["source_label"], item["owner_name"], item["client_id"], item["telegram_id"], item["telegram_username"], item["vk_id"], item["phone"], item["email"], _excel_datetime(item["created_at"]), _excel_datetime(item["deactivated_at"]), item["deactivation_reason"]])
+        ws.append([item["number"], item["status"], item["source_label"], item["owner_name"], item["client_id"], item["telegram_id"], item["telegram_username"], item["vk_id"], item["phone"], item["email"], item["subscription_status_label"], item["subscription_type_label"], _excel_datetime(item["subscription_active_until"]), _excel_datetime(item["created_at"]), _excel_datetime(item["deactivated_at"]), item["deactivation_reason"]])
     ws.auto_filter.ref = ws.dimensions; ws.freeze_panes = "A2"
-    widths = [14, 14, 34, 28, 12, 18, 22, 18, 18, 28, 22, 22, 32]
+    widths = [14, 16, 34, 28, 12, 18, 22, 18, 18, 28, 18, 18, 22, 22, 22, 32]
     for idx, width in enumerate(widths, 1): ws.column_dimensions[chr(64 + idx)].width = width
     for row in ws.iter_rows(min_row=2, min_col=1, max_col=1): row[0].number_format = "@"
-    for row in ws.iter_rows(min_row=2, min_col=11, max_col=12):
+    for row in ws.iter_rows(min_row=2, min_col=13, max_col=15):
         for cell in row: cell.number_format = "yyyy-mm-dd hh:mm:ss"
     buf = BytesIO(); wb.save(buf); buf.seek(0)
     filename = f"bloom_giveaway_{giveaway_id}_{date.today().isoformat()}.xlsx"
     return StreamingResponse(buf, media_type="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet", headers={"Content-Disposition": f"attachment; filename={filename}"})
+
+@router.post("/giveaways/{giveaway_id}/participant-subscriptions/recheck")
+def recheck_admin_giveaway_participant_subscriptions(
+    giveaway_id: int,
+    admin: AdminUser = Depends(require_admin),
+    db: Session = Depends(get_db),
+) -> dict[str, int]:
+    _ = admin
+    if db.get(Giveaway, giveaway_id) is None:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Giveaway not found")
+    client_ids = set(
+        db.execute(
+            select(GiveawayNumber.client_id)
+            .where(GiveawayNumber.giveaway_id == giveaway_id)
+            .distinct()
+        ).scalars().all()
+    )
+    active_subscriptions = _active_subscriptions_by_client(db, client_ids)
+    trial = sum(1 for subscription in active_subscriptions.values() if subscription.source == "trial")
+    paid = len(active_subscriptions) - trial
+    return {
+        "checked": len(client_ids),
+        "active": len(active_subscriptions),
+        "inactive": len(client_ids) - len(active_subscriptions),
+        "paid": paid,
+        "trial": trial,
+    }
+
 
 @router.post("/giveaways/{giveaway_id}/social-subscriptions/recheck")
 def recheck_admin_giveaway_social_subscriptions(giveaway_id: int, admin: AdminUser = Depends(require_admin), db: Session = Depends(get_db)) -> dict[str, int]:
