@@ -178,20 +178,30 @@ function getTextualOfferDiscountPercent(offer: Offer): number | null {
   return null;
 }
 
-function getVariableOrderDiscountPercent(offer: Offer): number | null {
-  const prices = getOfferPrices(offer);
-  const discountPercent = parseMoney(offer.discount_percent) ?? getTextualOfferDiscountPercent(offer);
+function getExplicitOrderAmountSetting(offer: Offer): boolean | null {
+  const value = offer.requires_order_amount;
+  if (value === undefined || value === null || value === "") {
+    return null;
+  }
+  return value === true || value === "true" || value === 1 || value === "1";
+}
 
-  if (
-    prices.basePrice !== undefined ||
-    discountPercent === null ||
-    discountPercent <= 0 ||
-    discountPercent > 100
-  ) {
+function getVariableOrderDiscountPercent(offer: Offer): number | null {
+  const explicitSetting = getExplicitOrderAmountSetting(offer);
+  const discountPercent = parseMoney(offer.discount_percent) ?? getTextualOfferDiscountPercent(offer);
+  const hasValidPercent =
+    discountPercent !== null && discountPercent > 0 && discountPercent <= 100;
+
+  if (explicitSetting === true) {
+    return hasValidPercent ? discountPercent : null;
+  }
+  if (explicitSetting === false) {
     return null;
   }
 
-  return discountPercent;
+  // Compatibility for cached/legacy API responses created before the explicit flag.
+  const prices = getOfferPrices(offer);
+  return prices.basePrice === undefined && hasValidPercent ? discountPercent : null;
 }
 
 function getOfferAccentBadge(offer: Offer): string | undefined {
@@ -386,11 +396,15 @@ export function PartnerPage({
       setSelectedOffer(offer);
     } catch (caughtError) {
       const backendDetail = isApiError(caughtError) ? toText(caughtError.detail) : "";
-      if (backendDetail === "order_amount_required" && getVariableOrderDiscountPercent(offer) !== null) {
-        setMessage("");
-        setOrderAmountInput("");
-        setOrderAmountError("");
-        setPendingAmountOffer(offer);
+      if (backendDetail === "order_amount_required") {
+        if (getVariableOrderDiscountPercent(offer) !== null) {
+          setMessage("");
+          setOrderAmountInput("");
+          setOrderAmountError("");
+          setPendingAmountOffer(offer);
+        } else {
+          setMessage("Для этой привилегии не настроен процент. Сообщите администратору.");
+        }
         return;
       }
       setMessage(getVerificationErrorMessage(caughtError));
