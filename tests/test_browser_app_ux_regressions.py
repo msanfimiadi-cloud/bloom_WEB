@@ -68,3 +68,13 @@ def test_partner_detail_hero_uses_contain_in_final_override() -> None:
     assert "object-fit: contain" in final_rule
     assert "height: auto" in final_rule
     assert "min-height: 0" in final_rule
+
+
+def test_flower_month_progress_counts_down_after_the_current_day() -> None:
+    flower = read("components/FlowerGame.tsx")
+
+    assert "state.days_in_month, new Date().getDate()" in flower
+    assert "safeDaysInMonth - elapsedDays" in flower
+    assert "До конца месяца осталось" in flower
+    assert "Сегодня последний день месяца" in flower
+    assert "state.days_grown} из {state.days_in_month}" not in flower
