@@ -59,6 +59,7 @@ class PartnerOfferRead(BaseModel):
     conditions: str | None
     base_price: Decimal | None
     discount_percent: Decimal | None
+    requires_order_amount: bool
     image_url: str | None
     is_active: bool
     sort_order: int
@@ -84,6 +85,7 @@ class PartnerOfferCreate(BaseModel):
     conditions: str | None = None
     base_price: Decimal | None = None
     discount_percent: Decimal | None = None
+    requires_order_amount: bool = false
     image_url: str | None = None
     is_active: bool = True
     sort_order: int = 0
@@ -96,6 +98,7 @@ class PartnerOfferUpdate(BaseModel):
     conditions: str | None = None
     base_price: Decimal | None = None
     discount_percent: Decimal | None = None
+    requires_order_amount: bool | None = None
     image_url: str | None = None
     is_active: bool | None = None
     sort_order: int | None = None
