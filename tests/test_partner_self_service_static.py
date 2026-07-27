@@ -19,13 +19,13 @@ def test_partner_cabinet_exposes_card_gallery_and_service_management() -> None:
     source = (ROOT / "browser-mobile-app" / "src" / "PartnerPortalApp.tsx").read_text(encoding="utf-8")
 
     for marker in (
-        "РџРѕРґС‚РІРµСЂРґРёС‚СЊ РїСЂРёРІРёР»РµРіРёСЋ",
-        "РњРѕСЏ РєР°СЂС‚РѕС‡РєР°",
-        "РЎРѕС…СЂР°РЅРёС‚СЊ РєР°СЂС‚РѕС‡РєСѓ",
-        "Р”РѕР±Р°РІРёС‚СЊ С„РѕС‚Рѕ",
-        "Р”РѕР±Р°РІРёС‚СЊ СѓСЃР»СѓРіСѓ",
-        "РЎРѕС…СЂР°РЅРёС‚СЊ Рё РѕС‚РїСЂР°РІРёС‚СЊ РЅР° РїСЂРѕРІРµСЂРєСѓ",
-        "РљР»РёРµРЅС‚ СѓРєР°Р·С‹РІР°РµС‚ СЃСѓРјРјСѓ Р·Р°РєР°Р·Р°",
+        "Подтвердить привилегию",
+        "Моя карточка",
+        "Сохранить карточку",
+        "Добавить фото",
+        "Добавить услугу",
+        "Сохранить и отправить на проверку",
+        "Клиент указывает сумму заказа",
         'partnerRequest<PartnerProfile>("/profile")',
         'partnerRequest<PartnerPhoto[]>("/photos")',
         'partnerRequest<PartnerOffer[]>("/offers")',
@@ -41,6 +41,6 @@ def test_partner_editor_keeps_mobile_safe_controls_and_moderation_statuses() -> 
     assert "env(safe-area-inset-bottom)" in styles
     assert "font-size: 16px" in styles
     assert "min-height: 44px" in styles
-    assert "РќР° РїСЂРѕРІРµСЂРєРµ" in source
-    assert "РћРїСѓР±Р»РёРєРѕРІР°РЅРѕ" in source
+    assert "На проверке" in source
+    assert "Опубликовано" in source
 
