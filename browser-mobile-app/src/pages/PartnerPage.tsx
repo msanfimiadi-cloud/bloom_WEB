@@ -154,9 +154,33 @@ function isOfferAvailable(offer: Offer): boolean {
   return !disabledFlags.some((value) => value === false || value === "false" || value === 0 || value === "0");
 }
 
+function getTextualOfferDiscountPercent(offer: Offer): number | null {
+  const candidates = [
+    offer.benefit_text,
+    offer.title,
+    offer.description,
+    offer.conditions,
+    readOfferField(offer, "discount"),
+  ];
+
+  for (const candidate of candidates) {
+    const match = toText(candidate).match(/(^|[^\\d.,])(\\d{1,3}(?:[.,]\\d{1,2})?)\\s*%/);
+    if (!match) {
+      continue;
+    }
+
+    const parsed = Number(match[2].replace(",", "."));
+    if (Number.isFinite(parsed) && parsed > 0 && parsed <= 100) {
+      return parsed;
+    }
+  }
+
+  return null;
+}
+
 function getVariableOrderDiscountPercent(offer: Offer): number | null {
   const prices = getOfferPrices(offer);
-  const discountPercent = parseMoney(offer.discount_percent);
+  const discountPercent = parseMoney(offer.discount_percent) ?? getTextualOfferDiscountPercent(offer);
 
   if (
     prices.basePrice !== undefined ||
@@ -361,6 +385,14 @@ export function PartnerPage({
       setSelectedVerification(verification);
       setSelectedOffer(offer);
     } catch (caughtError) {
+      const backendDetail = isApiError(caughtError) ? toText(caughtError.detail) : "";
+      if (backendDetail === "order_amount_required" && getVariableOrderDiscountPercent(offer) !== null) {
+        setMessage("");
+        setOrderAmountInput("");
+        setOrderAmountError("");
+        setPendingAmountOffer(offer);
+        return;
+      }
       setMessage(getVerificationErrorMessage(caughtError));
     } finally {
       setLoadingOfferId(null);
