@@ -508,6 +508,7 @@ const adminState = {
   leads: [],
   verifications: [],
   partnerAccesses: [],
+  partnerAccessCodeResult: null,
   flowerTasks: [],
   flowerSettings: { placement_mode: 'random', manual_position: 'top_right', daily_petals: 1 },
   flowerSpecialTasks: [],
@@ -4148,18 +4149,46 @@ const loadFlowerGarden = async () => {
 
 const renderPartnerAccessTab = () => {
   const rows = filterAdminRows(adminState.partnerAccesses, adminState.search.partnerAccesses, ['display_name', 'partner_name', 'provider', 'provider_user_id', 'username']);
+  const codeResult = adminState.partnerAccessCodeResult;
+  const partnerOptionsAvailable = adminState.partners.length > 0;
   return `<div class="partner-access-page stack">
-    <div class="admin-section-heading admin-page-heading"><p class="section-eyebrow section-kicker">Боты партнёров</p><h3>Партнёрский доступ</h3><p>Добавьте постоянный Telegram или VK ID сотрудника. Ник используется только как подпись и не даёт доступ.</p></div>
-    <form class="admin-form admin-form--inline ui-card" data-admin-form="partnerAccess">
-      <h4>Добавить сотрудника партнёра</h4>
-      <label>Партнёр${renderPartnerPicker('partnerAccess', '')}</label>
-      <label>Бот<select name="provider" required><option value="vk">VK</option><option value="telegram">Telegram</option></select></label>
-      <label>Постоянный ID<input name="provider_user_id" required placeholder="Например, 123456789" /></label>
-      <label>Имя сотрудника<input name="display_name" required placeholder="Например, Анна · кассир" /></label>
-      <label>Ник, необязательно<input name="username" placeholder="Например, anna_shop" /></label>
-      <button type="submit">Добавить доступ</button><p class="form-message" data-form-message="partnerAccess">${escapeHtml(adminState.formMessages.partnerAccess || '')}</p>
+    <div class="admin-section-heading admin-page-heading"><p class="section-eyebrow section-kicker">Доступ партнёров</p><h3>Коды для кабинета партнёра</h3><p>Выберите партнёра, сгенерируйте постоянный код и передайте его сотруднику. Telegram или VK ID для входа в кабинет не нужен.</p></div>
+
+    <form class="admin-form admin-form--inline ui-card" data-admin-form="partnerCode">
+      <h4>Выдать код для входа</h4>
+      <label>Партнёр${renderNativePartnerSelect()}</label>
+      <label>Постоянный код
+        <input name="access_code" type="text" minlength="8" maxlength="64" autocomplete="new-password" placeholder="Нажмите «Сгенерировать код»" required />
+      </label>
+      <div class="admin-form-actions">
+        <button class="ui-button ui-button--secondary" type="button" data-partner-code-generate ${partnerOptionsAvailable ? '' : 'disabled'}>Сгенерировать код</button>
+        <button class="ui-button ui-button--primary" type="submit" ${partnerOptionsAvailable ? '' : 'disabled'}>Сохранить код</button>
+      </div>
+      ${partnerOptionsAvailable ? '' : '<p class="form-message" role="alert">Партнёры не загрузились. Обновите страницу или сначала создайте партнёра.</p>'}
+      <p class="form-message" data-form-message="partnerCode">${escapeHtml(adminState.formMessages.partnerCode || '')}</p>
     </form>
-    <section class="ui-card"><div class="admin-section-heading"><h4>Сотрудники</h4><p>Доступ можно выключить без удаления истории активаций.</p></div>${renderAdminSearch('partnerAccesses', 'Поиск по сотрудникам и партнёрам')}
+
+    ${codeResult ? `<section class="ui-card partner-access-code-result" role="status">
+      <div class="admin-section-heading"><h4>Код готов</h4><p>Партнёр: <strong>${escapeHtml(codeResult.partnerName)}</strong>. Скопируйте код сейчас: после обновления страницы он больше не показывается.</p></div>
+      <div class="admin-form-actions">
+        <input value="${escapeHtml(codeResult.code)}" readonly data-partner-code-output aria-label="Код входа партнёра" />
+        <button class="ui-button ui-button--secondary" type="button" data-partner-code-copy>Скопировать код</button>
+      </div>
+    </section>` : ''}
+
+    <section class="ui-card stack">
+      <div class="admin-section-heading"><p class="section-eyebrow section-kicker">Telegram и VK боты</p><h4>Доступ сотрудников партнёра в ботах</h4><p>Этот блок нужен только сотрудникам, которые подтверждают привилегии через Telegram или VK. Он не создаёт код для входа в ЛК партнёра.</p></div>
+      <form class="admin-form admin-form--inline" data-admin-form="partnerAccess">
+        <label>Партнёр${renderNativePartnerSelect()}</label>
+        <label>Бот<select name="provider" required><option value="vk">VK</option><option value="telegram">Telegram</option></select></label>
+        <label>Постоянный ID<input name="provider_user_id" required placeholder="Например, 123456789" /></label>
+        <label>Имя сотрудника<input name="display_name" required placeholder="Например, Анна · кассир" /></label>
+        <label>Ник, необязательно<input name="username" placeholder="Например, anna_shop" /></label>
+        <button type="submit" ${partnerOptionsAvailable ? '' : 'disabled'}>Добавить доступ</button>
+        <p class="form-message" data-form-message="partnerAccess">${escapeHtml(adminState.formMessages.partnerAccess || '')}</p>
+      </form>
+      <div class="admin-section-heading"><h4>Сотрудники</h4><p>Доступ можно выключить без удаления истории активаций.</p></div>
+      ${renderAdminSearch('partnerAccesses', 'Поиск по сотрудникам и партнёрам')}
       ${renderTable(['Сотрудник', 'Партнёр', 'Бот', 'Постоянный ID', 'Активаций', 'Последняя активность', 'Доступ'], rows.map((item) => [formatValue(item.display_name), formatValue(item.partner_name), item.provider === 'telegram' ? 'Telegram' : 'VK', formatValue(item.provider_user_id), formatValue(item.activation_count), formatValue(formatDate(item.last_activity_at)), `<button class="admin-inline-action ui-button ${item.is_active ? 'ui-button--danger' : 'ui-button--secondary'}" type="button" data-partner-access-toggle="${escapeHtml(item.id)}" data-next-active="${item.is_active ? 'false' : 'true'}">${item.is_active ? 'Отключить' : 'Включить'}</button>`]), true, '', 'Сотрудники пока не добавлены.')}
     </section>
   </div>`;
@@ -5761,6 +5790,20 @@ const renderPartnerPicker = (scope, selectedValue) => renderCustomSelect({
   data: { partnerPicker: scope },
 });
 
+const renderNativePartnerSelect = ({ name = 'partner_id', required = true, selectedValue = '' } = {}) => `
+  <select name="${escapeHtml(name)}" ${required ? 'required' : ''}>
+    <option value="">Выберите партнёра</option>
+    ${adminState.partners.map((partner) => `<option value="${escapeHtml(partner.id)}" ${String(partner.id) === String(selectedValue) ? 'selected' : ''}>${escapeHtml(partner.name)}</option>`).join('')}
+  </select>
+`;
+
+const generatePartnerAccessCode = () => {
+  const alphabet = 'ABCDEFGHJKLMNPQRSTUVWXYZ23456789';
+  const bytes = new Uint8Array(10);
+  window.crypto.getRandomValues(bytes);
+  return `BLOOM-${Array.from(bytes, (byte) => alphabet[byte % alphabet.length]).join('')}`;
+};
+
 const showAdminDashboard = async (user) => {
   adminState.user = user;
   setLoginMessage();
@@ -6633,6 +6676,25 @@ const handleAdminFormSubmit = async (form) => {
       await submitLandingSettings(form);
     } else if (formType === 'landingGiveaway') {
       await submitLandingGiveaway(form);
+    } else if (formType === 'partnerCode') {
+      const data = new FormData(form);
+      const partnerId = Number(data.get('partner_id'));
+      const accessCode = String(data.get('access_code') || '').trim();
+      const partner = adminState.partners.find((item) => Number(item.id) === partnerId);
+      if (!partner) {
+        throw new Error('Выберите партнёра.');
+      }
+      if (accessCode.length < 8) {
+        throw new Error('Код должен содержать минимум 8 символов.');
+      }
+      const savedPartner = await patchJson(`/api/v1/admin/partners/${partnerId}`, { access_code: accessCode });
+      adminState.partners = adminState.partners.map((item) => Number(item.id) === partnerId ? savedPartner : item);
+      adminState.partnerAccessCodeResult = {
+        partnerId,
+        partnerName: savedPartner.name || partner.name,
+        code: accessCode,
+      };
+      successMessage = `Код для «${savedPartner.name || partner.name}» сохранён.`;
     } else if (formType === 'partnerAccess') {
       const data = new FormData(form);
       await postJson('/api/v1/admin/partner-accesses', {
@@ -6880,6 +6942,44 @@ const triggerPartnerUploadInput = (button) => {
 };
 
 root.addEventListener('click', async (event) => {
+
+  const partnerCodeGenerate = event.target.closest('[data-partner-code-generate]');
+  if (partnerCodeGenerate) {
+    event.preventDefault();
+    const form = partnerCodeGenerate.closest('[data-admin-form="partnerCode"]');
+    const codeInput = form?.querySelector('input[name="access_code"]');
+    if (codeInput) {
+      try {
+        codeInput.value = generatePartnerAccessCode();
+        codeInput.focus();
+        codeInput.select();
+        setFormMessage('partnerCode');
+      } catch (error) {
+        setFormMessage('partnerCode', 'Не удалось сгенерировать код. Обновите браузер и попробуйте ещё раз.');
+        const messageNode = form.querySelector('[data-form-message="partnerCode"]');
+        if (messageNode) messageNode.textContent = adminState.formMessages.partnerCode;
+      }
+    }
+    return;
+  }
+
+  const partnerCodeCopy = event.target.closest('[data-partner-code-copy]');
+  if (partnerCodeCopy) {
+    event.preventDefault();
+    const codeInput = root.querySelector('[data-partner-code-output]');
+    if (codeInput) {
+      try {
+        await navigator.clipboard.writeText(codeInput.value);
+        partnerCodeCopy.textContent = 'Скопировано';
+      } catch (error) {
+        codeInput.focus();
+        codeInput.select();
+        document.execCommand('copy');
+        partnerCodeCopy.textContent = 'Скопировано';
+      }
+    }
+    return;
+  }
 
   const giveawayEdit = event.target.closest('[data-admin-giveaway-edit]');
   if (giveawayEdit) {
