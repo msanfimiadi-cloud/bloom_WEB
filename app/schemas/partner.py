@@ -59,7 +59,7 @@ class PartnerOfferRead(BaseModel):
     conditions: str | None
     base_price: Decimal | None
     discount_percent: Decimal | None
-    requires_order_amount: bool
+    requires_order_amount: bool = False
     image_url: str | None
     is_active: bool
     sort_order: int
