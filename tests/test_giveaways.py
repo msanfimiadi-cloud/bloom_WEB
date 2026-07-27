@@ -212,3 +212,84 @@ def test_admin_giveaway_prizes_add_and_remove_places_without_duplicates() -> Non
     db.commit()
 
     assert db.query(GiveawayPrize).filter_by(giveaway_id=giveaway.id).count() == 1
+
+
+
+def test_active_giveaway_subscriptions_are_grouped_by_participant() -> None:
+    from app.api.v1.endpoints.admin import _active_subscriptions_by_client
+
+    db = _session()
+    paid_client = _client(db, "paid@example.com")
+    trial_client = _client(db, "trial@example.com")
+    inactive_client = _client(db, "inactive@example.com")
+    now = datetime.now(timezone.utc)
+    db.add_all(
+        [
+            Subscription(
+                client_id=paid_client.id,
+                status=SubscriptionStatus.active.value,
+                starts_at=now - timedelta(days=1),
+                ends_at=now + timedelta(days=30),
+                source="tochka",
+            ),
+            Subscription(
+                client_id=trial_client.id,
+                status=SubscriptionStatus.active.value,
+                starts_at=now - timedelta(days=1),
+                ends_at=now + timedelta(days=14),
+                source="trial",
+            ),
+            Subscription(
+                client_id=inactive_client.id,
+                status=SubscriptionStatus.expired.value,
+                starts_at=now - timedelta(days=30),
+                ends_at=now - timedelta(days=1),
+                source="tochka",
+            ),
+        ]
+    )
+    db.commit()
+
+    active = _active_subscriptions_by_client(
+        db,
+        {paid_client.id, trial_client.id, inactive_client.id},
+        now=now,
+    )
+
+    assert set(active) == {paid_client.id, trial_client.id}
+    assert active[paid_client.id].source == "tochka"
+    assert active[trial_client.id].source == "trial"
+
+
+def test_deleting_giveaway_removes_prizes_and_numbers() -> None:
+    from app.api.v1.endpoints.admin import delete_admin_giveaway
+
+    db = _session()
+    client = _client(db, "delete-giveaway@example.com")
+    giveaway = Giveaway(
+        title="Удаляемый розыгрыш",
+        is_active=False,
+        winners_count=1,
+        prizes=[GiveawayPrize(place_number=1, prize_title="Приз")],
+    )
+    db.add(giveaway)
+    db.flush()
+    db.add(
+        GiveawayNumber(
+            giveaway_id=giveaway.id,
+            client_id=client.id,
+            number="000001",
+            source="manual",
+        )
+    )
+    db.commit()
+    giveaway_id = giveaway.id
+
+    result = delete_admin_giveaway(giveaway_id, admin=None, db=db)
+
+    assert result["deleted"]["id"] == giveaway_id
+    assert result["deleted"]["prizes"] == 1
+    assert result["deleted"]["numbers"] == 1
+    assert db.get(Giveaway, giveaway_id) is None
+    assert db.query(GiveawayPrize).filter_by(giveaway_id=giveaway_id).count() == 0
+    assert db.query(GiveawayNumber).filter_by(giveaway_id=giveaway_id).count() == 0
