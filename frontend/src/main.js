@@ -3694,10 +3694,15 @@ const renderPartnerOfferForm = () => {
       <label>Краткая выгода<input name="benefit_text" value="${escapeHtml(offer?.benefit_text || '')}" /></label>
       <label>Описание<textarea name="description" rows="3">${escapeHtml(offer?.description || '')}</textarea></label>
       <label>Условия<textarea name="conditions" rows="3">${escapeHtml(offer?.conditions || '')}</textarea></label>
-      <div class="partner-offer-form-numeric-row">
-        <label>Обычная цена<input class="partner-input-compact" name="base_price" type="number" step="0.01" inputmode="decimal" value="${escapeHtml(offer?.base_price || '')}" /></label>
-        <label>Цена участницы<input class="partner-input-compact" name="member_price" type="number" step="0.01" inputmode="decimal" value="${escapeHtml(getOfferPricingView(offer || {}).memberPrice || '')}" /></label>
-        <label>Экономия<input class="partner-input-compact" name="saving_amount" type="number" step="0.01" inputmode="decimal" value="${escapeHtml(getOfferPricingView(offer || {}).savingAmount || '')}" readonly /></label>
+      <label class="checkbox-row"><input name="requires_order_amount" type="checkbox" data-order-amount-toggle ${offer?.requires_order_amount ? 'checked' : ''} /> Клиент должен сам указать сумму заказа</label>
+      <div data-order-amount-percent ${offer?.requires_order_amount ? '' : 'hidden'}>
+        <label>Скидка от суммы, %<input class="partner-input-compact" name="variable_discount_percent" type="number" min="0.01" max="100" step="0.01" inputmode="decimal" value="${escapeHtml(offer?.requires_order_amount ? (offer?.discount_percent || '') : '')}" ${offer?.requires_order_amount ? 'required' : 'disabled'} /></label>
+        <p class="helper-text form-message compact-copy">Например, 5 — клиент введёт сумму заказа, а приложение рассчитает итог и экономию.</p>
+      </div>
+      <div class="partner-offer-form-numeric-row" data-fixed-offer-pricing ${offer?.requires_order_amount ? 'hidden' : ''}>
+        <label>Обычная цена<input class="partner-input-compact" name="base_price" type="number" step="0.01" inputmode="decimal" value="${escapeHtml(offer?.base_price || '')}" ${offer?.requires_order_amount ? 'disabled' : ''} /></label>
+        <label>Цена участницы<input class="partner-input-compact" name="member_price" type="number" step="0.01" inputmode="decimal" value="${escapeHtml(getOfferPricingView(offer || {}).memberPrice || '')}" ${offer?.requires_order_amount ? 'disabled' : ''} /></label>
+        <label>Экономия<input class="partner-input-compact" name="saving_amount" type="number" step="0.01" inputmode="decimal" value="${escapeHtml(getOfferPricingView(offer || {}).savingAmount || '')}" readonly ${offer?.requires_order_amount ? 'disabled' : ''} /></label>
       </div>
       ${renderOfferImageUploader(offer, 'partner')}
       <details class="partner-profile-advanced">
@@ -5281,9 +5286,16 @@ const renderOfferEditForm = () => {
       <label>Краткая выгода<input name="benefit_text" value="${escapeHtml(offer.benefit_text || '')}" /></label>
       <label>Описание<textarea name="description" rows="3">${escapeHtml(offer.description || '')}</textarea></label>
       <label>Условия<textarea name="conditions" rows="3">${escapeHtml(offer.conditions || '')}</textarea></label>
-      <label>Обычная цена<input name="base_price" type="number" step="0.01" value="${escapeHtml(offer.base_price || '')}" /></label>
-      <label>Цена участницы<input name="member_price" type="number" step="0.01" value="${escapeHtml(getOfferPricingView(offer).memberPrice || '')}" /></label>
-      <label>Экономия<input name="saving_amount" type="number" step="0.01" value="${escapeHtml(getOfferPricingView(offer).savingAmount || '')}" readonly /></label>
+      <label class="checkbox-row"><input name="requires_order_amount" type="checkbox" data-order-amount-toggle ${offer.requires_order_amount ? 'checked' : ''} /> Клиент должен сам указать сумму заказа</label>
+      <div data-order-amount-percent ${offer.requires_order_amount ? '' : 'hidden'}>
+        <label>Скидка от суммы, %<input name="variable_discount_percent" type="number" min="0.01" max="100" step="0.01" value="${escapeHtml(offer.requires_order_amount ? (offer.discount_percent || '') : '')}" ${offer.requires_order_amount ? 'required' : 'disabled'} /></label>
+        <p class="helper-text form-message compact-copy">Обязательное поле. По этому проценту приложение рассчитает итог и экономию.</p>
+      </div>
+      <div data-fixed-offer-pricing ${offer.requires_order_amount ? 'hidden' : ''}>
+        <label>Обычная цена<input name="base_price" type="number" step="0.01" value="${escapeHtml(offer.base_price || '')}" ${offer.requires_order_amount ? 'disabled' : ''} /></label>
+        <label>Цена участницы<input name="member_price" type="number" step="0.01" value="${escapeHtml(getOfferPricingView(offer).memberPrice || '')}" ${offer.requires_order_amount ? 'disabled' : ''} /></label>
+        <label>Экономия<input name="saving_amount" type="number" step="0.01" value="${escapeHtml(getOfferPricingView(offer).savingAmount || '')}" readonly ${offer.requires_order_amount ? 'disabled' : ''} /></label>
+      </div>
       ${renderOfferImageUploader(offer, 'admin')}
       <details class="partner-profile-advanced">
         <summary>URL изображения предложения</summary>
@@ -5308,10 +5320,17 @@ const renderOfferCreateForm = () => `
     <label>Краткая выгода<input name="benefit_text" /></label>
     <label>Описание<textarea name="description" rows="3"></textarea></label>
     <label>Условия<textarea name="conditions" rows="3"></textarea></label>
-    <label>Обычная цена<input name="base_price" type="number" step="0.01" /></label>
-    <label>Цена участницы<input name="member_price" type="number" step="0.01" /></label>
-    <label>Экономия<input name="saving_amount" type="number" step="0.01" readonly /></label>
-    <p class="helper-text form-message compact-copy">Экономия рассчитывается автоматически из обычной цены и цены участницы.</p>
+    <label class="checkbox-row"><input name="requires_order_amount" type="checkbox" data-order-amount-toggle /> Клиент должен сам указать сумму заказа</label>
+    <div data-order-amount-percent hidden>
+      <label>Скидка от суммы, %<input name="variable_discount_percent" type="number" min="0.01" max="100" step="0.01" disabled /></label>
+      <p class="helper-text form-message compact-copy">Обязательное поле. По этому проценту приложение рассчитает итог и экономию.</p>
+    </div>
+    <div data-fixed-offer-pricing>
+      <label>Обычная цена<input name="base_price" type="number" step="0.01" /></label>
+      <label>Цена участницы<input name="member_price" type="number" step="0.01" /></label>
+      <label>Экономия<input name="saving_amount" type="number" step="0.01" readonly /></label>
+      <p class="helper-text form-message compact-copy">Экономия рассчитывается автоматически из обычной цены и цены участницы.</p>
+    </div>
     ${renderOfferImageUploader(null, 'admin')}
     <details class="partner-profile-advanced">
       <summary>URL изображения предложения</summary>
@@ -5942,17 +5961,23 @@ const calculateDiscountPercentFromPrices = (formData) => {
   return ((basePrice - memberPrice) / basePrice * 100).toFixed(2);
 };
 
-const buildPartnerOfferPayload = (formData) => ({
-  title: getOptionalText(formData, 'title'),
-  benefit_text: getOptionalText(formData, 'benefit_text'),
-  description: getOptionalText(formData, 'description'),
-  conditions: getOptionalText(formData, 'conditions'),
-  base_price: decimalOrNull(formData, 'base_price'),
-  discount_percent: calculateDiscountPercentFromPrices(formData),
-  image_url: getOptionalText(formData, 'image_url'),
-  is_active: formData.has('is_active'),
-  sort_order: Number(formData.get('sort_order') || 0),
-});
+const buildPartnerOfferPayload = (formData) => {
+  const requiresOrderAmount = formData.has('requires_order_amount');
+  return {
+    title: getOptionalText(formData, 'title'),
+    benefit_text: getOptionalText(formData, 'benefit_text'),
+    description: getOptionalText(formData, 'description'),
+    conditions: getOptionalText(formData, 'conditions'),
+    base_price: requiresOrderAmount ? null : decimalOrNull(formData, 'base_price'),
+    discount_percent: requiresOrderAmount
+      ? decimalOrNull(formData, 'variable_discount_percent')
+      : calculateDiscountPercentFromPrices(formData),
+    requires_order_amount: requiresOrderAmount,
+    image_url: getOptionalText(formData, 'image_url'),
+    is_active: formData.has('is_active'),
+    sort_order: Number(formData.get('sort_order') || 0),
+  };
+};
 
 const submitPartnerOffer = async (form) => {
   const formData = new FormData(form);
@@ -6312,17 +6337,23 @@ const decimalOrNull = (formData, name) => {
   return value || null;
 };
 
-const buildOfferTextPayload = (formData) => ({
-  title: getOptionalText(formData, 'title'),
-  benefit_text: getOptionalText(formData, 'benefit_text'),
-  description: getOptionalText(formData, 'description'),
-  conditions: getOptionalText(formData, 'conditions'),
-  base_price: decimalOrNull(formData, 'base_price'),
-  discount_percent: calculateDiscountPercentFromPrices(formData),
-  image_url: getOptionalText(formData, 'image_url'),
-  sort_order: Number(formData.get('sort_order') || 0),
-  is_active: formData.has('is_active'),
-});
+const buildOfferTextPayload = (formData) => {
+  const requiresOrderAmount = formData.has('requires_order_amount');
+  return {
+    title: getOptionalText(formData, 'title'),
+    benefit_text: getOptionalText(formData, 'benefit_text'),
+    description: getOptionalText(formData, 'description'),
+    conditions: getOptionalText(formData, 'conditions'),
+    base_price: requiresOrderAmount ? null : decimalOrNull(formData, 'base_price'),
+    discount_percent: requiresOrderAmount
+      ? decimalOrNull(formData, 'variable_discount_percent')
+      : calculateDiscountPercentFromPrices(formData),
+    requires_order_amount: requiresOrderAmount,
+    image_url: getOptionalText(formData, 'image_url'),
+    sort_order: Number(formData.get('sort_order') || 0),
+    is_active: formData.has('is_active'),
+  };
+};
 
 const submitOffer = async (form) => {
   if (guardLegacyContentWrite()) return;
@@ -8062,6 +8093,28 @@ const handlePartnerOfferPhotoFormSubmit = async (form) => {
 };
 
 root.addEventListener('change', (event) => {
+  const orderAmountToggle = event.target.closest('[data-order-amount-toggle]');
+  if (orderAmountToggle) {
+    const form = orderAmountToggle.closest('form');
+    const requiresOrderAmount = orderAmountToggle.checked;
+    const percentSection = form?.querySelector('[data-order-amount-percent]');
+    const percentInput = percentSection?.querySelector('input[name="variable_discount_percent"]');
+    const fixedPricing = form?.querySelector('[data-fixed-offer-pricing]');
+
+    if (percentSection) percentSection.hidden = !requiresOrderAmount;
+    if (percentInput) {
+      percentInput.disabled = !requiresOrderAmount;
+      percentInput.required = requiresOrderAmount;
+      if (requiresOrderAmount) percentInput.focus();
+    }
+    if (fixedPricing) {
+      fixedPricing.hidden = requiresOrderAmount;
+      fixedPricing.querySelectorAll('input').forEach((input) => {
+        input.disabled = requiresOrderAmount;
+      });
+    }
+    return;
+  }
   const acquiringPaymentStatus = event.target.closest('[data-acquiring-payment-status]');
   if (acquiringPaymentStatus) {
     adminState.acquiringPaymentStatusFilter = acquiringPaymentStatus.value || '';
