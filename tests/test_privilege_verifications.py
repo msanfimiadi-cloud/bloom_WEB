@@ -1845,6 +1845,7 @@ def test_percentage_offer_without_price_requires_order_amount(verification_clien
         assert offer is not None
         offer.base_price = None
         offer.discount_percent = 10
+        offer.requires_order_amount = True
         session.commit()
 
     response = verification_client.post(
@@ -1865,6 +1866,7 @@ def test_dynamic_order_saving_is_preserved_and_counted_after_confirmation(
         assert offer is not None
         offer.base_price = None
         offer.discount_percent = 10
+        offer.requires_order_amount = True
         session.commit()
 
     client_headers = _auth_headers(_client_token(verification_client))

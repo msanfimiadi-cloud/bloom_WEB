@@ -97,6 +97,7 @@ class PartnerOffer(Base):
     conditions: Mapped[str | None] = mapped_column(Text, nullable=True)
     base_price: Mapped[Decimal | None] = mapped_column(Numeric(12, 2), nullable=True)
     discount_percent: Mapped[Decimal | None] = mapped_column(Numeric(5, 2), nullable=True)
+    requires_order_amount: Mapped[bool] = mapped_column(Boolean, nullable=False, default=False)
     image_url: Mapped[str | None] = mapped_column(String(512), nullable=True)
     is_active: Mapped[bool] = mapped_column(Boolean, nullable=False, default=True)
     sort_order: Mapped[int] = mapped_column(Integer, nullable=False, default=0)

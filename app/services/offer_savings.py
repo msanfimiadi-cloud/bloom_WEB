@@ -79,16 +79,16 @@ def calculate_percentage_saving_snapshot(
 
 
 def offer_requires_order_amount(offer: PartnerOffer | None) -> bool:
-    """Return True when a percentage offer has no fixed base price."""
-    if offer is None or _money_or_none(offer.base_price) is not None:
+    """Return True only when the offer explicitly requires the client's order amount."""
+    if offer is None or not bool(getattr(offer, "requires_order_amount", False)):
         return False
 
     discount_percent = resolve_offer_discount_percent(offer)
     if discount_percent is None or discount_percent <= ZERO_MONEY or discount_percent > PERCENT_BASE:
         return False
 
-    # Persist the normalized fallback during verification creation so the existing
-    # calculation path and future catalog reads use the same structured value.
+    # Keep the structured value used by verification calculations consistent even
+    # for legacy records whose percentage was previously stored only in text.
     if _decimal_or_none(offer.discount_percent) != discount_percent:
         offer.discount_percent = discount_percent
     return True

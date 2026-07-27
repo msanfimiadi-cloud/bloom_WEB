@@ -253,6 +253,7 @@ export interface Offer {
   member_price?: string | number;
   price_with_discount?: string | number;
   discount_percent?: string | number;
+  requires_order_amount?: boolean | string | number;
   is_active?: boolean;
   saving?: string | number;
   saving_amount?: string | number;

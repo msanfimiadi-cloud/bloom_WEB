@@ -34,14 +34,18 @@ def test_extracts_explicit_percentage_from_russian_offer_text() -> None:
     assert extract_discount_percent_from_text("Заказ от 1000 рублей") is None
 
 
-def test_textual_percentage_without_price_requires_order_amount() -> None:
-    offer = _offer()
+def test_textual_percentage_requires_explicit_variable_amount_flag() -> None:
+    legacy_offer = _offer()
+    explicit_offer = _offer(requires_order_amount=True)
 
-    assert resolve_offer_discount_percent(offer) == Decimal("5.00")
-    assert offer_requires_order_amount(offer) is True
-    assert offer.discount_percent == Decimal("5.00")
+    assert resolve_offer_discount_percent(legacy_offer) == Decimal("5.00")
+    assert offer_requires_order_amount(legacy_offer) is False
+    assert legacy_offer.discount_percent is None
 
-    saving = calculate_percentage_saving_snapshot(Decimal("1000.00"), offer.discount_percent)
+    assert offer_requires_order_amount(explicit_offer) is True
+    assert explicit_offer.discount_percent == Decimal("5.00")
+
+    saving = calculate_percentage_saving_snapshot(Decimal("1000.00"), explicit_offer.discount_percent)
     assert saving.regular_price == Decimal("1000.00")
     assert saving.club_price == Decimal("950.00")
     assert saving.saving_amount == Decimal("50.00")
