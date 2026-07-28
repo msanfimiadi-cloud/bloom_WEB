@@ -214,6 +214,7 @@ export default function PartnerPortalApp() {
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [message, setMessage] = useState("");
   const [error, setError] = useState("");
+  const isClientCodeValid = /^\d{6}$/.test(clientCode);
 
   const loadContent = useCallback(async () => {
     setIsContentLoading(true);
@@ -295,11 +296,16 @@ export default function PartnerPortalApp() {
     event.preventDefault();
     clearNotices();
     setScan(null);
+    const normalizedCode = clientCode.trim();
+    if (!/^\d{6}$/.test(normalizedCode)) {
+      setError("Введите шестизначный код, который показывает клиентка.");
+      return;
+    }
     setIsSubmitting(true);
     try {
       const response = await partnerRequest<PrivilegeScan>("/privileges/scan", {
         method: "POST",
-        body: JSON.stringify({ code: clientCode.trim() }),
+        body: JSON.stringify({ code: normalizedCode }),
       });
       setScan(response);
     } catch (caughtError) {
@@ -378,6 +384,23 @@ export default function PartnerPortalApp() {
       setMessage(kind === "logo" ? "Логотип обновлён." : "Обложка обновлена.");
     } catch (caughtError) {
       setError(partnerErrorMessage(caughtError, "Не удалось загрузить изображение."));
+    } finally {
+      setIsSubmitting(false);
+    }
+  }
+
+  async function deleteProfileImage(kind: "logo" | "cover") {
+    if (!profile?.[`${kind}_url`]) return;
+    const label = kind === "logo" ? "логотип" : "обложку";
+    if (!window.confirm(`Удалить ${label}? Карточка партнёра будет показываться без этого изображения.`)) return;
+    clearNotices();
+    setIsSubmitting(true);
+    try {
+      const response = await partnerRequest<PartnerProfile>(`/profile/images/${kind}`, { method: "DELETE" });
+      setProfile(response);
+      setMessage(kind === "logo" ? "Логотип удалён." : "Обложка удалена.");
+    } catch (caughtError) {
+      setError(partnerErrorMessage(caughtError, `Не удалось удалить ${label}.`));
     } finally {
       setIsSubmitting(false);
     }
@@ -462,6 +485,25 @@ export default function PartnerPortalApp() {
     }
   }
 
+  async function deleteOffer(offer: PartnerOffer) {
+    if (!window.confirm(`Удалить услугу «${offer.title}»? Она перестанет отображаться у клиенток.`)) return;
+    clearNotices();
+    setIsSubmitting(true);
+    try {
+      await partnerRequest(`/offers/${offer.id}`, { method: "DELETE" });
+      setOffers((current) => current.filter((item) => item.id !== offer.id));
+      if (offerDraft?.id === offer.id) {
+        setOfferDraft(null);
+        setOfferImage(null);
+      }
+      setMessage("Услуга удалена.");
+    } catch (caughtError) {
+      setError(partnerErrorMessage(caughtError, "Не удалось удалить услугу."));
+    } finally {
+      setIsSubmitting(false);
+    }
+  }
+
   function logout() {
     storePartnerToken("");
     setPartner(null);
@@ -521,9 +563,20 @@ export default function PartnerPortalApp() {
             <button type="button" onClick={() => { setShowConfirmForm(false); setScan(null); setError(""); }}>Закрыть</button>
           </div>
           <form className="partner-code-form" onSubmit={handleScan}>
-            <input value={clientCode} onChange={(event) => setClientCode(event.target.value.replace(/\s/g, ""))} inputMode="numeric" autoComplete="one-time-code" placeholder="Код привилегии" maxLength={12} required />
-            <button type="submit" disabled={isSubmitting}>{isSubmitting ? "Проверяем…" : "Проверить код"}</button>
+            <input
+              value={clientCode}
+              onChange={(event) => setClientCode(event.target.value.replace(/\D/g, "").slice(0, 6))}
+              inputMode="numeric"
+              autoComplete="one-time-code"
+              placeholder="6 цифр"
+              maxLength={6}
+              pattern="[0-9]{6}"
+              aria-describedby="partner-code-hint"
+              required
+            />
+            <button type="submit" disabled={isSubmitting || !isClientCodeValid}>{isSubmitting ? "Проверяем…" : "Проверить код"}</button>
           </form>
+          <p className="partner-code-form__hint" id="partner-code-hint">Введите 6 цифр, которые показывает клиентка.</p>
           {error ? <p className="partner-portal__error" role="alert">{error}</p> : null}
           {scan ? (
             <article className="partner-privilege-review">
@@ -579,11 +632,20 @@ export default function PartnerPortalApp() {
             <>
               <div className="partner-media-editor">
                 <div className="partner-cover-preview" style={profile.cover_url ? { backgroundImage: `url("${profile.cover_url}")` } : undefined}>
-                  <label className="partner-media-action">Изменить обложку<input type="file" accept="image/jpeg,image/png,image/webp" onChange={(event) => void uploadProfileImage("cover", event.target.files?.[0])} /></label>
+                  <div className="partner-media-actions">
+                    <label className="partner-media-action">Изменить обложку<input type="file" accept="image/jpeg,image/png,image/webp" onChange={(event) => void uploadProfileImage("cover", event.target.files?.[0])} /></label>
+                    {profile.cover_url ? <button className="partner-destructive-action" type="button" onClick={() => void deleteProfileImage("cover")} disabled={isSubmitting}>Удалить обложку</button> : null}
+                  </div>
                 </div>
                 <div className="partner-logo-row">
                   <div className="partner-logo-preview">{profile.logo_url ? <img src={profile.logo_url} alt="" /> : <span>{profile.name.slice(0, 1)}</span>}</div>
-                  <div><strong>{profile.name}</strong><label className="partner-text-action">Загрузить логотип<input type="file" accept="image/jpeg,image/png,image/webp" onChange={(event) => void uploadProfileImage("logo", event.target.files?.[0])} /></label></div>
+                  <div>
+                    <strong>{profile.name}</strong>
+                    <div className="partner-inline-actions">
+                      <label className="partner-text-action">Загрузить логотип<input type="file" accept="image/jpeg,image/png,image/webp" onChange={(event) => void uploadProfileImage("logo", event.target.files?.[0])} /></label>
+                      {profile.logo_url ? <button className="partner-destructive-action partner-destructive-action--text" type="button" onClick={() => void deleteProfileImage("logo")} disabled={isSubmitting}>Удалить логотип</button> : null}
+                    </div>
+                  </div>
                 </div>
               </div>
               <form className="partner-edit-form" onSubmit={saveProfile}>
@@ -637,7 +699,10 @@ export default function PartnerPortalApp() {
                     <h3>{offer.title}</h3>
                     <p>{offer.benefit_text || (offer.requires_order_amount ? `Скидка ${offer.discount_percent || 0}% от суммы` : "Привилегия Bloom Club")}</p>
                   </div>
-                  <button type="button" onClick={() => { setOfferDraft(draftFromOffer(offer)); setOfferImage(null); clearNotices(); }}>Редактировать</button>
+                  <div className="partner-offer-item__actions">
+                    <button type="button" onClick={() => { setOfferDraft(draftFromOffer(offer)); setOfferImage(null); clearNotices(); }}>Редактировать</button>
+                    <button className="partner-destructive-action" type="button" onClick={() => void deleteOffer(offer)} disabled={isSubmitting}>Удалить</button>
+                  </div>
                 </article>
               ))}
               {!offers.length ? <p className="partner-empty-state">Услуг пока нет. Добавьте первую привилегию для участниц Bloom Club.</p> : null}
@@ -670,4 +735,5 @@ export default function PartnerPortalApp() {
     </main>
   );
 }
+
 

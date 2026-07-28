@@ -24,13 +24,27 @@ def test_partner_cabinet_exposes_card_gallery_and_service_management() -> None:
         "Сохранить карточку",
         "Добавить фото",
         "Добавить услугу",
+        "Удалить обложку",
+        "Удалить логотип",
+        "Удалить",
         "Сохранить и отправить на проверку",
         "Клиент указывает сумму заказа",
         'partnerRequest<PartnerProfile>("/profile")',
         'partnerRequest<PartnerPhoto[]>("/photos")',
         'partnerRequest<PartnerOffer[]>("/offers")',
+        '`/profile/images/${kind}`',
+        '`/offers/${offer.id}`',
     ):
         assert marker in source
+
+
+def test_partner_privilege_code_requires_six_digits_before_submit() -> None:
+    source = (ROOT / "browser-mobile-app" / "src" / "PartnerPortalApp.tsx").read_text(encoding="utf-8")
+
+    assert r'const isClientCodeValid = /^\d{6}$/.test(clientCode);' in source
+    assert 'disabled={isSubmitting || !isClientCodeValid}' in source
+    assert 'pattern="[0-9]{6}"' in source
+    assert "Введите 6 цифр, которые показывает клиентка." in source
 
 
 def test_partner_editor_keeps_mobile_safe_controls_and_moderation_statuses() -> None:
@@ -43,4 +57,5 @@ def test_partner_editor_keeps_mobile_safe_controls_and_moderation_statuses() -> 
     assert "min-height: 44px" in styles
     assert "На проверке" in source
     assert "Опубликовано" in source
+
 
