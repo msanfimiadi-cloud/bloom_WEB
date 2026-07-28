@@ -1397,6 +1397,34 @@ function extractOffersFromResponse(
   );
 }
 
+export function normalizeSavingsSummary(response: unknown): SavingsSummary {
+  if (!response || typeof response !== "object") {
+    return { total: 0, amount: 0, currency: "₽", items: [] };
+  }
+
+  const body = response as Record<string, unknown>;
+  const total = body.total_saving_amount ?? body.total ?? body.amount ?? 0;
+  const rawItems = Array.isArray(body.items) ? body.items : [];
+  const items = rawItems
+    .filter(
+      (item): item is Record<string, unknown> =>
+        Boolean(item) && typeof item === "object",
+    )
+    .map((item) => ({
+      ...item,
+      amount: item.saving_amount ?? item.amount ?? item.value ?? 0,
+      created_at: item.used_at ?? item.created_at,
+      description: item.description ?? item.offer_title,
+    }));
+
+  return {
+    total,
+    amount: total,
+    currency: body.currency ?? "₽",
+    items,
+  } as SavingsSummary;
+}
+
 function getResponseRequestId(response: Response): string | undefined {
   return (
     response.headers.get("x-request-id") ||
@@ -1748,15 +1776,17 @@ export async function getVerifications(): Promise<Verification[]> {
 
 export async function getSavings(): Promise<SavingsSummary> {
   if (!TG_LOCAL_CATALOG_ENABLED) {
-    return requestClientApiGet<SavingsSummary>("/clients/me/savings");
+    const response = await requestClientApiGet<unknown>("/clients/me/savings");
+    return normalizeSavingsSummary(response);
   }
 
   try {
-    return await request<SavingsSummary>(
+    const response = await request<unknown>(
       "/api/tg/me/savings",
       { retry: true },
       "tg",
     );
+    return normalizeSavingsSummary(response);
   } catch (caughtError) {
     if (
       isApiError(caughtError) &&
