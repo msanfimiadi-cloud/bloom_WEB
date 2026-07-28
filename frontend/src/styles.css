@@ -4128,6 +4128,34 @@ body.is-dashboard {
     rgba(255, 250, 248, 0.9);
 }
 
+.partner-profile-image-preview {
+  position: relative;
+  min-width: 0;
+}
+
+.partner-profile-image-delete {
+  position: absolute;
+  top: 10px;
+  right: 10px;
+  z-index: 2;
+  min-height: 38px;
+  padding: 0 14px;
+  border: 1px solid rgba(185, 28, 28, 0.28);
+  border-radius: 999px;
+  background: rgba(255, 250, 250, 0.94);
+  box-shadow: 0 8px 24px rgba(74, 38, 48, 0.18);
+  color: #a31d2d;
+  font: inherit;
+  font-weight: 850;
+  cursor: pointer;
+}
+
+.partner-profile-image-delete:hover,
+.partner-profile-image-delete:focus-visible {
+  background: #fff;
+  border-color: rgba(185, 28, 28, 0.55);
+}
+
 .partner-upload-actions {
   display: flex;
   flex-wrap: wrap;
@@ -5435,6 +5463,21 @@ body.is-dashboard {
   gap: 14px;
 }
 
+.analytics-panel__heading {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 14px;
+}
+
+.analytics-panel__heading > div {
+  min-width: 0;
+}
+
+.analytics-reset-button {
+  flex: 0 0 auto;
+}
+
 .analytics-card {
   min-width: 0;
   padding: 18px;
@@ -5489,6 +5532,15 @@ body.is-dashboard {
 
   .analytics-grid {
     grid-template-columns: 1fr;
+  }
+
+  .analytics-panel__heading {
+    align-items: stretch;
+    flex-direction: column;
+  }
+
+  .analytics-reset-button {
+    width: 100%;
   }
 }
 

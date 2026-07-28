@@ -283,17 +283,27 @@ def _partner_me_read(partner: Partner) -> PartnerMePartnerRead:
 
 def _partner_stats(db: Session, partner_id: int) -> PartnerStats:
     now = datetime.now(timezone.utc)
+    partner = db.get(Partner, partner_id)
+    reset_at = (
+        as_aware_utc(partner.analytics_reset_at)
+        if partner is not None and partner.analytics_reset_at is not None
+        else None
+    )
     today_start = datetime.combine(now.date(), time.min, tzinfo=timezone.utc)
     month_start = datetime(now.year, now.month, 1, tzinfo=timezone.utc)
-    confirmed_filters = (
+    confirmed_filters = [
         PrivilegeVerificationSession.partner_id == partner_id,
         PrivilegeVerificationSession.status == PrivilegeVerificationStatus.confirmed.value,
         PrivilegeVerificationSession.confirmed_at.is_not(None),
-    )
+    ]
+    if reset_at is not None:
+        confirmed_filters.append(PrivilegeVerificationSession.confirmed_at >= reset_at)
+    today_cutoff = max(today_start, reset_at) if reset_at is not None else today_start
+    month_cutoff = max(month_start, reset_at) if reset_at is not None else month_start
     confirmed_today = db.execute(
         select(func.count(PrivilegeVerificationSession.id)).where(
             *confirmed_filters,
-            PrivilegeVerificationSession.confirmed_at >= today_start,
+            PrivilegeVerificationSession.confirmed_at >= today_cutoff,
         )
     ).scalar_one()
     month_row = db.execute(
@@ -302,7 +312,7 @@ def _partner_stats(db: Session, partner_id: int) -> PartnerStats:
             func.coalesce(func.sum(PrivilegeVerificationSession.saving_amount), 0),
         ).where(
             *confirmed_filters,
-            PrivilegeVerificationSession.confirmed_at >= month_start,
+            PrivilegeVerificationSession.confirmed_at >= month_cutoff,
         )
     ).one()
     total_row = db.execute(

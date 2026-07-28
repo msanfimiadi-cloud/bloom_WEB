@@ -2028,6 +2028,25 @@ def test_frontend_contains_partner_analytics_ui_markers() -> None:
         assert removed_lotus_marker not in styles
 
 
+def test_frontend_contains_partner_destructive_controls_with_confirmations() -> None:
+    source = _frontend_main()
+    styles = _frontend_styles()
+
+    for marker in (
+        'data-partner-image-clear="${escapeHtml(kind)}"',
+        "partner-profile-image-delete",
+        "data-partner-offer-delete",
+        "/api/v1/partners/me/offers/${offerId}",
+        "Удалить услугу",
+        "История подтверждений сохранена",
+        "data-admin-partner-analytics-reset",
+        "/analytics/reset",
+        "Партнёр, клиенты, услуги, фотографии и история подтверждений НЕ удалятся",
+        "analytics-reset-button",
+    ):
+        assert marker in source or marker in styles
+
+
 def test_frontend_contains_derived_activity_feed_ui_markers() -> None:
     source = _frontend_main()
     styles = _frontend_styles()

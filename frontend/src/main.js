@@ -502,6 +502,7 @@ const adminState = {
   selectedPartnerAnalytics: null,
   partnerAnalyticsLoading: false,
   partnerAnalyticsError: '',
+  partnerAnalyticsResetting: false,
   offers: [],
   contentReview: { offers: [], photos: [] },
   qrLinks: [],
@@ -1507,11 +1508,12 @@ const renderAnalyticsSection = (analytics, options = {}) => {
   const title = options.title || 'Аналитика';
   const loading = options.loading || false;
   const error = options.error || '';
+  const actionHtml = options.actionHtml || '';
 
   if (loading) {
     return `
       <section class="analytics-panel" aria-live="polite">
-        <div class="admin-section-heading"><h4>${escapeHtml(title)}</h4><p class="analytics-hint">Аналитика помогает понять, сколько клиентов пришли из клуба и сколько привилегий реально использовали.</p></div>
+        <div class="admin-section-heading analytics-panel__heading"><div><h4>${escapeHtml(title)}</h4><p class="analytics-hint">Аналитика помогает понять, сколько клиентов пришли из клуба и сколько привилегий реально использовали.</p></div>${actionHtml}</div>
         <p class="analytics-hint">Загружаем аналитику…</p>
       </section>
     `;
@@ -1520,7 +1522,7 @@ const renderAnalyticsSection = (analytics, options = {}) => {
   if (error) {
     return `
       <section class="analytics-panel" aria-live="polite">
-        <div class="admin-section-heading"><h4>${escapeHtml(title)}</h4><p class="analytics-hint">Аналитика помогает понять, сколько клиентов пришли из клуба и сколько привилегий реально использовали.</p></div>
+        <div class="admin-section-heading analytics-panel__heading"><div><h4>${escapeHtml(title)}</h4><p class="analytics-hint">Аналитика помогает понять, сколько клиентов пришли из клуба и сколько привилегий реально использовали.</p></div>${actionHtml}</div>
         <p class="analytics-empty">${escapeHtml(error)}</p>
       </section>
     `;
@@ -1529,7 +1531,7 @@ const renderAnalyticsSection = (analytics, options = {}) => {
   if (!analytics) {
     return `
       <section class="analytics-panel" aria-live="polite">
-        <div class="admin-section-heading"><h4>${escapeHtml(title)}</h4><p class="analytics-hint">Аналитика помогает понять, сколько клиентов пришли из клуба и сколько привилегий реально использовали.</p></div>
+        <div class="admin-section-heading analytics-panel__heading"><div><h4>${escapeHtml(title)}</h4><p class="analytics-hint">Аналитика помогает понять, сколько клиентов пришли из клуба и сколько привилегий реально использовали.</p></div>${actionHtml}</div>
         <p class="analytics-empty">Выберите партнёра, чтобы увидеть аналитику.</p>
       </section>
     `;
@@ -1537,7 +1539,7 @@ const renderAnalyticsSection = (analytics, options = {}) => {
 
   return `
     <section class="analytics-panel" aria-live="polite">
-      <div class="admin-section-heading"><h4>${escapeHtml(title)}</h4><p class="analytics-hint">Аналитика помогает понять, сколько клиентов пришли из клуба и сколько привилегий реально использовали.</p></div>
+      <div class="admin-section-heading analytics-panel__heading"><div><h4>${escapeHtml(title)}</h4><p class="analytics-hint">Аналитика помогает понять, сколько клиентов пришли из клуба и сколько привилегий реально использовали.</p></div>${actionHtml}</div>
       ${renderAnalyticsCards(analytics)}
       ${isAnalyticsEmpty(analytics) ? '<p class="analytics-empty">Данных пока нет. Разместите QR-код и добавьте предложения, чтобы начать получать статистику.</p>' : ''}
     </section>
@@ -1794,6 +1796,13 @@ const renderSafePartnerImagePreview = (url, kind, label) => {
     : `<div class="partner-image-preview ${modifier} partner-image-preview--placeholder" aria-label="${escapeHtml(label)}">${kind === 'cover' ? 'Обложка' : 'Лого'}</div>`;
 };
 
+const renderPartnerProfileImagePreview = (url, kind, label, isAdmin) => `
+  <div class="partner-profile-image-preview">
+    ${renderSafePartnerImagePreview(url, kind, label)}
+    ${!isAdmin && isSafePublicAssetUrl(url) ? `<button class="partner-profile-image-delete" type="button" data-partner-image-clear="${escapeHtml(kind)}" aria-label="Удалить ${escapeHtml(label.toLowerCase())}">Удалить</button>` : ''}
+  </div>
+`;
+
 
 const getPartnerUploadStatus = (key) => partnerState.uploadStatuses[key] || { state: '', message: '' };
 
@@ -1893,22 +1902,22 @@ const renderPartnerImageUploader = (partner, scope) => {
       <div class="partner-image-grid">
         <article>
           <span>Логотип</span>
-          ${renderSafePartnerImagePreview(partner.logo_url, 'logo', 'Логотип партнёра')}
+          ${renderPartnerProfileImagePreview(partner.logo_url, 'logo', 'Логотип партнёра', isAdmin)}
           <div class="partner-upload-actions">
             ${isAdmin
               ? `<label class="admin-inline-action ui-button ui-button--secondary">Загрузить логотип<input type="file" accept="image/jpeg,image/png,image/webp" ${logoInputAttr} /></label>`
-              : `${renderPartnerUploadButton({ label: partner.logo_url ? 'Заменить логотип' : 'Загрузить логотип', trigger: 'profile-image', inputAttr: logoInputAttr, inputSelector: '[data-partner-image-upload="logo"]', statusKey: 'profileImages:logo', kind: 'logo' })}${partner.logo_url ? '<button class="admin-inline-action ui-button ui-button--danger admin-inline-action--danger" type="button" data-partner-image-clear="logo">Удалить логотип</button>' : ''}`}
+              : renderPartnerUploadButton({ label: partner.logo_url ? 'Заменить логотип' : 'Загрузить логотип', trigger: 'profile-image', inputAttr: logoInputAttr, inputSelector: '[data-partner-image-upload="logo"]', statusKey: 'profileImages:logo', kind: 'logo' })}
           </div>
           <p class="helper-text compact-copy">Рекомендуемый формат: квадратное фото 1:1.</p>
           ${!isAdmin ? renderPartnerUploadStatus('profileImages:logo') : ''}
         </article>
         <article>
           <span>Обложка</span>
-          ${renderSafePartnerImagePreview(partner.cover_url, 'cover', 'Обложка партнёра')}
+          ${renderPartnerProfileImagePreview(partner.cover_url, 'cover', 'Обложка партнёра', isAdmin)}
           <div class="partner-upload-actions">
             ${isAdmin
               ? `<label class="admin-inline-action ui-button ui-button--secondary">Загрузить обложку<input type="file" accept="image/jpeg,image/png,image/webp" ${coverInputAttr} /></label>`
-              : `${renderPartnerUploadButton({ label: partner.cover_url ? 'Заменить обложку' : 'Загрузить обложку', trigger: 'profile-image', inputAttr: coverInputAttr, inputSelector: '[data-partner-image-upload="cover"]', statusKey: 'profileImages:cover', kind: 'cover' })}${partner.cover_url ? '<button class="admin-inline-action ui-button ui-button--danger admin-inline-action--danger" type="button" data-partner-image-clear="cover">Удалить обложку</button>' : ''}`}
+              : renderPartnerUploadButton({ label: partner.cover_url ? 'Заменить обложку' : 'Загрузить обложку', trigger: 'profile-image', inputAttr: coverInputAttr, inputSelector: '[data-partner-image-upload="cover"]', statusKey: 'profileImages:cover', kind: 'cover' })}
           </div>
           <p class="helper-text compact-copy">Рекомендуемый формат: горизонтальное фото 16:9 или 4:3. Важные элементы размещайте ближе к центру.</p>
           ${!isAdmin ? renderPartnerUploadStatus('profileImages:cover') : ''}
@@ -3666,6 +3675,7 @@ const renderPartnerOfferAction = (offer) => `
     ? `<button class="admin-inline-action ui-button ui-button--secondary admin-inline-action--secondary" type="button" data-partner-offer-toggle="${escapeHtml(offer.id)}">Скрыть</button>`
     : '<button class="admin-inline-action ui-button ui-button--secondary admin-inline-action--secondary" type="button" disabled>На проверке</button>'}
   ${offer.image_url ? `<button class="admin-inline-action ui-button ui-button--danger admin-inline-action--danger" type="button" data-partner-offer-image-clear="${escapeHtml(offer.id)}">Удалить фото</button>` : ''}
+  <button class="admin-inline-action ui-button ui-button--danger admin-inline-action--danger" type="button" data-partner-offer-delete="${escapeHtml(offer.id)}" data-offer-title="${escapeHtml(offer.title || 'услугу')}">Удалить услугу</button>
 `;
 
 const renderPartnerOfferForm = () => {
@@ -3950,6 +3960,19 @@ const loadAdminPartnerAnalytics = async (partnerId) => {
     adminState.partnerAnalyticsError = error.message || 'Не удалось загрузить аналитику партнёра.';
   } finally {
     adminState.partnerAnalyticsLoading = false;
+  }
+};
+
+const resetAdminPartnerAnalytics = async (partnerId) => {
+  adminState.partnerAnalyticsResetting = true;
+  adminState.partnerAnalyticsError = '';
+  try {
+    const analytics = await apiFetch(`/api/v1/admin/partners/${partnerId}/analytics/reset`, { method: 'POST' });
+    adminState.partnerAnalyticsById[partnerId] = analytics;
+    adminState.selectedPartnerAnalytics = analytics;
+    return analytics;
+  } finally {
+    adminState.partnerAnalyticsResetting = false;
   }
 };
 
@@ -5060,6 +5083,7 @@ const renderPartnerEditForm = () => {
               title: 'Аналитика партнёра',
               loading: adminState.partnerAnalyticsLoading,
               error: adminState.partnerAnalyticsError,
+              actionHtml: `<button class="ui-button ui-button--danger analytics-reset-button" type="button" data-admin-partner-analytics-reset="${escapeHtml(partner.id)}" ${adminState.partnerAnalyticsResetting ? 'disabled' : ''}>${adminState.partnerAnalyticsResetting ? 'Обнуляем…' : 'Обнулить статистику'}</button>`,
             })}
           </section>
         </aside>
@@ -6520,6 +6544,16 @@ const clearPartnerOfferImage = async (offerId) => {
   return response;
 };
 
+const deletePartnerOffer = async (offerId) => {
+  const response = await partnerApiFetch(`/api/v1/partners/me/offers/${offerId}`, { method: 'DELETE' });
+  if (String(partnerState.selectedOfferIdForEdit) === String(offerId)) {
+    partnerState.selectedOfferIdForEdit = '';
+  }
+  delete partnerState.offerPhotosByOfferId[String(offerId)];
+  await loadPartnerOffers();
+  return response;
+};
+
 
 const activateContentReviewOffer = async (offerId) => {
   if (guardLegacyContentWrite()) return;
@@ -7490,6 +7524,25 @@ root.addEventListener('click', async (event) => {
     return;
   }
 
+  const partnerAnalyticsReset = event.target.closest('[data-admin-partner-analytics-reset]');
+  if (partnerAnalyticsReset) {
+    const partnerId = partnerAnalyticsReset.dataset.adminPartnerAnalyticsReset;
+    const confirmed = window.confirm(
+      'Обнулить статистику этого партнёра?\n\nПартнёр, клиенты, услуги, фотографии и история подтверждений НЕ удалятся. Новая статистика начнёт считаться с текущего момента.',
+    );
+    if (!confirmed) return;
+    try {
+      partnerAnalyticsReset.disabled = true;
+      await resetAdminPartnerAnalytics(partnerId);
+      setPanelMessage('Статистика партнёра обнулена. Новые показатели считаются с текущего момента.', 'success');
+    } catch (error) {
+      adminState.partnerAnalyticsError = error.message || 'Не удалось обнулить статистику партнёра.';
+      setPanelMessage(adminState.partnerAnalyticsError, 'error');
+    }
+    renderAdminLayout();
+    return;
+  }
+
   const partnerStepJump = event.target.closest('[data-admin-partner-step-jump]');
   if (partnerStepJump) {
     captureAdminPartnerCategoryDraft(partnerStepJump.closest('[data-admin-partner-wizard-form]'));
@@ -7798,6 +7851,24 @@ root.addEventListener('click', async (event) => {
   const partnerOfferToggle = event.target.closest('[data-partner-offer-toggle]');
   if (partnerOfferToggle) {
     togglePartnerOffer(partnerOfferToggle.dataset.partnerOfferToggle);
+    return;
+  }
+
+  const partnerOfferDelete = event.target.closest('[data-partner-offer-delete]');
+  if (partnerOfferDelete) {
+    const offerTitle = partnerOfferDelete.dataset.offerTitle || 'эту услугу';
+    const confirmed = window.confirm(
+      `Удалить услугу «${offerTitle}»?\n\nОна исчезнет из кабинета и клиентского приложения. История уже подтверждённых привилегий и статистика сохранятся.`,
+    );
+    if (!confirmed) return;
+    partnerOfferDelete.disabled = true;
+    try {
+      await deletePartnerOffer(partnerOfferDelete.dataset.partnerOfferDelete);
+      setPartnerPanelMessage('Услуга удалена. История подтверждений сохранена.', 'success');
+    } catch (error) {
+      setPartnerPanelMessage(error.message || 'Не удалось удалить услугу.', 'error');
+    }
+    renderPartnerLayout();
     return;
   }
 
