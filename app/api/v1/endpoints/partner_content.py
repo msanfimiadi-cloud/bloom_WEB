@@ -1,5 +1,7 @@
 from __future__ import annotations
 
+from datetime import datetime, timezone
+
 from fastapi import APIRouter, Depends, File, Form, HTTPException, UploadFile, status
 from fastapi.security import HTTPAuthorizationCredentials
 from sqlalchemy import select
@@ -156,7 +158,7 @@ def list_partner_offers(
     partner = _require_partner_from_credentials(db, credentials)
     offers = db.execute(
         select(PartnerOffer)
-        .where(PartnerOffer.partner_id == partner.id)
+        .where(PartnerOffer.partner_id == partner.id, PartnerOffer.deleted_at.is_(None))
         .order_by(PartnerOffer.sort_order.asc(), PartnerOffer.id.asc())
     ).scalars().all()
     return [_partner_offer_to_read(offer) for offer in offers]
@@ -217,6 +219,20 @@ def update_partner_offer(
     db.commit()
     db.refresh(offer)
     return _partner_offer_to_read(offer)
+
+
+@router.delete("/offers/{offer_id}")
+def delete_partner_offer(
+    offer_id: int,
+    credentials: HTTPAuthorizationCredentials | None = Depends(bearer_scheme),
+    db: Session = Depends(get_db),
+) -> dict[str, bool]:
+    partner = _require_partner_from_credentials(db, credentials)
+    offer = _get_owned_offer_or_404(db, partner.id, offer_id)
+    offer.is_active = False
+    offer.deleted_at = datetime.now(timezone.utc)
+    db.commit()
+    return {"ok": True}
 
 
 @router.post("/offers/{offer_id}/image")

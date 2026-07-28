@@ -1084,7 +1084,7 @@ def read_admin_content_review(
     offer_rows = db.execute(
         select(PartnerOffer, Partner.name.label("partner_name"))
         .join(Partner, PartnerOffer.partner_id == Partner.id)
-        .where(PartnerOffer.is_active.is_(False))
+        .where(PartnerOffer.is_active.is_(False), PartnerOffer.deleted_at.is_(None))
         .order_by(PartnerOffer.created_at.asc(), PartnerOffer.id.asc())
     ).all()
     photo_rows = db.execute(
@@ -1622,6 +1622,20 @@ def read_admin_partner_analytics(
     return build_partner_analytics(db, partner)
 
 
+@router.post("/partners/{partner_id}/analytics/reset", response_model=PartnerAnalyticsRead)
+def reset_admin_partner_analytics(
+    partner_id: int,
+    admin: AdminUser = Depends(require_admin),
+    db: Session = Depends(get_db),
+) -> PartnerAnalyticsRead:
+    _ = admin
+    partner = _ensure_partner_exists(db, partner_id)
+    partner.analytics_reset_at = datetime.now(timezone.utc)
+    db.commit()
+    db.refresh(partner)
+    return build_partner_analytics(db, partner)
+
+
 @router.get("/partners/{partner_id}", response_model=PartnerRead)
 def get_admin_partner(
     partner_id: int,
@@ -1888,7 +1902,7 @@ def list_admin_partner_offers(
     partner = _ensure_partner_exists(db, partner_id)
     statement = (
         select(PartnerOffer)
-        .where(PartnerOffer.partner_id == partner.id)
+        .where(PartnerOffer.partner_id == partner.id, PartnerOffer.deleted_at.is_(None))
         .order_by(PartnerOffer.sort_order.asc(), PartnerOffer.id.asc())
     )
     if is_active is not None:

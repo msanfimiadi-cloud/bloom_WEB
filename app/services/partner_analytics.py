@@ -13,36 +13,47 @@ from app.schemas.partner import PartnerAnalyticsRead
 
 def build_partner_analytics(db: Session, partner: Partner) -> PartnerAnalyticsRead:
     now = datetime.now(timezone.utc)
+    reset_at = partner.analytics_reset_at
 
     qr_links_count = _count(
         db,
         select(func.count()).select_from(PartnerQrLink).where(PartnerQrLink.partner_id == partner.id),
     )
+    lead_clicks_statement = (
+        select(func.count()).select_from(LeadClick).where(LeadClick.partner_id == partner.id)
+    )
+    if reset_at is not None:
+        lead_clicks_statement = lead_clicks_statement.where(LeadClick.created_at >= reset_at)
     lead_clicks_count = _count(
         db,
-        select(func.count()).select_from(LeadClick).where(LeadClick.partner_id == partner.id),
+        lead_clicks_statement,
     )
+    verification_scope = [PrivilegeVerificationSession.partner_id == partner.id]
+    confirmation_scope = [
+        PrivilegeVerificationSession.partner_id == partner.id,
+        PrivilegeVerificationSession.status == PrivilegeVerificationStatus.confirmed.value,
+    ]
+    if reset_at is not None:
+        verification_scope.append(PrivilegeVerificationSession.created_at >= reset_at)
+        confirmation_scope.append(PrivilegeVerificationSession.confirmed_at >= reset_at)
     privileges_created_count = _count(
         db,
         select(func.count())
         .select_from(PrivilegeVerificationSession)
-        .where(PrivilegeVerificationSession.partner_id == partner.id),
+        .where(*verification_scope),
     )
     privileges_confirmed_count = _count(
         db,
         select(func.count())
         .select_from(PrivilegeVerificationSession)
-        .where(
-            PrivilegeVerificationSession.partner_id == partner.id,
-            PrivilegeVerificationSession.status == PrivilegeVerificationStatus.confirmed.value,
-        ),
+        .where(*confirmation_scope),
     )
     active_privileges_count = _count(
         db,
         select(func.count())
         .select_from(PrivilegeVerificationSession)
         .where(
-            PrivilegeVerificationSession.partner_id == partner.id,
+            *verification_scope,
             PrivilegeVerificationSession.status == PrivilegeVerificationStatus.active.value,
             PrivilegeVerificationSession.expires_at > now,
         ),
@@ -52,7 +63,7 @@ def build_partner_analytics(db: Session, partner: Partner) -> PartnerAnalyticsRe
         select(func.count())
         .select_from(PrivilegeVerificationSession)
         .where(
-            PrivilegeVerificationSession.partner_id == partner.id,
+            *verification_scope,
             or_(
                 PrivilegeVerificationSession.status == PrivilegeVerificationStatus.expired.value,
                 (

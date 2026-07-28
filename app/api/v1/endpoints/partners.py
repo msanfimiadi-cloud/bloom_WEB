@@ -366,7 +366,7 @@ def list_partner_offers(
     partner = _get_current_partner_or_404(db, current_user.id)
     statement = (
         select(PartnerOffer)
-        .where(PartnerOffer.partner_id == partner.id)
+        .where(PartnerOffer.partner_id == partner.id, PartnerOffer.deleted_at.is_(None))
         .order_by(PartnerOffer.sort_order.asc(), PartnerOffer.id.asc())
     )
     if is_active is not None:
@@ -432,6 +432,20 @@ def update_partner_offer(
     db.commit()
     db.refresh(offer)
     return _partner_offer_to_read(offer)
+
+
+@router.delete("/me/offers/{offer_id}")
+def delete_partner_offer(
+    offer_id: int,
+    current_user: User = Depends(require_partner),
+    db: Session = Depends(get_db),
+) -> dict[str, bool]:
+    partner = _get_current_partner_or_404(db, current_user.id)
+    offer = _get_owned_offer_or_404(db, partner.id, offer_id)
+    offer.is_active = False
+    offer.deleted_at = datetime.now(timezone.utc)
+    db.commit()
+    return {"ok": True}
 
 
 @router.post("/me/offers/{offer_id}/image")
@@ -628,6 +642,7 @@ def _get_owned_offer_or_404(db: Session, partner_id: int, offer_id: int) -> Part
         select(PartnerOffer).where(
             PartnerOffer.id == offer_id,
             PartnerOffer.partner_id == partner_id,
+            PartnerOffer.deleted_at.is_(None),
         )
     ).scalar_one_or_none()
     if offer is None:

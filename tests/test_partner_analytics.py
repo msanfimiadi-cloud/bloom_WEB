@@ -2,10 +2,11 @@ from __future__ import annotations
 
 from collections.abc import Generator
 from datetime import datetime, timedelta, timezone
+from decimal import Decimal
 
 import pytest
 from fastapi.testclient import TestClient
-from sqlalchemy import create_engine
+from sqlalchemy import create_engine, func, select
 from sqlalchemy.orm import Session, sessionmaker
 from sqlalchemy.pool import StaticPool
 
@@ -17,7 +18,7 @@ from app.main import app
 from app.models.city import City
 from app.models.client import ClientProfile
 from app.models.lead import LeadClick
-from app.models.partner import Partner, PartnerQrLink
+from app.models.partner import Partner, PartnerOffer, PartnerQrLink
 from app.models.user import AdminUser, User, UserRole
 from app.models.verification import PrivilegeVerificationSession, PrivilegeVerificationStatus
 
@@ -115,6 +116,7 @@ def analytics_client() -> Generator[TestClient, None, None]:
         )
         session.add_all([partner, other_partner, zero_partner])
         session.flush()
+        session.add(PartnerOffer(partner_id=partner.id, title="Permanent offer", is_active=True))
 
         alpha_qr_one = PartnerQrLink(partner_id=partner.id, slug="alpha-one")
         alpha_qr_two = PartnerQrLink(partner_id=partner.id, slug="alpha-two")
@@ -345,3 +347,87 @@ def test_admin_unknown_partner_returns_404(analytics_client: TestClient) -> None
 
     assert response.status_code == 404
     assert response.json()["detail"] == "Partner not found"
+
+
+def test_admin_reset_starts_new_statistics_without_deleting_business_data(
+    analytics_client: TestClient,
+) -> None:
+    admin_token = _admin_token(analytics_client)
+
+    reset_response = analytics_client.post(
+        "/api/v1/admin/partners/1/analytics/reset",
+        headers=_auth_headers(admin_token),
+    )
+
+    assert reset_response.status_code == 200
+    reset_data = reset_response.json()
+    assert reset_data["qr_links_count"] == 2
+    assert reset_data["lead_clicks_count"] == 0
+    assert reset_data["privileges_created_count"] == 0
+    assert reset_data["privileges_confirmed_count"] == 0
+
+    session_factory = analytics_client.session_factory  # type: ignore[attr-defined]
+    with session_factory() as session:
+        partner = session.get(Partner, 1)
+        assert partner is not None
+        assert partner.analytics_reset_at is not None
+        assert session.execute(select(func.count()).select_from(PartnerOffer)).scalar_one() == 1
+        assert session.execute(select(func.count()).select_from(PrivilegeVerificationSession)).scalar_one() == 7
+
+        reset_at = partner.analytics_reset_at
+        qr_link_id = session.execute(
+            select(PartnerQrLink.id).where(PartnerQrLink.partner_id == partner.id).limit(1)
+        ).scalar_one()
+        client_id = session.execute(
+            select(ClientProfile.id).order_by(ClientProfile.id.asc()).limit(1)
+        ).scalar_one()
+        session.add(
+            LeadClick(
+                partner_id=partner.id,
+                qr_link_id=qr_link_id,
+                source="qr",
+                session_id="after-reset",
+                created_at=reset_at + timedelta(seconds=1),
+            )
+        )
+        session.add(
+            PrivilegeVerificationSession(
+                client_id=client_id,
+                partner_id=partner.id,
+                code="888888",
+                status=PrivilegeVerificationStatus.confirmed.value,
+                source="test",
+                expires_at=reset_at + timedelta(minutes=10),
+                confirmed_at=reset_at + timedelta(seconds=1),
+                saving_amount=Decimal("125.00"),
+                created_at=reset_at + timedelta(seconds=1),
+            )
+        )
+        session.commit()
+
+    analytics_response = analytics_client.get(
+        "/api/v1/admin/partners/1/analytics",
+        headers=_auth_headers(admin_token),
+    )
+    assert analytics_response.status_code == 200
+    assert analytics_response.json()["lead_clicks_count"] == 1
+    assert analytics_response.json()["privileges_created_count"] == 1
+    assert analytics_response.json()["privileges_confirmed_count"] == 1
+
+    partner_response = analytics_client.get(
+        "/api/v1/partner/me",
+        headers=_auth_headers(_partner_token(analytics_client)),
+    )
+    assert partner_response.status_code == 200
+    assert partner_response.json()["stats"]["confirmed_total"] == 1
+    assert partner_response.json()["stats"]["unique_clients_total"] == 1
+    assert Decimal(partner_response.json()["stats"]["savings_month"]) == Decimal("125.00")
+
+
+def test_partner_cannot_reset_own_statistics(analytics_client: TestClient) -> None:
+    response = analytics_client.post(
+        "/api/v1/admin/partners/1/analytics/reset",
+        headers=_auth_headers(_partner_token(analytics_client)),
+    )
+
+    assert response.status_code in {401, 403}

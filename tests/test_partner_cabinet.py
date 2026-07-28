@@ -473,6 +473,41 @@ def test_partner_can_deactivate_active_own_offer(partner_client: TestClient) -> 
     assert response.json()["is_active"] is False
 
 
+def test_partner_can_delete_own_offer_without_exposing_it_again(partner_client: TestClient) -> None:
+    token = _partner_token(partner_client)
+
+    delete_response = partner_client.delete(
+        "/api/v1/partners/me/offers/1",
+        headers=_auth_headers(token),
+    )
+
+    assert delete_response.status_code == 200
+    assert delete_response.json() == {"ok": True}
+
+    list_response = partner_client.get("/api/v1/partners/me/offers", headers=_auth_headers(token))
+    assert list_response.status_code == 200
+    assert all(offer["id"] != 1 for offer in list_response.json())
+
+    patch_response = partner_client.patch(
+        "/api/v1/partners/me/offers/1",
+        headers=_auth_headers(token),
+        json={"title": "Must stay deleted"},
+    )
+    assert patch_response.status_code == 404
+
+
+def test_partner_cannot_delete_another_partner_offer(partner_client: TestClient) -> None:
+    token = _partner_token(partner_client)
+
+    response = partner_client.delete(
+        "/api/v1/partners/me/offers/4",
+        headers=_auth_headers(token),
+    )
+
+    assert response.status_code == 404
+    assert response.json()["detail"] == "Offer not found"
+
+
 def test_partner_offer_create_empty_title_returns_400(partner_client: TestClient) -> None:
     token = _partner_token(partner_client)
 
