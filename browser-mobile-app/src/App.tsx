@@ -2235,6 +2235,15 @@ export default function App() {
       lifecycleTrace("page_transition_request", { nextPage });
       scrollAppToTop();
       setPage(nextPage);
+      if (nextPage === "savings") {
+        void getSavings()
+          .then((savings) => {
+            setData((current) => normalizeAppData({ ...current, savings }));
+          })
+          .catch(() => {
+            // Keep the last successfully loaded savings snapshot on transient errors.
+          });
+      }
     },
     [openCatalog],
   );

@@ -287,18 +287,21 @@ export interface Verification {
 }
 
 export interface SavingsSummary {
-  total?: number;
-  amount?: number;
+  total?: string | number;
+  amount?: string | number;
   currency?: BackendText;
   items?: SavingItem[] | null;
 }
 
 export interface SavingItem {
   id?: ApiId;
+  partner_id?: ApiId;
+  offer_id?: ApiId;
+  offer_title?: BackendText;
   partner?: Partner | null;
   partner_name?: BackendText;
-  amount?: number;
-  value?: number;
+  amount?: string | number;
+  value?: string | number;
   created_at?: BackendText;
   description?: BackendText;
 }
