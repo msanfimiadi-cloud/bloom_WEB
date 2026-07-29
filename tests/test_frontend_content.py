@@ -567,7 +567,1497 @@ def test_frontend_contains_compact_admin_table_markers() -> None:
         "Партнёры",
         "Предложения",
         "QR / лиды",
-        "Подтв…13055 tokens truncated… marker in source or marker in styles
+        "Подтверждения",
+    ):
+        assert tab_text in source
+
+
+def test_frontend_contains_admin_search_filter_markers() -> None:
+    source = _frontend_main()
+    styles = _frontend_styles()
+
+    for expected in (
+        "admin-search",
+        "admin-search-input",
+        "admin-toolbar",
+        "admin-search-reset",
+    ):
+        assert expected in source or expected in styles
+
+    for placeholder in (
+        "Поиск по пользователям",
+        "Поиск по городам",
+        "Поиск по категориям",
+        "Поиск по партнёрам",
+        "Поиск по предложениям",
+        "Поиск по QR",
+        "Поиск по лидам",
+        "Поиск по подтверждениям",
+    ):
+        assert placeholder in source
+
+    for helper_marker in (
+        "normalizeSearchText",
+        "filterAdminRows",
+        "data-admin-search",
+        "data-admin-search-reset",
+        "Ничего не найдено.",
+    ):
+        assert helper_marker in source
+
+
+def test_frontend_contains_reusable_status_badges() -> None:
+    source = _frontend_main()
+    styles = _frontend_styles()
+
+    for expected in (
+        "renderStatusBadge",
+        "status-badge",
+        "status-badge--success",
+        "status-badge--muted",
+        "status-badge--warning",
+        "status-badge--danger",
+    ):
+        assert expected in source or expected in styles
+
+    for expected_label in (
+        "Активен",
+        "Неактивен",
+        "Активна",
+        "Неактивна",
+        "Проверен",
+        "Не проверен",
+        "Подтверждено",
+        "Истекло",
+        "Отменено",
+    ):
+        assert expected_label in source
+
+    for preserved_marker in (
+        "Пользователи",
+        "Города",
+        "Категории",
+        "Партнёры",
+        "Предложения",
+        "QR / лиды",
+        "Подтверждения",
+        "Личный кабинет",
+        "Кабинет партнёра",
+        "womenClubAdminAccessToken",
+        "womenclub_partner_token",
+        "womenclub_client_token",
+        "dashboard-shell",
+        "dashboard-topbar",
+        "dashboard-sidebar",
+        "dashboard-main",
+        "Женский клуб",
+        "Федеральный клуб привилегий для девушек",
+        "Новосибирск",
+        "Череповец",
+    ):
+        assert preserved_marker in source or preserved_marker in styles
+
+    for removed_lotus_marker in (
+        "reference-lotus-layer",
+        "lotus-layer",
+        "lotus-decor",
+        "--user-lotus-reference-svg",
+        "--lotus-reference-background",
+        "/assets/lotus-bg.png",
+    ):
+        assert removed_lotus_marker not in source
+        assert removed_lotus_marker not in styles
+
+
+def test_frontend_contains_human_readable_admin_labels() -> None:
+    source = _frontend_main()
+
+    for expected in (
+        "Название города",
+        "Порядок сортировки",
+        "Владелец / аккаунт партнёра",
+        "Название партнёра",
+        "Ссылка на соцсеть / сайт",
+        "Название предложения",
+        "Обычная цена",
+        "Цена участницы",
+        "Целевая ссылка",
+        "Подтверждено",
+        "Email",
+        "Телефон",
+        "Роль",
+        "Активен",
+        "Действие",
+        "Клиент",
+        "Администратор",
+    ):
+        assert expected in source
+
+
+def test_frontend_does_not_render_technical_admin_labels() -> None:
+    source = _frontend_main()
+    rendered_table_headers = "\n".join(re.findall(r"renderTable\(\[(.*?)\]", source, re.S))
+
+    for forbidden_label in (
+        "city_id",
+        "owner_user_id",
+        "category_slug",
+        "sort_order",
+        "is_active",
+    ):
+        assert f">{forbidden_label}<" not in source
+        assert f">{forbidden_label}" not in source
+        assert f"'{forbidden_label}'" not in rendered_table_headers
+        assert f'"{forbidden_label}"' not in rendered_table_headers
+
+
+def test_frontend_contains_admin_cabinet_tabs() -> None:
+    source = _frontend_main()
+
+    for tab_text in (
+        "Панель администратора",
+        "Главная",
+        "Обзор",
+        "Пользователи",
+        "Города",
+        "Категории",
+        "Партнёры",
+        "Предложения",
+        "QR / лиды",
+        "Подтверждения",
+    ):
+        assert tab_text in source
+
+
+
+def test_frontend_contains_admin_payment_requests_ui_markers() -> None:
+    source = _frontend_main()
+    styles = _frontend_styles()
+
+    for expected in (
+        "Оплаты",
+        "Заявки на оплату",
+        "Проверяйте ручные оплаты",
+        "Заявок на оплату пока нет",
+        "Подтвердить",
+        "Отклонить",
+        "Ожидает отметки клиента",
+        "Подписка продлена",
+        "/api/v1/admin/payment-requests",
+        "/approve",
+        "/reject",
+        "admin-payments",
+        "admin-payment-card",
+        "admin-payment-actions",
+        "admin-payment-receipts",
+        "custom-select",
+        "data-custom-select",
+        "custom-select:change",
+    ):
+        assert expected in source or expected in styles
+
+    for preserved_marker in (
+        "Партнёры",
+        "Предложения",
+        "На проверке",
+        "Активность",
+        "Аналитика",
+        "Кабинет клуба",
+        "Кабинет партнёра",
+        "Личный кабинет",
+        "setup-password",
+        "landing",
+        "reference-lotus-layer",
+        "/assets/lotus-bg.png",
+    ):
+        if preserved_marker in ("reference-lotus-layer", "/assets/lotus-bg.png"):
+            assert preserved_marker not in source
+            assert preserved_marker not in styles
+        else:
+            assert preserved_marker in source or preserved_marker in styles
+
+
+def test_frontend_contains_flower_revoke_and_task_delete_controls() -> None:
+    source = _frontend_main()
+
+    for expected in (
+        "Забрать лепестки у участницы",
+        'data-admin-form="flowerPetalRevoke"',
+        "/api/v1/admin/flower/petals/revoke",
+        "data-special-task-delete",
+        "/api/v1/admin/flower/special-tasks/",
+        "Действие нельзя отменить",
+    ):
+        assert expected in source
+
+def test_frontend_contains_admin_cabinet_endpoint_strings() -> None:
+    source = _frontend_main()
+
+    for endpoint in (
+        "/api/v1/admin/users",
+        "/api/v1/admin/cities",
+        "/api/v1/admin/categories",
+        "/api/v1/admin/partners",
+        "/api/v1/admin/leads/partners",
+        "/api/v1/admin/verifications",
+    ):
+        assert endpoint in source
+
+
+def test_admin_categories_support_create_edit_and_safe_toggle_ui() -> None:
+    endpoints = _admin_endpoints()
+    schemas = _admin_schemas()
+    source = _frontend_main()
+
+    assert '@router.get("/categories", response_model=list[CategoryRead])' in endpoints
+    assert '@router.post("/categories", response_model=CategoryRead)' in endpoints
+    assert '@router.patch("/categories/{category_id}", response_model=CategoryRead)' in endpoints
+    assert '@router.delete("/categories/{category_id}"' not in endpoints
+    assert 'class CategoryCreate' in schemas
+    assert 'class CategoryUpdate' in schemas
+
+    for marker in (
+        "Новая категория",
+        "Редактировать категорию",
+        "Редактировать",
+        "Деактивировать",
+        "Активировать",
+        "Название",
+        "Slug",
+        "Активна",
+        "Порядок сортировки",
+        "Отмена",
+        "postJson('/api/v1/admin/categories'",
+        "patchJson(`/api/v1/admin/categories/${categoryId}`",
+        "data-admin-category-edit",
+        "data-admin-category-active-toggle",
+        "category_ids",
+        "getPartnerCategories",
+        "partner-multicategory",
+        "category-chip",
+    ):
+        assert marker in source
+
+
+
+
+def test_admin_partners_phase2_form_toggle_and_sections_markers() -> None:
+    source = _frontend_main()
+
+    for marker in (
+        "adminState.partnerFormOpen",
+        "data-admin-partner-create",
+        "+ Добавить партнёра",
+        "data-admin-partner-edit",
+        "data-admin-partner-edit-cancel",
+        "admin-partner-create-page",
+        "Основная информация",
+        "Категории",
+        "Контакты",
+        "Сайт и соцсети",
+        "Доступ и публикация",
+        "admin-partners-layout",
+        "admin-partners-table",
+        "partnerFilters",
+        "data-admin-partner-filter",
+        "data-admin-partner-filter-reset",
+        "data-admin-partner-filter-clear",
+        "Найдено:",
+        "По выбранным фильтрам партнёры не найдены.",
+        "renderPartnersList(partners, adminState.partners)",
+        "renderPartnerForm()",
+        "adminState.partnerFormOpen = true;",
+        "adminState.partnerFormOpen = false;",
+    ):
+        assert marker in source
+
+    assert "if (adminState.partnerFormOpen)" in source
+    assert 'class="admin-partner-form-panel is-open"' not in source
+
+
+
+def test_admin_partners_phase21_filters_and_category_normalization_markers() -> None:
+    source = _frontend_main()
+
+    for marker in (
+        "city: ''",
+        "category: ''",
+        "activity: 'all'",
+        "photos: 'all'",
+        "offers: 'all'",
+        "getPartnerCategories(partner)",
+        "name === '[object Object]'",
+        "slug === '[object Object]'",
+        "+ Добавить партнёра",
+        "adminState.partnerFormOpen",
+    ):
+        assert marker in source
+def test_frontend_category_admin_keeps_public_dashboard_and_removed_image_markers() -> None:
+    source = _frontend_main()
+    styles = _frontend_styles()
+
+    for marker in (
+        "Женский клуб",
+        "Федеральный клуб привилегий для девушек",
+        "Новосибирск",
+        "Череповец",
+        "dashboard-shell",
+        "dashboard-topbar",
+        "dashboard-sidebar",
+        "dashboard-main",
+        "womenClubAdminAccessToken",
+        "womenclub_partner_token",
+        "womenclub_client_token",
+    ):
+        assert marker in source
+
+    for removed_marker in (
+        "reference-lotus-layer",
+        "lotus-layer",
+        "lotus-decor",
+        "--user-lotus-reference-svg",
+        "--lotus-reference-background",
+        "/assets/lotus-bg.png",
+    ):
+        assert removed_marker not in source
+        assert removed_marker not in styles
+
+
+def test_frontend_contains_admin_user_role_options() -> None:
+    source = _frontend_main()
+
+    for role in ("client", "partner", "admin"):
+        assert role in source
+
+
+def test_frontend_contains_admin_users_management_ui_strings() -> None:
+    source = _frontend_main()
+
+    for expected in (
+        "data-admin-form=\"user\"",
+        "data-user-active-toggle",
+        "Создать пользователя",
+        "owner_user_id",
+        "Без владельца",
+        "owner_email",
+    ):
+        assert expected in source
+
+
+def test_public_landing_copy_and_city_chips_remain_intact() -> None:
+    source = _frontend_main()
+
+    for public_copy in (
+        "Женский клуб",
+        "Федеральный клуб привилегий для девушек",
+        "Новосибирск",
+        "Череповец",
+    ):
+        assert public_copy in source
+
+
+def test_frontend_contains_admin_city_edit_and_safe_deactivate_ui() -> None:
+    source = _frontend_main()
+    styles = _frontend_styles()
+
+    for expected in (
+        "Редактировать город",
+        "Редактировать",
+        "Деактивировать",
+        "Убрать город из активных?",
+        "data-admin-city-edit",
+        "data-admin-city-active-toggle",
+        "Название",
+        "Slug",
+        "Активен",
+        "Порядок сортировки",
+        "Отмена",
+        "POST",
+        "PATCH",
+        "/api/v1/admin/cities",
+        "patchJson(`/api/v1/admin/cities/${cityId}`",
+        "is_active: city.is_active ? false : true",
+        "await loadCities();",
+    ):
+        assert expected in source or expected in styles
+
+
+def test_frontend_city_management_keeps_required_landing_dashboard_and_negative_markers() -> None:
+    source = _frontend_main()
+    styles = _frontend_styles()
+
+    for expected in (
+        "Женский клуб",
+        "Федеральный клуб привилегий для девушек",
+        "Новосибирск",
+        "Череповец",
+        "dashboard-shell",
+        "dashboard-topbar",
+        "dashboard-sidebar",
+        "dashboard-main",
+        "womenClubAdminAccessToken",
+        "womenclub_partner_token",
+        "womenclub_client_token",
+    ):
+        assert expected in source or expected in styles
+
+    for removed_marker in (
+        "reference-lotus-layer",
+        "lotus-layer",
+        "lotus-decor",
+        "--user-lotus-reference-svg",
+        "--lotus-reference-background",
+        "/assets/lotus-bg.png",
+    ):
+        assert removed_marker not in source
+        assert removed_marker not in styles
+
+
+def test_frontend_contains_admin_partner_edit_ui() -> None:
+    source = _frontend_main()
+
+    for expected in (
+        "Редактирование партнёра",
+        "Редактировать",
+        "/api/v1/admin/partners/",
+        "Город",
+        "Категория",
+        "Владелец",
+        "Без владельца",
+        "Название",
+        "Описание",
+        "Адрес",
+        "Телефон",
+        "Сайт",
+        "Соцсеть",
+        "Активен",
+        "Проверен",
+    ):
+        assert expected in source
+
+
+def test_frontend_contains_admin_offer_edit_ui() -> None:
+    source = _frontend_main()
+    styles = _frontend_styles()
+
+    for expected in (
+        "Редактировать предложение",
+        "Редактировать",
+        "/api/v1/admin/offers/",
+        "PATCH",
+        "Название",
+        "Описание",
+        "Краткая выгода",
+        "Условия",
+        "Активно",
+        "Отмена",
+        "POST",
+        "/api/v1/admin/partners/",
+        "/offers",
+        "Женский клуб",
+        "Федеральный клуб привилегий для девушек",
+        "Новосибирск",
+        "Череповец",
+        "dashboard-shell",
+        "dashboard-topbar",
+        "dashboard-sidebar",
+        "dashboard-main",
+        "womenClubAdminAccessToken",
+        "womenclub_partner_token",
+        "womenclub_client_token",
+    ):
+        assert expected in source or expected in styles
+
+    for removed_lotus_marker in (
+        "reference-lotus-layer",
+        "lotus-layer",
+        "lotus-decor",
+        "--user-lotus-reference-svg",
+        "--lotus-reference-background",
+        "/assets/lotus-bg.png",
+    ):
+        assert removed_lotus_marker not in source
+        assert removed_lotus_marker not in styles
+
+
+def test_frontend_contains_admin_qr_edit_ui() -> None:
+    source = _frontend_main()
+    styles = _frontend_styles()
+
+    for expected in (
+        "Редактировать QR-ссылку",
+        "Редактировать",
+        "/api/v1/admin/qr-links/",
+        "PATCH",
+        "Slug",
+        "Целевая ссылка",
+        "Deep-link payload",
+        "Активна",
+        "Отмена",
+        "POST",
+        "/api/v1/admin/partners/",
+        "/qr-links",
+        "Женский клуб",
+        "Федеральный клуб привилегий для девушек",
+        "Новосибирск",
+        "Череповец",
+        "dashboard-shell",
+        "dashboard-topbar",
+        "dashboard-sidebar",
+        "dashboard-main",
+        "womenClubAdminAccessToken",
+        "womenclub_partner_token",
+        "womenclub_client_token",
+    ):
+        assert expected in source or expected in styles
+
+    for removed_lotus_marker in (
+        "reference-lotus-layer",
+        "lotus-layer",
+        "lotus-decor",
+        "--user-lotus-reference-svg",
+        "--lotus-reference-background",
+        "/assets/lotus-bg.png",
+    ):
+        assert removed_lotus_marker not in source
+        assert removed_lotus_marker not in styles
+
+
+def test_frontend_keeps_landing_and_dashboard_markers_with_partner_edit() -> None:
+    source = _frontend_main()
+    styles = _frontend_styles()
+
+    for expected in (
+        "Женский клуб",
+        "Федеральный клуб привилегий для девушек",
+        "Новосибирск",
+        "Череповец",
+        "dashboard-shell",
+        "dashboard-topbar",
+        "dashboard-sidebar",
+        "dashboard-main",
+        "womenClubAdminAccessToken",
+        "womenclub_partner_token",
+        "womenclub_client_token",
+    ):
+        assert expected in source or expected in styles
+
+
+def test_frontend_login_modes_remain_available() -> None:
+    source = _frontend_main()
+
+    for expected in (
+        "Администратор",
+        "Партнёр",
+        "Клиент",
+    ):
+        assert expected in source
+
+
+def test_frontend_contains_partner_cabinet_foundation() -> None:
+    source = _frontend_main()
+
+    for expected in (
+        "Кабинет партнёра",
+        "Партнёр",
+        "Профиль",
+        "Предложения",
+        "QR / лиды",
+        "Подтверждения",
+    ):
+        assert expected in source
+
+
+def test_frontend_contains_partner_endpoint_strings_and_separate_token() -> None:
+    source = _frontend_main()
+
+    for endpoint in (
+        "/api/v1/auth/user-login",
+        "/api/v1/auth/user-me",
+        "/api/v1/partners/me",
+        "/api/v1/partners/me/offers",
+        "/api/v1/partners/me/qr-links",
+        "/api/v1/partners/me/leads",
+        "/api/v1/partners/me/verifications",
+    ):
+        assert endpoint in source
+
+    assert "/api/v1/auth/login" in source
+    assert "womenclub_partner_token" in source
+
+
+def test_partner_cabinet_uses_human_readable_copy_statuses_and_empty_states() -> None:
+    source = _frontend_main()
+
+    for expected in (
+        "Пока нет предложений.",
+        "Добавьте первое предложение",
+        "Пока нет QR-ссылок.",
+        "Создайте QR-ссылку",
+        "Пока нет лидов.",
+        "Когда клиенты перейдут по QR-ссылке",
+        "Пока нет подтверждений.",
+        "Когда клиент покажет код привилегии",
+        "Активен",
+        "Неактивен",
+        "Проверен",
+        "Не проверен",
+        "Активно",
+        "Неактивно",
+        "Активна",
+        "Неактивна",
+        "Подтверждено",
+        "Истекло",
+        "Отменено",
+        "Название",
+        "Краткая выгода",
+        "Описание",
+        "Условия",
+        "Обычная цена",
+        "Код ссылки",
+        "Целевая ссылка",
+        "Подтвердить привилегию",
+    ):
+        assert expected in source
+
+    for marker in (
+        "womenclub_partner_token",
+        "womenclub_client_token",
+        "womenClubAdminAccessToken",
+        "dashboard-shell",
+        "dashboard-topbar",
+        "dashboard-sidebar",
+        "dashboard-main",
+        "Женский клуб",
+        "Федеральный клуб привилегий для девушек",
+        "Новосибирск",
+        "Череповец",
+    ):
+        assert marker in source
+
+    assert "renderStatusBadge(formatStatus(item.status))" in source
+    assert "renderActiveStatusBadge(offer.is_active)" in source
+    assert "renderActiveStatusFeminineBadge(link.is_active)" in source
+
+def test_frontend_contains_client_cabinet_foundation() -> None:
+    source = _frontend_main()
+
+    for expected in (
+        "Личный кабинет",
+        "Клиент",
+        "Профиль",
+        "Каталог",
+        "Моя подписка",
+        "История",
+    ):
+        assert expected in source
+
+
+def test_frontend_contains_client_endpoint_strings_and_separate_token() -> None:
+    source = _frontend_main()
+
+    for endpoint in (
+        "/api/v1/auth/user-login",
+        "/api/v1/auth/user-me",
+        "/api/v1/clients/me",
+        "/api/v1/clients/me/subscription",
+        "/api/v1/clients/catalog/partners",
+        "/api/v1/clients/partners/",
+        "/api/v1/clients/me/verifications",
+    ):
+        assert endpoint in source
+
+    assert "womenclub_client_token" in source
+    assert "womenClubAdminAccessToken" in source
+    assert "womenclub_partner_token" in source
+
+
+def test_frontend_contains_client_vk_link_code_ui() -> None:
+    source = _frontend_main()
+
+    for expected in (
+        "Привязка VK",
+        "Создать код для VK",
+        "/api/v1/clients/me/vk-link-codes",
+        "Привязать",
+    ):
+        assert expected in source
+
+    assert "womenclub_client_token" in source
+    assert "womenClubAdminAccessToken" in source
+    assert "womenclub_partner_token" in source
+
+    for public_copy in (
+        "Женский клуб",
+        "Федеральный клуб привилегий для девушек",
+        "Новосибирск",
+        "Череповец",
+    ):
+        assert public_copy in source
+
+
+def test_client_cabinet_uses_human_readable_profile_catalog_history_and_subscription_copy() -> None:
+    source = _frontend_main()
+
+    for forbidden in (
+        "ID города не угадывается",
+        "Город (ID)",
+        "например, beauty",
+        "Например, beauty",
+        "ID из админки",
+    ):
+        assert forbidden not in source
+
+    for expected in (
+        "Выберите город",
+        "Город помогает подобрать предложения рядом.",
+        "Все категории",
+        "Категория",
+        "По выбранному городу",
+        "Все города",
+        "Название, описание, адрес",
+        "Пока нет подтверждений.",
+        "Активная подписка пока не найдена",
+        "Когда подписка будет оформлена",
+        "Активно",
+        "Подтверждено",
+        "Истекло",
+        "Отменено",
+    ):
+        assert expected in source
+
+    assert "selected_city_id: selectedCityId ? Number(selectedCityId) : null" in source
+    assert "renderStatusBadge(formatStatus(item.status))" in source
+    assert "getPartnerCategories(partner)" in source
+
+
+def test_frontend_contains_vk_password_setup_flow_markers() -> None:
+    source = _frontend_main()
+
+    assert "setup_token" in source
+    assert "client_login" in source
+    assert "getPasswordSetupParams" in source
+    assert "applyClientLoginPrefill" in source
+    assert "Задайте пароль" in source
+    assert "Новый пароль" in source
+    assert "Повторите пароль" in source
+    assert "Пароль установлен. Теперь войдите" in source
+    assert "login prefill" in source
+    assert "client login mode" in source
+    assert "/api/v1/auth/password-setup/complete" in source
+    assert "Ссылка недействительна или истекла" in source
+
+
+def test_frontend_preserves_public_and_cabinet_contract_markers_after_password_setup() -> None:
+    source = _frontend_main()
+    styles = _frontend_styles()
+
+    for expected in (
+        "Федеральный клуб привилегий для девушек",
+        "data-login-form",
+        'data-login-mode="admin"',
+        'data-login-mode="partner"',
+        'data-login-mode="client"',
+        "/api/v1/auth/login",
+        "/api/v1/auth/user-login",
+        "Панель администратора",
+        "partner-dashboard",
+        "client-dashboard",
+    ):
+        assert expected in source
+
+    for removed_marker in (
+        "reference-lotus-layer",
+        "lotus-layer",
+        "lotus-decor",
+        "--user-lotus-reference-svg",
+        "--lotus-reference-background",
+    ):
+        assert removed_marker not in source
+        assert removed_marker not in styles
+
+
+def test_public_landing_contains_smm_hero_menu_directions_and_partner_modal() -> None:
+    source = _frontend_main()
+    styles = _frontend_styles()
+
+    for expected in (
+        "editorial-hero",
+        "Твой мир привилегий",
+        "Красота, забота, отдых и вдохновение",
+        "специальные предложения у лучших партнёров города",
+        "formatPartnerBenefit",
+        "Клубная привилегия",
+        "landing-menu",
+        "landing-menu-toggle",
+        "landing-menu-panel",
+        "О клубе",
+        "Как это работает",
+        "Партнёры",
+        "Подписка",
+        "Стать участницей",
+        "Контакты",
+        "landing-about",
+        "landing-how",
+        "landing-partners",
+        "landing-directions",
+        "landing-join",
+        "landing-cities",
+        "landing-subscription",
+        "landing-contacts",
+        "editorial-category-card",
+        "editorial-directions",
+        "data-landing-category-slug",
+        "selectedLandingDirection",
+        "landingPartnerModalState",
+        "/api/v1/public/landing/partners",
+        "landing-partner-modal",
+        "landing-partner-panel",
+        "landing-partner-card",
+        "landing-partner-cover",
+        "landing-partner-cover--placeholder",
+        "landing-carousel-button",
+        "Партнёры этого направления скоро появятся.",
+        "Закрыть",
+    ):
+        assert expected in source or expected in styles
+
+    for expected_style in (
+        ".hero-card",
+        ".pill",
+        ".landing-menu-panel",
+        ".landing-direction-button",
+        ".landing-partner-modal",
+        ".landing-partner-card",
+        ".landing-carousel-button",
+    ):
+        assert expected_style in styles
+
+    topbar_block = _css_block(styles, ".topbar")
+    landing_menu_block = _css_block(styles, ".landing-menu")
+    landing_menu_panel_block = _css_block(styles, ".landing-menu-panel")
+    hero_card_block = _css_block(styles, ".hero-card")
+
+    assert "z-index: 20;" in topbar_block
+    assert "z-index: 30;" in landing_menu_block
+    assert "Keep landing dropdown above hero/glass cards." in landing_menu_panel_block
+    assert "position: absolute;" in landing_menu_panel_block
+    assert "z-index: 40;" in landing_menu_panel_block
+    assert "pointer-events: auto;" in landing_menu_panel_block
+    assert "right: 0;" in landing_menu_panel_block
+    assert "z-index:" not in hero_card_block
+
+    assert "Красота, забота и привилегии рядом с вами" not in source
+    assert "hero-visual" not in source
+    assert "hero-visual-image" not in styles
+    assert "1E+1" not in source
+    assert "-1E+1%" not in source
+
+
+def test_public_landing_uses_safe_public_partner_fetches_and_images() -> None:
+    source = _frontend_main()
+    styles = _frontend_styles()
+    public_landing_match = re.search(r"const renderPublicApp = \(\) => \{(.*?)const authTokenKey", source, re.S)
+    assert public_landing_match is not None
+    public_landing_source = public_landing_match.group(1)
+
+    assert "/api/v1/public/landing/partners" in source
+    assert "/api/v1/admin/partners" not in public_landing_source
+    assert "/api/v1/clients/catalog/partners" not in public_landing_source
+    assert "Красота, забота и привилегии рядом с вами" not in source
+    assert "hero-visual" not in source
+    assert "hero-visual-image" not in styles
+    assert 'url("/assets/hero-woman.jpg")' not in styles
+    assert "startsWith('/assets/')" in source
+    assert "startsWith('/uploads/')" in source
+
+
+def test_frontend_contains_partner_logo_cover_upload_markers() -> None:
+    source = _frontend_main()
+    styles = _frontend_styles()
+
+    for expected in (
+        "Загрузить логотип",
+        "Загрузить обложку",
+        "Фотографии профиля",
+        "Изображения партнёра",
+        "/api/v1/admin/partners/${partnerId}/images?kind=${kind}",
+        "/api/v1/partners/me/images?kind=${kind}",
+        "partner-image-uploader",
+        "partner-image-preview",
+        "data-partner-upload-kind=\"logo\"",
+        "data-partner-upload-kind=\"cover\"",
+        "type=\"file\"",
+        "accept=\"image/jpeg,image/png,image/webp\"",
+        "FormData",
+        "input.value = \"\"",
+        "partner-upload-status",
+        "Загружаем изображение",
+        "Изображение загружено",
+        "Не удалось загрузить изображение",
+        "/uploads/",
+    ):
+        assert expected in source or expected in styles
+
+
+def test_frontend_contains_partner_marketplace_profile_preview() -> None:
+    source = _frontend_main()
+    styles = _frontend_styles()
+
+    for expected in (
+        "renderPartnerMarketplaceCard",
+        "partner-marketplace-card",
+        "partner-marketplace-cover",
+        "partner-marketplace-logo",
+        "partner-marketplace-body",
+        "partner-marketplace-meta",
+        "partner-marketplace-offer",
+        "partner-profile-layout",
+        "partner-profile-main",
+        "partner-profile-side",
+        "partner-side-stack",
+        "partner-section",
+        "partner-section--compact",
+        "partner-section-header",
+        "partner-section-description",
+        "partner-combined-section",
+        "partner-progress-card",
+        "Контакты и график",
+        "partner-missing-list",
+        "partner-save-bar",
+        "partner-save-status",
+        "partner-empty-state",
+        "partner-profile-preview",
+        "partner-profile-settings",
+        "partner-profile-hints",
+        "partner-onboarding",
+        "partner-onboarding-progress",
+        "partner-onboarding-step",
+        "partner-onboarding-action",
+        "Настройте витрину за 4 шага",
+        "Готовность профиля",
+        "Заполните главное для понятной витрины",
+        "Основная информация",
+        "Фото и обложка",
+        "Предложения",
+        "Публикация и проверка",
+        "Витрина готова к публикации",
+        "Нужно заполнить",
+        "Профиль партнёра",
+        "Главные данные для витрины",
+        "Preview для клиента",
+        "Название, город, категорию и статусы обновляет администратор",
+        "График работы",
+        "Витрина партнёра",
+        "Заполненность профиля",
+        "Профиль заполнен на",
+        "Нет логотипа",
+        "Нет обложки",
+        "Нет описания",
+        "Нет предложений",
+        "Есть несохранённые изменения",
+        "Сохранение…",
+        "Сохранено",
+        "Например: Bloom Beauty Studio",
+        "Новосибирск, ул. Ленина, 15",
+        "+7 999 123-45-67",
+        "Уютная студия красоты в центре города",
+        "Добавьте 3–5 фото",
+        "Добавьте первое предложение — именно оно мотивирует клиентку прийти.",
+        "Загрузить логотип",
+        "Загрузить обложку",
+        "/api/v1/partners/me/images",
+        "/api/v1/admin/partners/",
+        "/images?kind=",
+        "working_hours",
+        "logo_url",
+        "cover_url",
+        "sort_order",
+    ):
+        assert expected in source or expected in styles
+
+    assert "startsWith('/uploads/')" in source
+    assert "startsWith('/assets/')" in source
+
+def test_frontend_contains_offer_marketplace_cards() -> None:
+    source = _frontend_main()
+    styles = _frontend_styles()
+
+    for expected in (
+        "renderOfferMarketplaceCard",
+        "offer-marketplace-card",
+        "offer-marketplace-image",
+        "offer-marketplace-benefit",
+        "offer-marketplace-preview",
+        "offer-card-grid",
+        "offer-card-placeholder",
+        "Предложения и привилегии",
+        "Короткая выгода и условия для клиенток",
+        "Preview для клиента",
+        "Добавьте первое предложение",
+        "URL изображения",
+        "Обычная цена",
+        "Цена участницы",
+        "Получить привилегию",
+        "Карточка привилегии партнёра",
+        "Фото услуги",
+        "Клубная привилегия",
+        "/uploads/offer.webp",
+        "/assets/offer.webp",
+    ):
+        assert expected in source or expected in styles
+
+    assert "startsWith('/uploads/')" in source
+    assert "startsWith('/assets/')" in source
+    assert "image_url: getOptionalText(formData, 'image_url')" in source
+    assert "partner-marketplace-card" in source or "partner-marketplace-card" in styles
+    assert "Загрузить логотип" in source
+    assert "Загрузить обложку" in source
+    assert "/api/v1/public/landing/partners" in source
+    assert "landing-partner-card" in source or "landing-partner-card" in styles
+    assert "data-landing-partner-modal" in source
+    assert "setup_token" in source
+    assert "womenClubAdminAccessToken" in source
+    assert "womenclub_partner_token" in source
+    assert "womenclub_client_token" in source
+
+    for removed_marker in (
+        "reference-lotus-layer",
+        "lotus-layer",
+        "lotus-decor",
+        "--user-lotus-reference-svg",
+        "--lotus-reference-background",
+        "/assets/lotus-bg.png",
+    ):
+        assert removed_marker not in source
+        assert removed_marker not in styles
+
+
+def test_frontend_contains_safe_offer_image_upload_markers() -> None:
+    source = _frontend_main()
+    styles = _frontend_styles()
+
+    for expected in (
+        "Фото предложения",
+        "Загрузить фото предложения",
+        "Сначала сохраните, затем загрузите фото.",
+        "/api/v1/admin/offers/",
+        "/image",
+        "/api/v1/partners/me/offers/",
+        "offer-image-uploader",
+        "offer-image-preview",
+        "offer-image-upload-actions",
+        "offer-image-status",
+        "admin-offers-layout",
+        "admin-offers-toolbar",
+        "admin-offers-preview-panel",
+        "admin-offers-table-panel",
+        "admin-offers-form-panel",
+        "admin-table-actions",
+        "admin-action-button",
+        "admin-table-action",
+        "/uploads/",
+        "renderOfferMarketplaceCard",
+        "offer-marketplace-card",
+        "offer-marketplace-image",
+        "Загрузить логотип",
+        "Загрузить обложку",
+        "partner-image-uploader",
+        "partner-image-preview",
+        "/api/v1/public/landing/partners",
+        "data-landing-partner-modal",
+        "landing-directions",
+        "setup_token",
+        "womenClubAdminAccessToken",
+        "womenclub_partner_token",
+        "womenclub_client_token",
+        "dashboard-shell",
+        "dashboard-topbar",
+        "dashboard-sidebar",
+        "dashboard-main",
+    ):
+        assert expected in source or expected in styles
+
+    assert "startsWith('/uploads/')" in source
+    assert "startsWith('/assets/')" in source
+
+    for removed_marker in (
+        "reference-lotus-layer",
+        "lotus-layer",
+        "lotus-decor",
+        "--user-lotus-reference-svg",
+        "--lotus-reference-background",
+        "/assets/lotus-bg.png",
+    ):
+        assert removed_marker not in source
+        assert removed_marker not in styles
+
+
+def test_frontend_contains_partner_gallery_photo_mvp_markers() -> None:
+    source = FRONTEND_MAIN.read_text(encoding="utf-8")
+    styles = FRONTEND_STYLES.read_text(encoding="utf-8")
+
+    required_source_markers = [
+        "Галерея партнёра",
+        "Загрузить фото в галерею",
+        "data-partner-gallery-upload",
+        "Фото для клиентской витрины.",
+        "Публикация после проверки.",
+        "Фото загружено и отправлено на проверку.",
+        "На проверке",
+        "Ожидает активации.",
+        "Скрыть фото",
+        "partner-gallery",
+        "partner-gallery-grid",
+        "/api/v1/admin/partners/",
+        "/photos",
+        "/api/v1/partners/me/photos",
+        "landing-partner-gallery",
+        "/api/v1/partners/me/images?kind=${kind}",
+        "/api/v1/admin/partners/${partnerId}/images?kind=${kind}",
+        "/api/v1/partners/me/offers/${offerId}/image",
+        "data-partner-offer-image-upload",
+        "Сначала сохраните предложение",
+        "/api/v1/admin/offers/${offerId}/image",
+        "partner-marketplace-card",
+        "offer-marketplace-card",
+        "setup_token",
+        "/api/v1/public/landing/partners",
+        "startsWith('/uploads/')",
+    ]
+    for marker in required_source_markers:
+        assert marker in source
+
+    for marker in [
+        ".partner-gallery",
+        ".partner-gallery-grid",
+        ".partner-gallery-item",
+        ".partner-gallery-image",
+        ".partner-gallery-actions",
+        ".partner-gallery-upload",
+        ".partner-gallery-empty",
+        ".partner-gallery-status",
+        ".partner-empty-state",
+    ]:
+        assert marker in styles
+
+    forbidden_reference_markers = ["lotus", "Лотос", "remote image fetch"]
+    for marker in forbidden_reference_markers:
+        assert marker not in source
+
+
+def test_frontend_contains_partner_content_moderation_markers() -> None:
+    source = _frontend_main()
+    styles = _frontend_styles()
+
+    for expected in (
+        "Публикация после проверки администратором.",
+        "Предложение отправлено на проверку. После активации администратором оно появится у клиентов.",
+        "Публикация после проверки.",
+        "Фото загружено и отправлено на проверку.",
+        "Ожидает активации.",
+        "На проверке",
+        "partner-gallery-status",
+        "renderPartnerReviewStatusBadge",
+        "Фото для клиентской витрины.",
+        "partner-marketplace-card",
+        "offer-marketplace-card",
+        "/api/v1/partners/me/photos",
+        "/api/v1/partners/me/offers",
+        "/api/v1/partners/me/activity",
+        "/api/v1/partners/me/analytics",
+        "setup_token",
+        "dashboard-shell",
+        "womenclub_partner_token",
+        "womenclub_client_token",
+        "/api/v1/public/landing/partners",
+    ):
+        assert expected in source or expected in styles
+
+    for removed_marker in (
+        "reference-lotus-layer",
+        "lotus-layer",
+        "lotus-decor",
+        "--user-lotus-reference-svg",
+        "--lotus-reference-background",
+        "/assets/lotus-bg.png",
+    ):
+        assert removed_marker not in source
+        assert removed_marker not in styles
+
+
+def test_frontend_contains_client_marketplace_partner_catalog_markers() -> None:
+    source = _frontend_main()
+    styles = _frontend_styles()
+
+    for expected in (
+        "client-marketplace-grid",
+        "client-partner-card",
+        "client-partner-cover",
+        "client-partner-logo",
+        "client-partner-gallery",
+        "client-partner-detail",
+        "client-partner-offers",
+        "client-partner-empty",
+        "Партнёры пока не найдены",
+        "Попробуйте выбрать другой город или категорию",
+        "Предложения скоро появятся",
+        "Открыть",
+        "Получить привилегию",
+        "Проверенный партнёр",
+        "renderOfferMarketplaceCard",
+        "offer-marketplace-card",
+        "getActivePartnerGalleryPhotos(partner.photos)",
+        "isSafePublicAssetUrl(partner.cover_url)",
+        "isSafePublicAssetUrl(partner.logo_url)",
+        "openClientPartnerMarketplace",
+        "/api/v1/clients/partners/${partnerId}",
+        "/api/v1/clients/partners/${partnerId}/offers",
+        "partner-gallery",
+        "partner-gallery-grid",
+        "Загрузить фото в галерею",
+        "setup_token",
+        "womenClubAdminAccessToken",
+        "womenclub_partner_token",
+        "womenclub_client_token",
+        "dashboard-shell",
+        "dashboard-topbar",
+        "dashboard-sidebar",
+        "dashboard-main",
+        "/api/v1/public/landing/partners",
+        "data-landing-partner-modal",
+        "renderClientPartnerModal",
+        "renderClientPartnerModalGallery",
+        "getPartnerGalleryImages",
+        "selectedPartnerModalId",
+        "selectedPartnerModalPartner",
+        "selectedPartnerModalOffers",
+        "partnerModalGalleryIndex",
+        "data-client-partner-open",
+        "data-partner-id",
+        "data-client-partner-modal-close",
+        "data-gallery-action",
+        'role="dialog"',
+        'aria-modal="true"',
+        "client-partner-modal",
+        "client-partner-modal__overlay",
+        "client-partner-modal__panel",
+        "client-partner-modal__gallery",
+        "client-partner-modal__thumbs",
+        "client-partner-modal__offers",
+        "client-partner-card",
+        "object-fit: contain",
+        "object-fit: cover",
+    ):
+        assert expected in source or expected in styles
+
+    assert "startsWith('/uploads/')" in source
+    assert "startsWith('/assets/')" in source
+
+    for removed_marker in (
+        "reference-lotus-layer",
+        "lotus-layer",
+        "lotus-decor",
+        "--user-lotus-reference-svg",
+        "--lotus-reference-background",
+        "/assets/lotus-bg.png",
+    ):
+        assert removed_marker not in source
+        assert removed_marker not in styles
+
+
+
+def test_frontend_contains_client_onboarding_checklist_markers() -> None:
+    source = _frontend_main()
+    styles = _frontend_styles()
+
+    for expected in (
+        "Как пользоваться клубом",
+        "Пройдено",
+        "Выберите город",
+        "Откройте каталог",
+        "Получите привилегию",
+        "Покажите код партнёру",
+        "Партнёр → код → визит",
+        "Вы уже умеете пользоваться клубом",
+        "client-onboarding",
+        "client-onboarding-progress",
+        "client-onboarding-step",
+        "client-onboarding-action",
+    ):
+        assert expected in source or expected in styles
+
+
+def test_frontend_contains_client_home_overview_markers() -> None:
+    source = _frontend_main()
+    styles = _frontend_styles()
+
+    for expected in (
+        "Мой клуб привилегий",
+        "Смотреть партнёров",
+        "Получить код у партнёра",
+        "Мои коды",
+        "Изменить город",
+        "Ежемесячный розыгрыш",
+        "VK привязан",
+        "VK не привязан",
+        "У вас есть активная привилегия",
+        "Активных привилегий пока нет",
+        "Выберите предложение в каталоге",
+        "client-home",
+        "client-home-hero",
+        "client-home-stats",
+        "client-quick-actions",
+        "client-quick-action",
+        "client-active-privilege",
+        "client-active-code",
+        "client-profile-home-only",
+        "client-tab-header",
+        "client-tab-title",
+        "client-tab-description",
+        "Каталог партнёров",
+        "Выберите категорию, город или найдите партнёра",
+        "Статус клубного доступа и срок действия",
+        "Активные и использованные коды",
+        "Ваши действия и изменения статусов",
+    ):
+        assert expected in source or expected in styles
+
+
+def test_frontend_contains_privilege_marketplace_flow_markers() -> None:
+    source = _frontend_main()
+    styles = _frontend_styles()
+
+    for expected in (
+        "Привилегия активирована",
+        "Покажите этот код партнёру перед оплатой/получением услуги.",
+        "Мои привилегии",
+        "Для получения привилегии нужна активная подписка.",
+        "Предложение сейчас недоступно.",
+        "Подтвердить привилегию",
+        "data-privilege-success-panel",
+        "data-client-privilege-card",
+        "data-partner-confirmation-card",
+        "privilege-success-panel",
+        "client-privilege-card",
+        "partner-confirmation-card",
+        "/api/v1/clients/partners/${partnerId}/verify",
+        "/api/v1/clients/me/verifications",
+        "/api/v1/partners/me/verifications/${verificationId}/confirm",
+        "renderOfferMarketplaceCard",
+        "offer-marketplace-card",
+        "partner-gallery",
+        "setup_token",
+        "/api/v1/public/landing/partners",
+        "womenclub_client_token",
+        "womenclub_partner_token",
+    ):
+        assert expected in source or expected in styles
+
+    for expected_status in ("Активно", "Подтверждено", "Истекло", "Отменено"):
+        assert expected_status in source
+
+    assert "startsWith('/uploads/')" in source
+    assert "startsWith('/assets/')" in source
+
+    for removed_lotus_marker in (
+        "reference-lotus-layer",
+        "lotus-layer",
+        "lotus-decor",
+        "--user-lotus-reference-svg",
+        "--lotus-reference-background",
+        "/assets/lotus-bg.png",
+    ):
+        assert removed_lotus_marker not in source
+        assert removed_lotus_marker not in styles
+
+
+def test_frontend_contains_partner_analytics_ui_markers() -> None:
+    source = _frontend_main()
+    styles = _frontend_styles()
+
+    for expected in (
+        "Аналитика",
+        "Аналитика партнёра",
+        "Переходы по QR",
+        "Получено привилегий",
+        "Подтверждено",
+        "Активные привилегии",
+        "Истекшие привилегии",
+        "Конверсия в привилегию",
+        "Процент подтверждения",
+        "Данных пока нет",
+        "Аналитика помогает понять",
+        "/api/v1/partners/me/analytics",
+        "/api/v1/admin/partners/",
+        "/analytics",
+        "renderAnalyticsCards",
+        "partnerAnalyticsById",
+        "selectedPartnerAnalytics",
+        "analyticsLoading",
+        "analyticsError",
+    ):
+        assert expected in source
+
+    for expected_style in (
+        "analytics-grid",
+        "analytics-card",
+        "analytics-value",
+        "analytics-label",
+        "analytics-hint",
+        "analytics-empty",
+    ):
+        assert expected_style in source or expected_style in styles
+
+    for preserved_marker in (
+        "partner-marketplace-card",
+        "offer-marketplace-card",
+        "partner-gallery",
+        "partner-gallery-grid",
+        "data-privilege-success-panel",
+        "data-client-privilege-card",
+        "data-partner-confirmation-card",
+        "setup_token",
+        "/api/v1/public/landing/partners",
+        "womenclub_partner_token",
+        "womenclub_client_token",
+        "dashboard-shell",
+        "dashboard-topbar",
+        "dashboard-sidebar",
+        "dashboard-main",
+        "startsWith('/uploads/')",
+    ):
+        assert preserved_marker in source or preserved_marker in styles
+
+    for removed_lotus_marker in (
+        "reference-lotus-layer",
+        "lotus-layer",
+        "lotus-decor",
+        "--user-lotus-reference-svg",
+        "--lotus-reference-background",
+        "/assets/lotus-bg.png",
+    ):
+        assert removed_lotus_marker not in source
+        assert removed_lotus_marker not in styles
+
+
+def test_frontend_contains_partner_destructive_controls_with_confirmations() -> None:
+    source = _frontend_main()
+    styles = _frontend_styles()
+
+    for marker in (
+        'data-partner-image-clear="${escapeHtml(kind)}"',
+        "partner-profile-image-delete",
+        "data-partner-offer-delete",
+        "/api/v1/partners/me/offers/${offerId}",
+        "Удалить услугу",
+        "История подтверждений сохранена",
+        "data-admin-partner-analytics-reset",
+        "/analytics/reset",
+        "Партнёр, клиенты, услуги, фотографии и история подтверждений НЕ удалятся",
+        "analytics-reset-button",
+    ):
+        assert marker in source or marker in styles
 
 
 def test_frontend_contains_derived_activity_feed_ui_markers() -> None:
@@ -1070,4 +2560,3 @@ def test_admin_legacy_content_readonly_notice_and_flag_handling_present() -> Non
     assert "guardLegacyContentWrite" in source
     assert "data-legacy-content-form" in source
     assert "admin-readonly-notice" in styles
-
