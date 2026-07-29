@@ -1,6 +1,6 @@
 from __future__ import annotations
 
-from datetime import datetime, timezone
+from datetime import datetime, timedelta, timezone
 
 from typing import Any
 
@@ -10,6 +10,7 @@ from sqlalchemy import func, or_, select
 from sqlalchemy.orm import Session, joinedload
 
 from app.api.deps import get_current_user
+from app.core.config import settings
 from app.core.security import (
     create_access_token,
     hash_password,
@@ -97,7 +98,10 @@ def login(payload: LoginRequest, db: Session = Depends(get_db)) -> LoginResponse
     if not admin.is_active:
         raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="Inactive admin user")
 
-    token = create_access_token(str(admin.id))
+    token = create_access_token(
+        str(admin.id),
+        expires_delta=timedelta(minutes=settings.ADMIN_ACCESS_TOKEN_EXPIRE_MINUTES),
+    )
     return LoginResponse(access_token=token, user=admin)
 
 
@@ -127,7 +131,15 @@ def user_login(payload: UserLoginRequest, db: Session = Depends(get_db)) -> Unif
     if not verify_password(payload.password, user.password_hash):
         raise unauthorized
 
-    token = create_access_token(f"user:{user.id}")
+    token_lifetime = (
+        settings.PARTNER_ACCESS_TOKEN_EXPIRE_MINUTES
+        if user.role == UserRole.PARTNER.value
+        else settings.ACCESS_TOKEN_EXPIRE_MINUTES
+    )
+    token = create_access_token(
+        f"user:{user.id}",
+        expires_delta=timedelta(minutes=token_lifetime),
+    )
     return UnifiedTokenResponse(access_token=token, user=user)
 
 
