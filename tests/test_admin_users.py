@@ -785,4 +785,3 @@ def test_admin_delete_referred_client_preserves_referrer_reward_entries(admin_us
         reward = session.query(GiveawayEntry).filter_by(client_id=referrer_id, source="referral").one()
         assert reward.entries_count == 5
         assert reward.related_referral_id is None
-
