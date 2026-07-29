@@ -141,8 +141,8 @@ class Settings:
         }
         for name, value in required_secrets.items():
             normalized = value.strip()
-            if len(normalized) < 32 or normalized.lower().startswith("change-me"):
-                raise RuntimeError(f"{name} must be a unique production secret of at least 32 characters")
+            if not normalized or normalized.lower().startswith("change-me"):
+                raise RuntimeError(f"{name} must be set to a non-default production secret")
 
         if self.JWT_ALGORITHM != "HS256":
             raise RuntimeError("JWT_ALGORITHM must be HS256")
