@@ -30,6 +30,8 @@ def test_api_health_check() -> None:
     assert response.status_code == 200
     assert response.json()["status"] == "ok"
     assert response.json()["service"] == "womenclub"
+    assert response.headers["x-content-type-options"] == "nosniff"
+    assert response.headers["x-frame-options"] == "DENY"
 
 
 def test_health_checks_do_not_require_auth() -> None:
@@ -68,6 +70,26 @@ def test_database_health_check_failure_is_controlled(monkeypatch) -> None:
 
     assert response.status_code == 503
     assert response.json() == {"status": "error", "service": "womenclub", "database": "unavailable"}
+
+
+def test_client_error_payload_size_is_limited() -> None:
+    response = client.post(
+        "/api/client-errors",
+        content=b"x" * (16 * 1024 + 1),
+        headers={"Content-Type": "application/json"},
+    )
+
+    assert response.status_code == 413
+
+
+def test_auth_responses_are_not_cacheable() -> None:
+    response = client.post(
+        "/api/v1/auth/login-code",
+        json={"login_code": "BC-NOPE99"},
+    )
+
+    assert response.headers["cache-control"] == "no-store"
+    assert response.headers["pragma"] == "no-cache"
 
 
 def _example_openapi_path(path: str) -> str:

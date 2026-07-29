@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import json
 import logging
 import time
 from datetime import datetime, timezone
@@ -10,6 +11,7 @@ from fastapi import FastAPI, HTTPException, Request, status
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import FileResponse, JSONResponse, Response
 from fastapi.staticfiles import StaticFiles
+from starlette.middleware.trustedhost import TrustedHostMiddleware
 from sqlalchemy import text
 from sqlalchemy.exc import DBAPIError, OperationalError, SQLAlchemyError, TimeoutError as SQLAlchemyTimeoutError
 
@@ -18,6 +20,13 @@ from app.api.v1.endpoints.content import router as content_router
 from app.api.v1.endpoints.public import router as public_router
 from app.api.v1.router import api_router
 from app.core.config import settings
+from app.core.request_security import (
+    AUTH_RATE_LIMITS,
+    SlidingWindowRateLimiter,
+    client_ip_for_rate_limit,
+    normalize_request_id,
+    sanitize_client_error_payload,
+)
 from app.db.session import SessionLocal
 
 
@@ -30,6 +39,17 @@ SERVICE_NAME = "womenclub"
 APP_VERSION = "0.1.0"
 ROOT_DIR = Path(__file__).resolve().parents[1]
 BROWSER_BUILD_ID_PATH = ROOT_DIR / "browser-mobile-app" / "dist" / "build-id.txt"
+MAX_CLIENT_ERROR_BODY_BYTES = 16 * 1024
+AUTH_RESPONSE_PATHS = {
+    "/api/v1/auth/login",
+    "/api/v1/auth/user-login",
+    "/api/v1/auth/login-code",
+    "/api/v1/auth/browser-token-login",
+    "/api/v1/auth/password-setup/complete",
+    "/api/v1/partner/login",
+    "/api/v1/partner/code-login",
+}
+request_rate_limiter = SlidingWindowRateLimiter()
 
 def read_browser_mobile_build_id() -> str:
     try:
@@ -42,6 +62,11 @@ def read_browser_mobile_build_id() -> str:
 app = FastAPI(
     title=settings.PROJECT_NAME,
     version=APP_VERSION,
+)
+
+app.add_middleware(
+    TrustedHostMiddleware,
+    allowed_hosts=settings.trusted_hosts_list,
 )
 
 app.add_middleware(
@@ -143,13 +168,31 @@ async def vk_mini_app_static(full_path: str) -> FileResponse:
 
 @app.post("/api/client-errors", status_code=204, response_class=Response, tags=["diagnostics"])
 async def client_errors(request: Request) -> Response:
-    """Public, fail-safe browser diagnostics sink; never requires auth."""
+    """Public browser diagnostics sink with strict size and secret redaction."""
+    declared_size = request.headers.get("content-length")
+    if declared_size and declared_size.isdigit() and int(declared_size) > MAX_CLIENT_ERROR_BODY_BYTES:
+        return Response(status_code=status.HTTP_413_CONTENT_TOO_LARGE)
+
     try:
-        payload = await request.json()
+        raw_body = await request.body()
     except Exception:
-        payload = {"_invalid_json": True}
+        raw_body = b""
+    if len(raw_body) > MAX_CLIENT_ERROR_BODY_BYTES:
+        return Response(status_code=status.HTTP_413_CONTENT_TOO_LARGE)
+
     try:
-        logger.warning("client_error path=%s request_id=%s payload=%r", request.url.path, getattr(request.state, "request_id", ""), payload)
+        payload = json.loads(raw_body) if raw_body else {"_empty": True}
+    except (json.JSONDecodeError, UnicodeDecodeError):
+        payload = {"_invalid_json": True}
+
+    sanitized = sanitize_client_error_payload(payload)
+    try:
+        logger.warning(
+            "client_error path=%s request_id=%s payload=%r",
+            request.url.path,
+            getattr(request.state, "request_id", ""),
+            sanitized,
+        )
     except Exception:
         logger.warning("client_error logging_failed path=%s", request.url.path)
     return Response(status_code=204)
@@ -205,7 +248,10 @@ app.add_api_route("/api/v1/auth/telegram-miniapp-login", telegram_miniapp_login,
 
 @app.middleware("http")
 async def request_logging_middleware(request: Request, call_next):
-    request_id = request.headers.get("x-request-id") or str(uuid4())
+    request_id = normalize_request_id(
+        request.headers.get("x-request-id"),
+        str(uuid4()),
+    )
     request.state.request_id = request_id
     started_at = time.perf_counter()
     status_code = 500
@@ -226,6 +272,43 @@ async def request_logging_middleware(request: Request, call_next):
         )
         if "response" in locals():
             response.headers["X-Request-ID"] = request_id
+
+
+@app.middleware("http")
+async def sensitive_route_rate_limit_middleware(request: Request, call_next):
+    rule = AUTH_RATE_LIMITS.get(request.url.path)
+    if settings.AUTH_RATE_LIMIT_ENABLED and rule is not None and request.method != "OPTIONS":
+        client_ip = client_ip_for_rate_limit(request)
+        allowed, retry_after = request_rate_limiter.check(
+            f"{client_ip}:{request.url.path}",
+            rule,
+        )
+        if not allowed:
+            return JSONResponse(
+                status_code=status.HTTP_429_TOO_MANY_REQUESTS,
+                content={"detail": "Too many requests. Please try again later."},
+                headers={
+                    "Retry-After": str(retry_after),
+                    "Cache-Control": "no-store",
+                },
+            )
+    return await call_next(request)
+
+
+@app.middleware("http")
+async def security_headers_middleware(request: Request, call_next):
+    response = await call_next(request)
+    response.headers.setdefault("X-Content-Type-Options", "nosniff")
+    response.headers.setdefault("X-Frame-Options", "DENY")
+    response.headers.setdefault("Referrer-Policy", "strict-origin-when-cross-origin")
+    response.headers.setdefault(
+        "Permissions-Policy",
+        "camera=(), microphone=(), geolocation=()",
+    )
+    if request.url.path in AUTH_RESPONSE_PATHS:
+        response.headers["Cache-Control"] = "no-store"
+        response.headers["Pragma"] = "no-cache"
+    return response
 
 
 @app.middleware("http")

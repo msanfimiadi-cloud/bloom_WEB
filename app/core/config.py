@@ -8,6 +8,23 @@ from pydantic import SecretStr
 
 _ENV = os.getenv("ENV", "test")
 _DEFAULT_JWT_SECRET = "change-me-test-jwt-secret" if _ENV.lower() in {"test", "testing"} else ""
+_IS_PRODUCTION_ENV = _ENV.lower() in {"production", "prod"}
+_DEFAULT_TRUSTED_HOSTS = (
+    "bloomclub.ru,www.bloomclub.ru,app.bloomclub.ru"
+    if _IS_PRODUCTION_ENV
+    else "bloomclub.ru,www.bloomclub.ru,app.bloomclub.ru,localhost,127.0.0.1,testserver"
+)
+_DEFAULT_CORS_ORIGINS = (
+    "https://bloomclub.ru,https://www.bloomclub.ru,https://app.bloomclub.ru,"
+    "https://m.vk.ru,https://m.vk.com,https://vk.com,https://vk.ru,"
+    "https://kosmos327-fed-women-club-mini-app-3f15.twc1.net"
+    if _IS_PRODUCTION_ENV
+    else
+    "https://bloomclub.ru,https://www.bloomclub.ru,https://app.bloomclub.ru,"
+    "https://m.vk.ru,https://m.vk.com,https://vk.com,https://vk.ru,"
+    "https://kosmos327-fed-women-club-mini-app-3f15.twc1.net,"
+    "http://localhost:5173,http://127.0.0.1:5173"
+)
 
 
 @dataclass(frozen=True)
@@ -21,6 +38,16 @@ class Settings:
     JWT_SECRET_KEY: str = os.getenv("JWT_SECRET_KEY", _DEFAULT_JWT_SECRET)
     JWT_ALGORITHM: str = os.getenv("JWT_ALGORITHM", "HS256")
     ACCESS_TOKEN_EXPIRE_MINUTES: int = int(os.getenv("ACCESS_TOKEN_EXPIRE_MINUTES", "1440"))
+    ADMIN_ACCESS_TOKEN_EXPIRE_MINUTES: int = int(os.getenv("ADMIN_ACCESS_TOKEN_EXPIRE_MINUTES", "120"))
+    PARTNER_ACCESS_TOKEN_EXPIRE_MINUTES: int = int(os.getenv("PARTNER_ACCESS_TOKEN_EXPIRE_MINUTES", "480"))
+    AUTH_RATE_LIMIT_ENABLED: bool = os.getenv(
+        "AUTH_RATE_LIMIT_ENABLED",
+        "true" if _ENV.lower() in {"production", "prod"} else "false",
+    ).lower() in {"1", "true", "yes", "on"}
+    TRUSTED_HOSTS: str = os.getenv(
+        "TRUSTED_HOSTS",
+        _DEFAULT_TRUSTED_HOSTS,
+    )
     BOT_API_TOKEN: str = os.getenv("BOT_API_TOKEN", "")
     TELEGRAM_ADMIN_API_TOKEN: str = os.getenv("TELEGRAM_ADMIN_API_TOKEN", "")
     BOT_SERVICE_TOKEN: str = os.getenv("BOT_SERVICE_TOKEN", "change-me-test-token")
@@ -39,7 +66,7 @@ class Settings:
     LEAD_HASH_SALT: str = os.getenv("LEAD_HASH_SALT", "change-me-test-salt")
     BACKEND_CORS_ORIGINS: str = os.getenv(
         "BACKEND_CORS_ORIGINS",
-        "https://bloomclub.ru,https://www.bloomclub.ru,https://m.vk.ru,https://m.vk.com,https://vk.com,https://vk.ru,https://kosmos327-fed-women-club-mini-app-3f15.twc1.net,http://localhost:5173,http://127.0.0.1:5173",
+        _DEFAULT_CORS_ORIGINS,
     )
     WEB_PUBLIC_URL: str = os.getenv("WEB_PUBLIC_URL", "https://women-club.example")
     UPLOAD_DIR: str = os.getenv("UPLOAD_DIR", "uploads")
@@ -71,6 +98,10 @@ class Settings:
         return [origin.strip() for origin in self.BACKEND_CORS_ORIGINS.split(",") if origin.strip()]
 
     @property
+    def trusted_hosts_list(self) -> list[str]:
+        return [host.strip() for host in self.TRUSTED_HOSTS.split(",") if host.strip()]
+
+    @property
     def visitor_cookie_secure(self) -> bool:
         return self.ENV.lower() in {"production", "prod", "staging"}
 
@@ -99,5 +130,31 @@ class Settings:
             raise RuntimeError("Tochka payments are enabled but required backend settings are missing")
 
 
+    def validate_security(self) -> None:
+        if not self.is_production:
+            return
+
+        required_secrets = {
+            "JWT_SECRET_KEY": self.JWT_SECRET_KEY,
+            "SECRET_KEY": self.SECRET_KEY,
+            "BOT_SERVICE_TOKEN": self.BOT_SERVICE_TOKEN,
+        }
+        for name, value in required_secrets.items():
+            normalized = value.strip()
+            if not normalized or normalized.lower().startswith("change-me"):
+                raise RuntimeError(f"{name} must be set to a non-default production secret")
+
+        if self.JWT_ALGORITHM != "HS256":
+            raise RuntimeError("JWT_ALGORITHM must be HS256")
+
+        if not self.trusted_hosts_list:
+            raise RuntimeError("TRUSTED_HOSTS must contain at least one production host")
+
+        for origin in self.backend_cors_origins_list:
+            if origin == "*" or origin.startswith("http://"):
+                raise RuntimeError("Production CORS origins must be explicit HTTPS origins")
+
+
 settings = Settings()
+settings.validate_security()
 settings.validate_tochka()

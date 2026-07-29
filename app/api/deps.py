@@ -39,7 +39,7 @@ def require_bot_api_token(
         raise unauthorized
     if credentials is None or credentials.scheme.lower() != "bearer":
         raise unauthorized
-    if credentials.credentials != settings.BOT_API_TOKEN:
+    if not compare_digest(credentials.credentials, settings.BOT_API_TOKEN):
         raise unauthorized
 
 
