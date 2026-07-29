@@ -363,4 +363,3 @@ class AdminDeleteUserResponse(BaseModel):
     ok: bool
     deleted_user_id: int
     deleted: dict[str, int]
-
