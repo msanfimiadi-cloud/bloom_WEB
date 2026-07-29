@@ -1,6 +1,6 @@
 from __future__ import annotations
 
-from datetime import datetime, time, timezone
+from datetime import datetime, time, timedelta, timezone
 from decimal import Decimal
 
 from fastapi import APIRouter, Depends, HTTPException, status
@@ -9,6 +9,7 @@ from sqlalchemy import func, or_, select
 from sqlalchemy.orm import Session, selectinload
 
 from app.api.deps import bearer_scheme
+from app.core.config import settings
 from app.core.security import create_access_token, decode_access_token, verify_password
 from app.db.session import get_db
 from app.models.client import ClientProfile
@@ -68,6 +69,7 @@ def partner_login(payload: PartnerLoginRequest, db: Session = Depends(get_db)) -
 
     token = create_access_token(
         f"user:{user.id}",
+        expires_delta=timedelta(minutes=settings.PARTNER_ACCESS_TOKEN_EXPIRE_MINUTES),
         additional_claims={
             "typ": PARTNER_ACCESS_TOKEN_TYPE,
             "role": UserRole.PARTNER.value,
@@ -100,6 +102,7 @@ def partner_code_login(payload: PartnerCodeLoginRequest, db: Session = Depends(g
 
     token = create_access_token(
         f"partner:{partner.id}",
+        expires_delta=timedelta(minutes=settings.PARTNER_ACCESS_TOKEN_EXPIRE_MINUTES),
         additional_claims={
             "typ": PARTNER_ACCESS_TOKEN_TYPE,
             "role": UserRole.PARTNER.value,
