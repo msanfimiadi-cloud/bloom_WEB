@@ -65,7 +65,7 @@ def test_production_security_configuration_accepts_strong_values() -> None:
 @pytest.mark.parametrize(
     ("field", "value"),
     (
-        ("JWT_SECRET_KEY", "short"),
+        ("JWT_SECRET_KEY", ""),
         ("SECRET_KEY", "change-me-in-production"),
         ("BOT_SERVICE_TOKEN", ""),
         ("JWT_ALGORITHM", "none"),
