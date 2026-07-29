@@ -1,9 +1,11 @@
+import json
+
 import pytest
 import httpx
 
 from vk_bot.client import InternalApiClient, VkApiClient
-from vk_bot.handlers import ERROR_MESSAGE, LINK_INSTRUCTION_MESSAGE, LINK_INTRO_MESSAGE, LOGIN_INSTRUCTION_MESSAGE, LOGIN_INTRO_MESSAGE, VkBotHandler, backoff_sleep
-from vk_bot.keyboards import NEW_CODE_LABEL, OPEN_APP_LABEL
+from vk_bot.handlers import ERROR_MESSAGE, LOGIN_MESSAGE, VkBotHandler, backoff_sleep
+from vk_bot.keyboards import OPEN_APP_LABEL
 from vk_bot.settings import VkBotSettings
 
 
@@ -47,15 +49,17 @@ async def test_first_message_requests_internal_api_and_sends_keyboard():
     await handler.handle_update({"type": "message_new", "object": {"message": {"peer_id": 10, "from_id": 1, "text": "Начать"}}})
 
     assert internal.calls[0].user_id == "1"
-    assert [message for _, message, _ in fake_vk.messages] == [
-        LOGIN_INTRO_MESSAGE,
-        "BC-ABC123",
-        LOGIN_INSTRUCTION_MESSAGE,
-    ]
-    assert fake_vk.messages[0][2] is None
-    assert fake_vk.messages[1][2] is None
-    assert OPEN_APP_LABEL in fake_vk.messages[2][2]
-    assert "https://app.bloomclub.ru" in fake_vk.messages[2][2]
+    assert [message for _, message, _ in fake_vk.messages] == [LOGIN_MESSAGE.format(code="BC-ABC123")]
+    keyboard = json.loads(fake_vk.messages[0][2])
+    assert keyboard["inline"] is False
+    assert keyboard["one_time"] is False
+    assert len(keyboard["buttons"]) == 1
+    assert len(keyboard["buttons"][0]) == 1
+    assert keyboard["buttons"][0][0]["action"] == {
+        "type": "open_link",
+        "link": "https://app.bloomclub.ru",
+        "label": OPEN_APP_LABEL,
+    }
 
 
 @pytest.mark.asyncio
@@ -71,11 +75,7 @@ async def test_repeat_code_uses_same_internal_flow():
 
     assert len(internal.calls) == 1
     assert internal.calls[0] is profile
-    assert [message for _, message, _ in fake_vk.messages] == [
-        LOGIN_INTRO_MESSAGE,
-        "BC-ABC123",
-        LOGIN_INSTRUCTION_MESSAGE,
-    ]
+    assert [message for _, message, _ in fake_vk.messages] == [LOGIN_MESSAGE.format(code="BC-ABC123")]
 
 
 @pytest.mark.asyncio
@@ -111,17 +111,24 @@ async def test_users_get_fallback_username():
 
 
 @pytest.mark.asyncio
-async def test_link_code_messages_send_copyable_code_and_new_code_keyboard():
-    handler = VkBotHandler(FakeVk(), FakeInternal(), VkBotSettings(browser_app_url="https://app.bloomclub.ru"))
+async def test_old_vk_bot_menu_and_partner_mode_are_removed():
+    from vk_bot.client import VkProfile
 
-    await handler.send_link_code_messages(10, "LK-AB12CD")
+    fake_vk = FakeVk(profile=VkProfile(user_id="7", username="screen"))
+    handler = VkBotHandler(fake_vk, FakeInternal(), VkBotSettings())
 
-    assert [message for _, message, _ in handler.vk.messages] == [
-        LINK_INTRO_MESSAGE,
-        "LK-AB12CD",
-        LINK_INSTRUCTION_MESSAGE,
-    ]
-    assert handler.vk.messages[0][2] is None
-    assert handler.vk.messages[1][2] is None
-    assert OPEN_APP_LABEL in handler.vk.messages[2][2]
-    assert NEW_CODE_LABEL in handler.vk.messages[2][2]
+    await handler.handle_update({"type": "message_new", "object": {"message": {"peer_id": 10, "from_id": 7, "text": "/partner"}}})
+
+    assert len(handler.internal.calls) == 1
+    keyboard = fake_vk.messages[0][2]
+    for removed_text in (
+        "Получить код повторно",
+        "Получить новый код",
+        "Подписка",
+        "Партнёры и скидки",
+        "Присоединиться к клубу",
+        "Установить новый пароль",
+        "Открыть WEB-кабинет",
+        "Да, активировать",
+    ):
+        assert removed_text not in keyboard
