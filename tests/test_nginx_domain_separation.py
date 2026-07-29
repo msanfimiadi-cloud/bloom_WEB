@@ -72,3 +72,30 @@ def test_public_domain_sets_baseline_security_headers() -> None:
         "Content-Security-Policy",
     ):
         assert f"add_header {header}" in block
+
+
+def test_app_domain_sets_baseline_security_headers() -> None:
+    block = _server_block_for("app.bloomclub.ru")
+
+    for header in (
+        "Strict-Transport-Security",
+        "X-Content-Type-Options",
+        "X-Frame-Options",
+        "Referrer-Policy",
+        "Permissions-Policy",
+        "Content-Security-Policy",
+    ):
+        assert f"add_header {header}" in block
+
+    assert "object-src 'none'" in block
+    assert "frame-ancestors 'none'" in block
+
+
+def test_sensitive_login_routes_are_rate_limited_at_nginx() -> None:
+    assert "limit_req_zone $binary_remote_addr zone=bloom_auth:" in NGINX_CONFIG
+    assert "limit_req_status 429;" in NGINX_CONFIG
+
+    public_block = _server_block_for("bloomclub.ru www.bloomclub.ru")
+    app_block = _server_block_for("app.bloomclub.ru")
+    assert "limit_req zone=bloom_auth" in public_block
+    assert "limit_req zone=bloom_auth" in app_block
