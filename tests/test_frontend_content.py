@@ -296,6 +296,19 @@ def test_admin_users_subscription_date_uses_safe_datetime_formatter() -> None:
     assert "formatDateTime(item.subscription_active_until ?? item.active_subscription_until)" in users_block
 
 
+def test_admin_users_can_add_and_remove_subscription_days() -> None:
+    source = _frontend_main()
+    users_block = source.split("const renderUserActionButton = (user) =>", 1)[1].split("const renderAdminSearch", 1)[0]
+
+    assert "Добавить дни" in users_block
+    assert "Убрать дни" in users_block
+    assert "data-user-subscription-adjust" in users_block
+    assert "data-subscription-operation" in users_block
+    assert "const adjustUserSubscriptionDays = async" in source
+    assert "/subscription-days" in source
+    assert "days < 1 || days > 3650" in source
+
+
 def test_frontend_applies_custom_selects_to_client_catalog_filters() -> None:
     source = _frontend_main()
     catalog_block = source.split("const renderClientCatalogTab = () => {", 1)[1].split("const renderClientPartnerCard", 1)[0]

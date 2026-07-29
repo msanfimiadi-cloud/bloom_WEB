@@ -43,6 +43,8 @@ from app.schemas.admin import (
     AdminManagedUserCreate,
     AdminManagedUserRead,
     AdminManagedUserUpdate,
+    AdminSubscriptionDaysAdjustRead,
+    AdminSubscriptionDaysAdjustRequest,
     AdminDeleteUserResponse,
     AdminVerificationRead,
     ContentReviewOfferRead,
@@ -1303,6 +1305,87 @@ def list_admin_users(
             )
         )
     return result
+
+
+@router.post("/users/{user_id}/subscription-days", response_model=AdminSubscriptionDaysAdjustRead)
+def adjust_admin_user_subscription_days(
+    user_id: int,
+    payload: AdminSubscriptionDaysAdjustRequest,
+    admin: AdminUser = Depends(require_admin),
+    db: Session = Depends(get_db),
+) -> AdminSubscriptionDaysAdjustRead:
+    _ = admin
+    user = db.get(User, user_id)
+    if user is None:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="User not found")
+
+    client = db.execute(
+        select(ClientProfile).where(ClientProfile.user_id == user.id).with_for_update()
+    ).scalar_one_or_none()
+    if client is None:
+        raise HTTPException(
+            status_code=status.HTTP_409_CONFLICT,
+            detail="User does not have a client profile",
+        )
+
+    now = datetime.now(timezone.utc)
+    subscription = db.execute(
+        select(Subscription)
+        .where(
+            Subscription.client_id == client.id,
+            Subscription.status == SubscriptionStatus.active.value,
+            Subscription.starts_at <= now,
+            Subscription.ends_at > now,
+        )
+        .order_by(Subscription.ends_at.desc(), Subscription.id.desc())
+        .with_for_update()
+        .limit(1)
+    ).scalar_one_or_none()
+
+    previous_ends_at = as_aware_utc(subscription.ends_at) if subscription is not None else None
+    adjustment = timedelta(days=payload.days)
+
+    if payload.operation == "add":
+        if subscription is None:
+            subscription = Subscription(
+                client_id=client.id,
+                status=SubscriptionStatus.active.value,
+                starts_at=now,
+                ends_at=now + adjustment,
+                source="admin_adjustment",
+            )
+            db.add(subscription)
+        else:
+            subscription.ends_at = previous_ends_at + adjustment
+    else:
+        if subscription is None or previous_ends_at is None:
+            raise HTTPException(
+                status_code=status.HTTP_409_CONFLICT,
+                detail="User does not have an active subscription",
+            )
+        adjusted_ends_at = previous_ends_at - adjustment
+        if adjusted_ends_at <= now:
+            subscription.ends_at = now
+            subscription.status = SubscriptionStatus.expired.value
+        else:
+            subscription.ends_at = adjusted_ends_at
+
+    db.commit()
+    db.refresh(subscription)
+    is_active = (
+        subscription.status == SubscriptionStatus.active.value
+        and as_aware_utc(subscription.starts_at) <= now
+        and as_aware_utc(subscription.ends_at) > now
+    )
+    return AdminSubscriptionDaysAdjustRead(
+        user_id=user.id,
+        client_id=client.id,
+        operation=payload.operation,
+        days=payload.days,
+        previous_ends_at=previous_ends_at,
+        subscription_active_until=subscription.ends_at if is_active else None,
+        subscription_status=subscription.status,
+    )
 
 
 @router.post("/users", response_model=AdminManagedUserRead)

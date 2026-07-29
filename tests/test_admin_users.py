@@ -165,6 +165,90 @@ def test_admin_users_returns_401_without_token(admin_users_client: TestClient) -
     assert response.status_code == 401
 
 
+def test_admin_can_add_days_to_active_subscription(
+    admin_users_client: TestClient,
+    admin_token: str,
+) -> None:
+    users_before = admin_users_client.get("/api/v1/admin/users", headers=_auth_headers(admin_token)).json()
+    user_before = next(item for item in users_before if item["id"] == 1)
+    previous_ends_at = datetime.fromisoformat(user_before["subscription_active_until"])
+
+    response = admin_users_client.post(
+        "/api/v1/admin/users/1/subscription-days",
+        headers=_auth_headers(admin_token),
+        json={"operation": "add", "days": 5},
+    )
+
+    assert response.status_code == 200
+    data = response.json()
+    assert data["operation"] == "add"
+    assert data["days"] == 5
+    assert datetime.fromisoformat(data["subscription_active_until"]) == previous_ends_at + timedelta(days=5)
+
+
+def test_admin_can_create_then_reduce_manual_subscription(
+    admin_users_client: TestClient,
+    admin_token: str,
+) -> None:
+    created = admin_users_client.post(
+        "/api/v1/admin/users/2/subscription-days",
+        headers=_auth_headers(admin_token),
+        json={"operation": "add", "days": 10},
+    )
+    assert created.status_code == 200
+    created_until = datetime.fromisoformat(created.json()["subscription_active_until"])
+
+    reduced = admin_users_client.post(
+        "/api/v1/admin/users/2/subscription-days",
+        headers=_auth_headers(admin_token),
+        json={"operation": "remove", "days": 3},
+    )
+
+    assert reduced.status_code == 200
+    assert datetime.fromisoformat(reduced.json()["subscription_active_until"]) == created_until - timedelta(days=3)
+
+
+def test_admin_removing_all_remaining_days_expires_subscription(
+    admin_users_client: TestClient,
+    admin_token: str,
+) -> None:
+    created = admin_users_client.post(
+        "/api/v1/admin/users/2/subscription-days",
+        headers=_auth_headers(admin_token),
+        json={"operation": "add", "days": 2},
+    )
+    assert created.status_code == 200
+
+    response = admin_users_client.post(
+        "/api/v1/admin/users/2/subscription-days",
+        headers=_auth_headers(admin_token),
+        json={"operation": "remove", "days": 3},
+    )
+
+    assert response.status_code == 200
+    assert response.json()["subscription_status"] == SubscriptionStatus.expired.value
+    assert response.json()["subscription_active_until"] is None
+
+
+def test_admin_subscription_adjustment_requires_client_profile_and_valid_days(
+    admin_users_client: TestClient,
+    admin_token: str,
+) -> None:
+    missing_profile = admin_users_client.post(
+        "/api/v1/admin/users/3/subscription-days",
+        headers=_auth_headers(admin_token),
+        json={"operation": "add", "days": 30},
+    )
+    invalid_days = admin_users_client.post(
+        "/api/v1/admin/users/2/subscription-days",
+        headers=_auth_headers(admin_token),
+        json={"operation": "add", "days": 0},
+    )
+
+    assert missing_profile.status_code == 409
+    assert invalid_days.status_code == 422
+
+
 def test_admin_users_post_creates_partner_user_with_email_password(
     admin_users_client: TestClient,
     admin_token: str,

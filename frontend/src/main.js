@@ -4724,6 +4724,12 @@ const renderAdminTableActions = (content) => `
 `;
 
 const renderUserActionButton = (user) => renderAdminTableActions(`
+  <button class="admin-inline-action ui-button ui-button--secondary admin-table-action" type="button" data-user-subscription-adjust="${escapeHtml(user.id)}" data-subscription-operation="add">
+    Добавить дни
+  </button>
+  <button class="admin-inline-action ui-button ui-button--secondary admin-table-action" type="button" data-user-subscription-adjust="${escapeHtml(user.id)}" data-subscription-operation="remove">
+    Убрать дни
+  </button>
   <button class="admin-inline-action ui-button ui-button--secondary admin-table-action" type="button" data-user-active-toggle="${escapeHtml(user.id)}">
     ${user.is_active ? 'Заблокировать' : 'Активировать'}
   </button>
@@ -6331,6 +6337,40 @@ const toggleUserActive = async (userId) => {
 };
 
 
+const adjustUserSubscriptionDays = async (userId, operation) => {
+  const currentUser = adminState.users.find((item) => String(item.id) === String(userId));
+  if (!currentUser || !['add', 'remove'].includes(operation)) {
+    return;
+  }
+
+  const actionLabel = operation === 'add' ? 'добавить' : 'убрать';
+  const rawDays = window.prompt(`Сколько дней ${actionLabel} у пользователя «${currentUser.display_name || currentUser.full_name || `#${currentUser.id}`}»?`, '30');
+  if (rawDays === null) {
+    return;
+  }
+  const days = Number(rawDays);
+  if (!Number.isInteger(days) || days < 1 || days > 3650) {
+    setPanelMessage('Введите целое количество дней от 1 до 3650.', 'error');
+    renderAdminLayout();
+    return;
+  }
+  if (!window.confirm(`${operation === 'add' ? 'Добавить' : 'Убрать'} ${days} дн. подписки у выбранного пользователя?`)) {
+    return;
+  }
+
+  try {
+    const response = await postJson(`/api/v1/admin/users/${userId}/subscription-days`, { operation, days });
+    await loadUsers();
+    const until = response.subscription_active_until ? ` Новая дата окончания: ${formatDateTime(response.subscription_active_until)}.` : ' Подписка завершена.';
+    setPanelMessage(`${operation === 'add' ? 'Дни добавлены.' : 'Дни убраны.'}${until}`, 'success');
+  } catch (error) {
+    setPanelMessage(error.message || 'Не удалось изменить срок подписки.', 'error');
+  }
+
+  renderAdminLayout();
+};
+
+
 const deleteUser = async (userId) => {
   const confirmationText = 'Вы уверены? Будет удалена вся информация по выбранному пользователю. Действие нельзя отменить.';
   if (!window.confirm(confirmationText)) {
@@ -7421,6 +7461,15 @@ root.addEventListener('click', async (event) => {
   const userToggle = event.target.closest('[data-user-active-toggle]');
   if (userToggle) {
     toggleUserActive(userToggle.dataset.userActiveToggle);
+    return;
+  }
+
+  const userSubscriptionAdjust = event.target.closest('[data-user-subscription-adjust]');
+  if (userSubscriptionAdjust) {
+    adjustUserSubscriptionDays(
+      userSubscriptionAdjust.dataset.userSubscriptionAdjust,
+      userSubscriptionAdjust.dataset.subscriptionOperation,
+    );
     return;
   }
 
