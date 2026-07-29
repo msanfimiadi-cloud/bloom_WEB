@@ -2,6 +2,7 @@ from __future__ import annotations
 
 from datetime import datetime
 from decimal import Decimal
+from typing import Literal
 
 from pydantic import AliasChoices, BaseModel, Field
 
@@ -83,6 +84,21 @@ class AdminManagedUserUpdate(BaseModel):
     password: str | None = None
     role: str | None = None
     is_active: bool | None = None
+
+
+class AdminSubscriptionDaysAdjustRequest(BaseModel):
+    operation: Literal["add", "remove"]
+    days: int = Field(ge=1, le=3650)
+
+
+class AdminSubscriptionDaysAdjustRead(BaseModel):
+    user_id: int
+    client_id: int
+    operation: Literal["add", "remove"]
+    days: int
+    previous_ends_at: datetime | None
+    subscription_active_until: datetime | None
+    subscription_status: str
 
 
 class CategoryRead(BaseModel):
@@ -347,3 +363,4 @@ class AdminDeleteUserResponse(BaseModel):
     ok: bool
     deleted_user_id: int
     deleted: dict[str, int]
+
