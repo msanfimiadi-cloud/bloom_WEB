@@ -63,6 +63,56 @@ def test_user_with_active_subscription_gets_one_base_number() -> None:
     assert [(n.number, n.source) for n in numbers] == [("000001", "subscription")]
 
 
+def test_excluded_user_gets_no_giveaway_numbers() -> None:
+    db = _session()
+    client = _client(db, "excluded@example.com")
+    client.user.exclude_from_giveaways = True
+    _active_subscription(db, client.id)
+    giveaway = Giveaway(title="active", is_active=True, winners_count=1)
+    db.add(giveaway)
+    db.commit()
+
+    numbers = ensure_user_numbers(db, giveaway.id, client.id)
+
+    assert numbers == []
+    assert db.query(GiveawayNumber).count() == 0
+
+
+def test_admin_giveaway_entries_omit_excluded_users() -> None:
+    from app.api.v1.endpoints.admin import list_admin_giveaway_entries
+
+    db = _session()
+    included = _client(db, "included@example.com")
+    excluded = _client(db, "excluded-existing@example.com")
+    excluded.user.exclude_from_giveaways = True
+    giveaway = Giveaway(title="active", is_active=True, winners_count=1)
+    db.add(giveaway)
+    db.flush()
+    db.add_all(
+        [
+            GiveawayNumber(
+                giveaway_id=giveaway.id,
+                client_id=included.id,
+                number="000001",
+                source="subscription",
+            ),
+            GiveawayNumber(
+                giveaway_id=giveaway.id,
+                client_id=excluded.id,
+                number="000002",
+                source="subscription",
+            ),
+        ]
+    )
+    db.commit()
+
+    result = list_admin_giveaway_entries(giveaway.id, admin=None, db=db)
+
+    assert result["summary"]["total_numbers"] == 1
+    assert result["summary"]["unique_participants"] == 1
+    assert [item["client_id"] for item in result["items"]] == [included.id]
+
+
 def test_user_with_one_activated_referral_gets_two_numbers_total() -> None:
     db = _session()
     referrer = _client(db, "referrer@example.com")
