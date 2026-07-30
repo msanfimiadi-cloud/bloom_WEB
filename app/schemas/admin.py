@@ -37,6 +37,7 @@ class AdminManagedUserRead(BaseModel):
     phone: str | None
     role: str
     is_active: bool
+    exclude_from_giveaways: bool = False
     full_name: str | None = None
     contact_email: str | None = None
     selected_city_id: int | None = None
@@ -84,6 +85,7 @@ class AdminManagedUserUpdate(BaseModel):
     password: str | None = None
     role: str | None = None
     is_active: bool | None = None
+    exclude_from_giveaways: bool | None = None
 
 
 class AdminSubscriptionDaysAdjustRequest(BaseModel):
