@@ -448,6 +448,22 @@ small,
   text-align: center;
 }
 
+.state__bloom-loader {
+  display: block;
+  width: clamp(7rem, 30vw, 10rem);
+  aspect-ratio: 1;
+  margin: 0 auto 0.8rem;
+  border-radius: 1.5rem;
+  object-fit: contain;
+  mix-blend-mode: multiply;
+  filter: drop-shadow(0 0.8rem 1.6rem rgba(112, 63, 81, 0.12));
+}
+
+.state--compact .state__bloom-loader {
+  width: 5.5rem;
+  margin-bottom: 0.45rem;
+}
+
 .spinner {
   width: 34px;
   height: 34px;
@@ -7050,11 +7066,21 @@ small,
 .flower-game__heading h2 { margin: .1rem 0 0; letter-spacing: -.025em; }
 .flower-game__rank { min-height: 2.6rem; padding: .65rem .9rem; border: 0; border-radius: 999px; background: rgba(255,255,255,.72); color: #734f66; font-weight: 700; box-shadow: inset 0 0 0 1px rgba(112,73,97,.1); }
 .flower-game__rank:active, .flower-game__checkin:active { transform: scale(.97); }
-.flower-visual { position: relative; display: grid; place-items: center; min-height: 15.5rem; padding-top: .35rem; text-align: center; isolation: isolate; }
+.flower-visual { position: relative; display: grid; place-items: center; min-height: 21.5rem; padding-top: .35rem; text-align: center; isolation: isolate; }
 .flower-visual__glow { position: absolute; top: 1.25rem; width: 12rem; height: 12rem; border-radius: 50%; background: radial-gradient(circle, rgba(255,241,196,.72) 0%, rgba(231,154,194,.2) 48%, transparent 72%); filter: blur(.45rem); z-index: -1; opacity: calc(.62 + var(--stage-progress, 0) * .28); transform: scale(calc(.82 + var(--flower-stage, 0) * .045 + var(--stage-progress, 0) * .018)); transition: opacity .6s ease, transform .75s cubic-bezier(.2,.8,.2,1); }
-.flower-visual__bloom { display: grid; place-items: center; width: min(100%, 14rem); height: 12rem; transform: scale(calc(.94 + var(--flower-stage, 0) * .012 + var(--stage-progress, 0) * .018)); transform-origin: center bottom; transition: transform .75s cubic-bezier(.2,.8,.2,1); }
+.flower-visual__bloom { position: relative; display: grid; place-items: center; overflow: hidden; width: min(100%, 14rem); aspect-ratio: 2 / 3; border-radius: 46% 46% 1.5rem 1.5rem; background: #f8dfe1; box-shadow: 0 1rem 2.5rem rgba(91, 54, 78, .13); transform: scale(calc(.94 + var(--flower-stage, 0) * .012 + var(--stage-progress, 0) * .018)); transform-origin: center bottom; transition: transform .75s cubic-bezier(.23,1,.32,1); }
 .flower-visual--stage-1 { --flower-stage: 1; }.flower-visual--stage-2 { --flower-stage: 2; }.flower-visual--stage-3 { --flower-stage: 3; }.flower-visual--stage-4 { --flower-stage: 4; }
 .flower-visual strong { margin-top: -.2rem; font-family: var(--font-display); font-size: 1.35rem; font-weight: 600; letter-spacing: -.02em; }.flower-visual small { margin-top: .3rem; color: #745f6b; }
+.flower-stage-media { display: block; width: 100%; height: 100%; object-fit: cover; transform-origin: 50% 82%; will-change: transform; }
+.flower-stage-media--stage-0 { transform-origin: 50% 72%; animation: bloom-garden-seed-alive 3.2s ease-in-out infinite; }
+.flower-stage-media--stage-1 { transform-origin: 50% 76%; animation: bloom-garden-germinated-alive 3.5s ease-in-out infinite; }
+.flower-stage-media--stage-2 { transform-origin: 50% 86%; animation: bloom-garden-sprout-alive 4s ease-in-out infinite; }
+.flower-stage-media--stage-3 { transform-origin: 50% 90%; animation: bloom-garden-bud-alive 3.7s ease-in-out infinite; }
+.flower-stage-media--video { background: #f7dedf; }
+@keyframes bloom-garden-seed-alive { 0%,100% { transform: translateY(0) scale(1); } 45% { transform: translateY(-2px) scale(1.012); } 65% { transform: translateY(0) scale(1.004); } }
+@keyframes bloom-garden-germinated-alive { 0%,100% { transform: translateY(0) rotate(-.2deg) scale(1.008); } 50% { transform: translateY(-3px) rotate(.3deg) scale(1.014); } }
+@keyframes bloom-garden-sprout-alive { 0%,100% { transform: translateY(0) rotate(-.35deg) scale(1.01); } 50% { transform: translateY(-3px) rotate(.45deg) scale(1.016); } }
+@keyframes bloom-garden-bud-alive { 0%,100% { transform: translateY(0) rotate(-.22deg) scale(1.008); } 50% { transform: translateY(-3px) rotate(.32deg) scale(1.016); } }
 .flower-illustration { width: 100%; height: 100%; overflow: visible; }
 .flower-illustration__ground-shadow { fill: rgba(74,43,54,.13); filter: blur(4px); }
 .flower-illustration__soil-light { fill: rgba(226,167,145,.25); }
@@ -7123,7 +7149,7 @@ small,
 .flower-game__message { margin: .9rem 0 0; text-align: center; color: #7c4c67; font-weight: 650; }
 .flower-leaderboard { position: absolute; inset: .75rem; z-index: 5; overflow: auto; padding: 1.15rem; border-radius: 1.4rem; background: rgba(255,255,255,.94); backdrop-filter: blur(1.4rem) saturate(150%); box-shadow: 0 1.2rem 3rem rgba(66,35,53,.2); }.flower-leaderboard__heading button { width: 2.5rem; height: 2.5rem; border: 0; border-radius: 50%; background: #f5edf2; font-size: 1.4rem; }.flower-leaderboard ol { display: grid; gap: .45rem; padding: 0; list-style: none; }.flower-leaderboard li { display: grid; grid-template-columns: 2rem 1fr auto; align-items: center; gap: .55rem; padding: .7rem; border-radius: .9rem; }.flower-leaderboard li.is-current { background: #f6e5ef; }.flower-leaderboard li > span { display: grid; place-items: center; width: 1.8rem; height: 1.8rem; border-radius: 50%; background: #f1e8ed; font-weight: 800; }
 .flower-game--loading { display: flex; align-items: center; gap: .8rem; min-height: 5rem; }.flower-game__sprout { font-size: 2rem; }
-@media (prefers-reduced-motion: reduce) { .flower-visual__bloom, .flower-visual__glow, .flower-progress i, .flower-stage-path__line i, .flower-stage-path li > span, .flower-illustration__stem, .flower-illustration__seed-crack, .flower-illustration__cotyledons, .flower-illustration__bud { transition: none; } .flower-joining-petal, .flower-illustration__seed, .flower-illustration__new-leaves, .flower-illustration__bud, .flower-illustration__flower, .flower-visual.is-stage-changing .flower-visual__bloom, .flower-visual.is-stage-changing .flower-visual__glow { animation: none; } }
+@media (prefers-reduced-motion: reduce) { .state__bloom-loader { display: none; } .flower-visual__bloom, .flower-visual__glow, .flower-progress i, .flower-stage-path__line i, .flower-stage-path li > span, .flower-illustration__stem, .flower-illustration__seed-crack, .flower-illustration__cotyledons, .flower-illustration__bud { transition: none; } .flower-stage-media, .flower-joining-petal, .flower-illustration__seed, .flower-illustration__new-leaves, .flower-illustration__bud, .flower-illustration__flower, .flower-visual.is-stage-changing .flower-visual__bloom, .flower-visual.is-stage-changing .flower-visual__glow { animation: none; } }
 @media (prefers-reduced-transparency: reduce) { .flower-leaderboard { background: #fff; backdrop-filter: none; } }
 
 /* Mobile auth and safe-area guardrails. Keep these final so later theme passes cannot

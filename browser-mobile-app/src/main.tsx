@@ -35,6 +35,8 @@ declare global {
     __BLOOM_RESOURCE_ERROR_TRACE__?: Array<Record<string, unknown>>;
     __BLOOM_CHUNK_RECOVERY_STARTED__?: boolean;
     __BLOOM_STARTUP_PHASE__?: string;
+    __BLOOM_STARTUP_SPLASH_STARTED_AT__?: number;
+    __BLOOM_STARTUP_SPLASH_MINIMUM_MS__?: number;
   }
 }
 
@@ -259,7 +261,8 @@ function renderStartupRecoveryScreen(reason = "startup_watchdog_timeout"): void 
 
 function renderStartupLoadingFallback(): void {
   const existing = document.getElementById("bloom-entry-fallback-overlay");
-  if (existing) {
+  const htmlFallback = document.getElementById("bloom-html-fallback-overlay");
+  if (existing || htmlFallback) {
     return;
   }
 
@@ -585,17 +588,22 @@ async function importApplicationModules(): Promise<{
 export function removeEntryFallbackOverlay(): void {
   const entryFallback = document.getElementById("bloom-entry-fallback-overlay");
   const htmlFallback = document.getElementById("bloom-html-fallback-overlay");
+  const splashStartedAt = window.__BLOOM_STARTUP_SPLASH_STARTED_AT__ ?? Date.now();
+  const minimumSplashMs = window.__BLOOM_STARTUP_SPLASH_MINIMUM_MS__ ?? 5000;
+  const remainingSplashMs = Math.max(0, minimumSplashMs - (Date.now() - splashStartedAt));
   const fadeAndRemove = (element: HTMLElement | null): void => {
     if (!element) return;
     element.style.opacity = "0";
     element.style.pointerEvents = "none";
     window.setTimeout(() => element.remove(), 260);
   };
-  fadeAndRemove(entryFallback);
-  fadeAndRemove(htmlFallback);
-  window.__BLOOM_ENTRY_FALLBACK_OVERLAY_REMOVED__ = true;
-  window.__BLOOM_HTML_FALLBACK_REMOVED__ = true;
-  stopEntryWatchdog();
+  window.setTimeout(() => {
+    fadeAndRemove(entryFallback);
+    fadeAndRemove(htmlFallback);
+    window.__BLOOM_ENTRY_FALLBACK_OVERLAY_REMOVED__ = true;
+    window.__BLOOM_HTML_FALLBACK_REMOVED__ = true;
+    stopEntryWatchdog();
+  }, remainingSplashMs);
 }
 
 async function startApp(): Promise<void> {
