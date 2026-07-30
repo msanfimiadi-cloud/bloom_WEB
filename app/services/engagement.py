@@ -25,6 +25,7 @@ from app.models.engagement import (
 )
 from app.models.giveaway import Giveaway, GiveawayNumber
 from app.models.partner import Partner
+from app.models.user import User
 from app.models.verification import PrivilegeVerificationSession, PrivilegeVerificationStatus
 from app.services.giveaways import create_bonus_number, get_active_giveaway, has_active_access
 from app.services.offer_savings import calculate_offer_saving_snapshot
@@ -220,7 +221,10 @@ def flower_state(db: Session, client_id: int, *, today: date | None = None) -> d
 
     leaderboard_rows = db.execute(
         select(BloomPetalEvent.client_id, func.sum(BloomPetalEvent.petals).label("petals"))
+        .join(ClientProfile, ClientProfile.id == BloomPetalEvent.client_id)
+        .join(User, User.id == ClientProfile.user_id)
         .where(BloomPetalEvent.month_start == month_start)
+        .where(User.exclude_from_giveaways.is_(False))
         .group_by(BloomPetalEvent.client_id)
         .order_by(func.sum(BloomPetalEvent.petals).desc(), BloomPetalEvent.client_id.asc())
     ).all()
