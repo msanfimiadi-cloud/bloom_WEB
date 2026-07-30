@@ -40,6 +40,12 @@ class User(Base):
     site_credentials_created_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
     role: Mapped[str] = mapped_column(String(32), nullable=False, default=UserRole.CLIENT.value)
     is_active: Mapped[bool] = mapped_column(Boolean, nullable=False, default=True)
+    exclude_from_giveaways: Mapped[bool] = mapped_column(
+        Boolean,
+        nullable=False,
+        default=False,
+        server_default="false",
+    )
     created_at: Mapped[datetime] = mapped_column(
         DateTime(timezone=True),
         nullable=False,
