@@ -52,8 +52,9 @@ def test_flower_has_five_thresholds_and_visible_growth_feedback() -> None:
 
     assert "const STAGE_STARTS = [0, 5, 12, 22, 35]" in flower
     assert "getStageProgress(state.petals, stage)" in flower
-    assert "flower-illustration__seed-crack" in flower
-    assert "flower-illustration__cotyledons" in flower
+    assert "/assets/garden/stage-${stage}.jpeg" in flower
+    assert "/assets/garden/bloom-flower-loop.mp4" in flower
+    assert "flower-stage-media--stage-${stage}" in flower
     assert "flower-stage-path" in flower
     assert "До стадии" in flower
     assert "is-stage-changing" in flower
