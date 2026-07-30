@@ -62,15 +62,40 @@ def test_remove_entry_fallback_overlay_removes_entry_and_html_fallbacks() -> Non
 
 def test_index_contains_visible_html_startup_fallback_overlay() -> None:
     assert 'id="bloom-html-fallback-overlay"' in INDEX
-    assert "Bloom Club загружается" in INDEX
-    assert "Диагностика появится после запуска приложения" in INDEX
+    assert 'id="bloom-startup-video"' in INDEX
+    assert "/assets/loader/bloom-loader.mp4" in INDEX
+    assert "Подготавливаем ваши привилегии…" in INDEX
+    assert "__BLOOM_STARTUP_SPLASH_MINIMUM_MS__ = 5000" in INDEX
     assert INDEX.index('id="bloom-html-fallback-overlay"') < INDEX.index('id="root"') < INDEX.index('type="module" src="/src/main.tsx"')
 
 
 def test_startup_loader_video_is_component_owned_asset() -> None:
     loading_state = (ROOT / 'src/components/LoadingState.tsx').read_text(encoding='utf-8')
-    assert 'spinner' in loading_state
+    assert 'className="state__bloom-loader"' in loading_state
+    assert "/assets/loader/bloom-loader.mp4" in loading_state
+    assert "autoPlay" in loading_state
+    assert "muted" in loading_state
+    assert "playsInline" in loading_state
     assert 'role="status"' in loading_state
+
+
+def test_startup_loader_waits_for_the_branded_splash_minimum() -> None:
+    remove_block = MAIN[MAIN.index("export function removeEntryFallbackOverlay()") : MAIN.index("async function startApp()")]
+    assert "__BLOOM_STARTUP_SPLASH_STARTED_AT__" in remove_block
+    assert "__BLOOM_STARTUP_SPLASH_MINIMUM_MS__" in remove_block
+    assert "remainingSplashMs" in remove_block
+    assert "window.setTimeout" in remove_block
+
+
+def test_garden_animation_assets_are_shipped() -> None:
+    public = ROOT / "public/assets"
+    for path in [
+        public / "loader/bloom-loader.mp4",
+        public / "garden/bloom-flower-loop.mp4",
+        *[public / f"garden/stage-{stage}.jpeg" for stage in range(5)],
+    ]:
+        assert path.is_file()
+        assert path.stat().st_size > 0
 
 
 def test_telegram_sdk_loads_lazily_after_app_needs_it() -> None:
