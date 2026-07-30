@@ -4724,6 +4724,10 @@ const renderAdminTableActions = (content) => `
 `;
 
 const renderUserActionButton = (user) => renderAdminTableActions(`
+  ${user.role === 'client' ? `<label class="checkbox-row admin-user-giveaway-exclusion">
+    <input type="checkbox" data-user-giveaway-exclusion-toggle="${escapeHtml(user.id)}" ${user.exclude_from_giveaways ? 'checked' : ''} />
+    Убрать клиента из учёта розыгрышей
+  </label>` : ''}
   <button class="admin-inline-action ui-button ui-button--secondary admin-table-action" type="button" data-user-subscription-adjust="${escapeHtml(user.id)}" data-subscription-operation="add">
     Добавить дни
   </button>
@@ -4796,7 +4800,7 @@ const renderUsersTab = () => {
             renderUserActionButton(item),
           ]),
           true,
-          'admin-table--compact',
+          'admin-table--compact admin-table--users',
           adminState.search.users ? 'Ничего не найдено.' : 'Пока нет данных.',
         )}
       </div>
@@ -6331,6 +6335,31 @@ const toggleUserActive = async (userId) => {
     setPanelMessage(currentUser.is_active ? 'Пользователь заблокирован.' : 'Пользователь активирован.', 'success');
   } catch (error) {
     setPanelMessage(error.message || 'Не удалось обновить пользователя.', 'error');
+  }
+
+  renderAdminLayout();
+};
+
+
+const toggleUserGiveawayExclusion = async (userId, excludeFromGiveaways) => {
+  const currentUser = adminState.users.find((item) => String(item.id) === String(userId));
+  if (!currentUser || currentUser.role !== 'client') {
+    return;
+  }
+
+  try {
+    await patchJson(`/api/v1/admin/users/${userId}`, {
+      exclude_from_giveaways: Boolean(excludeFromGiveaways),
+    });
+    await loadUsers();
+    setPanelMessage(
+      excludeFromGiveaways
+        ? 'Клиент исключён из учёта розыгрышей.'
+        : 'Клиент снова участвует в розыгрышах.',
+      'success',
+    );
+  } catch (error) {
+    setPanelMessage(error.message || 'Не удалось изменить участие клиента в розыгрышах.', 'error');
   }
 
   renderAdminLayout();
@@ -8361,6 +8390,15 @@ const handlePartnerOfferPhotoFormSubmit = async (form) => {
 };
 
 root.addEventListener('change', (event) => {
+  const userGiveawayExclusionToggle = event.target.closest('[data-user-giveaway-exclusion-toggle]');
+  if (userGiveawayExclusionToggle) {
+    void toggleUserGiveawayExclusion(
+      userGiveawayExclusionToggle.dataset.userGiveawayExclusionToggle,
+      userGiveawayExclusionToggle.checked,
+    );
+    return;
+  }
+
   const orderAmountToggle = event.target.closest('[data-order-amount-toggle]');
   if (orderAmountToggle) {
     const form = orderAmountToggle.closest('form');
