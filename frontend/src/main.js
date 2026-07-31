@@ -436,6 +436,7 @@ const renderPublicApp = () => {
   </main>
 `;
   bindPublicElements();
+  void loadLandingStats();
 };
 
 

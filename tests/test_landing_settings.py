@@ -333,6 +333,14 @@ def test_frontend_landing_hero_stats_do_not_use_legacy_hardcodes() -> None:
     assert "Dyson" not in text
 
 
+def test_public_landing_requests_live_statistics_after_render() -> None:
+    text = Path("frontend/src/main.js").read_text(encoding="utf-8")
+    render_public_app = text.split("const renderPublicApp = () => {", 1)[1].split("const authTokenKey", 1)[0]
+
+    assert "void loadLandingStats();" in render_public_app
+    assert "fetch('/api/v1/public/landing/stats')" in text
+
+
 def test_frontend_landing_settings_copy_marks_partner_and_savings_values_as_base() -> None:
     text = Path("frontend/src/main.js").read_text(encoding="utf-8")
 
