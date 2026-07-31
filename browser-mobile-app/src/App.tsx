@@ -163,8 +163,43 @@ const TELEGRAM_LOGIN_CODE_DRAFT_STORAGE_KEY = "bloom.telegramLoginCodeDraft";
 const VK_LOGIN_CODE_DRAFT_STORAGE_KEY = "bloom.vkLoginCodeDraft";
 const REFERRAL_CODE_DRAFT_STORAGE_KEY = "bloom.referralCodeDraft";
 const GUEST_MODE_STORAGE_KEY = "bloom.browserGuestMode";
-const TELEGRAM_BOT_LINK = import.meta.env.VITE_TELEGRAM_BOT_LINK || "";
-const VK_BOT_LINK = import.meta.env.VITE_VK_BOT_LINK || "";
+const TELEGRAM_BOT_LINK =
+  import.meta.env.VITE_TELEGRAM_BOT_LINK || "https://t.me/app_bloom_club_bot";
+const VK_BOT_LINK =
+  import.meta.env.VITE_VK_BOT_LINK || "https://vk.me/club238169934";
+
+function LoginBotLinks() {
+  return (
+    <section className="login-bot-links" aria-labelledby="login-bot-links-title">
+      <div className="login-bot-links__copy">
+        <strong id="login-bot-links-title">Где получить код?</strong>
+        <span>Бот сразу пришлёт код для входа участницы</span>
+      </div>
+      <div className="login-bot-links__actions">
+        <a
+          className="login-bot-link login-bot-link--telegram"
+          href={TELEGRAM_BOT_LINK}
+          target="_blank"
+          rel="noopener noreferrer"
+          aria-label="Открыть бота Bloom Club в Telegram"
+        >
+          <span className="login-bot-link__badge" aria-hidden="true">TG</span>
+          <span>Telegram</span>
+        </a>
+        <a
+          className="login-bot-link login-bot-link--vk"
+          href={VK_BOT_LINK}
+          target="_blank"
+          rel="noopener noreferrer"
+          aria-label="Открыть чат с ботом Bloom Club во ВКонтакте"
+        >
+          <span className="login-bot-link__badge" aria-hidden="true">VK</span>
+          <span>ВКонтакте</span>
+        </a>
+      </div>
+    </section>
+  );
+}
 
 function hasStoredBrowserLoginDraft(): boolean {
   return Boolean(
@@ -2841,11 +2876,7 @@ export default function App() {
                 spellCheck={false}
                 onChange={(event) => updateVkLoginCodeDraft(event.target.value)}
               />
-              <p className="login-code-legal-text">Получите код у нашего бота в Telegram или VK</p>
-              <div className="auth-actions">
-                {TELEGRAM_BOT_LINK ? <a className="button button--secondary" href={TELEGRAM_BOT_LINK}>Получить код в Telegram</a> : null}
-                {VK_BOT_LINK ? <a className="button button--secondary" href={VK_BOT_LINK}>Получить код во VK</a> : null}
-              </div>
+              <LoginBotLinks />
               <input
                 aria-label="Реферальный код — необязательно"
                 className="auth-code-input"
@@ -2873,6 +2904,7 @@ export default function App() {
           ) : (
             <>
               <button className="button button--primary" type="button" onClick={() => { writeBrowserGuestMode(false); setBrowserGuestMode(false); pendingBrowserLoginRef.current = true; setIsLoginCodeFormOpen(true); }}>Войти по коду</button>
+              <LoginBotLinks />
               <button className="button button--secondary" type="button" onClick={() => { pendingBrowserLoginRef.current = false; writeBrowserGuestMode(true); setBrowserGuestMode(true); setBrowserLoginRequired(false); setAuthRestoreStatus("unauthenticated"); setLastAuthDecisionReason("guest_mode_selected"); setIsBootstrapDone(true); setIsLoading(false); resetPartnerFlowState("home"); loadPartners(true).catch(() => undefined); }}>Продолжить без регистрации</button>
               <a className="button button--ghost partner-login-link" href="/partner">Вход для партнёров</a>
             </>
