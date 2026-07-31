@@ -18,6 +18,16 @@ def test_browser_startup_shows_welcome_and_login_code_guest_choices() -> None:
     assert "Продолжить без регистрации" in APP
 
 
+def test_browser_startup_links_to_official_login_bots() -> None:
+    assert '"https://t.me/app_bloom_club_bot"' in APP
+    assert '"https://vk.me/club238169934"' in APP
+    assert "Где получить код?" in APP
+    assert "Бот сразу пришлёт код для входа участницы" in APP
+    assert 'target="_blank"' in APP
+    assert 'rel="noopener noreferrer"' in APP
+    assert APP.count("<LoginBotLinks />") == 2
+
+
 def test_guest_registration_modal_blocks_protected_actions() -> None:
     assert "Требуется регистрация" in APP
     assert "Чтобы воспользоваться возможностями Bloom Club" in APP
