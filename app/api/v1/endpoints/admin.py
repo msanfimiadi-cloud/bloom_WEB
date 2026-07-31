@@ -1448,8 +1448,9 @@ def update_admin_user(
     update_data = payload.model_dump(exclude_unset=True)
     next_email = _normalize_user_email(update_data["email"]) if "email" in update_data else user.email
     next_phone = _normalize_user_phone(update_data["phone"]) if "phone" in update_data else user.phone
-    _ensure_user_contact_present(next_email, next_phone)
-    _ensure_unique_user_identity(db, email=next_email, phone=next_phone, exclude_user_id=user.id)
+    if "email" in update_data or "phone" in update_data:
+        _ensure_user_contact_present(next_email, next_phone)
+        _ensure_unique_user_identity(db, email=next_email, phone=next_phone, exclude_user_id=user.id)
 
     if "email" in update_data:
         user.email = next_email

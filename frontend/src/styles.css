@@ -5980,24 +5980,22 @@ body.is-dashboard {
 }
 
 .admin-table.admin-table--users {
-  min-width: 1320px;
+  min-width: 1180px;
   table-layout: auto;
 }
 
 .admin-table--users .admin-table-cell--actions {
-  position: sticky;
-  right: 0;
-  z-index: 2;
-  width: 320px;
-  min-width: 320px;
-  max-width: 320px;
-  background: #fffdfc;
-  box-shadow: -12px 0 22px rgba(143, 81, 75, 0.08);
+  width: 300px;
+  min-width: 300px;
+  max-width: 300px;
 }
 
-.admin-table--users thead .admin-table-cell--actions {
-  z-index: 3;
-  background: #fff7f4;
+.admin-two-column.admin-two-column--users {
+  grid-template-columns: minmax(0, 1fr);
+}
+
+.admin-two-column--users > .admin-form {
+  width: min(520px, 100%);
 }
 
 .admin-table--users .admin-table-actions {
@@ -6005,8 +6003,10 @@ body.is-dashboard {
   grid-template-columns: repeat(2, minmax(0, 1fr));
 }
 
-.admin-table--users .admin-table-action {
+.admin-table--users .admin-table-actions .admin-table-action {
   min-width: 0;
+  padding-inline: 8px;
+  font-size: 0.76rem;
 }
 
 .admin-user-giveaway-exclusion {

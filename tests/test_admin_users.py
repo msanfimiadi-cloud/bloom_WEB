@@ -186,6 +186,35 @@ def test_admin_can_exclude_client_from_giveaways(
     assert excluded["exclude_from_giveaways"] is True
 
 
+def test_admin_can_exclude_contactless_social_client_from_giveaways(
+    admin_users_client: TestClient,
+    admin_token: str,
+) -> None:
+    with next(app.dependency_overrides[get_db]()) as session:
+        contactless_user = User(
+            email=None,
+            phone=None,
+            password_hash=hash_password("SocialClientPassword123"),
+            role=UserRole.CLIENT.value,
+            is_active=True,
+        )
+        session.add(contactless_user)
+        session.commit()
+        session.refresh(contactless_user)
+        contactless_user_id = contactless_user.id
+
+    response = admin_users_client.patch(
+        f"/api/v1/admin/users/{contactless_user_id}",
+        headers=_auth_headers(admin_token),
+        json={"exclude_from_giveaways": True},
+    )
+
+    assert response.status_code == 200
+    assert response.json()["email"] is None
+    assert response.json()["phone"] is None
+    assert response.json()["exclude_from_giveaways"] is True
+
+
 def test_admin_cannot_apply_giveaway_exclusion_to_non_client(
     admin_users_client: TestClient,
     admin_token: str,
