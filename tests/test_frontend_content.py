@@ -980,6 +980,24 @@ def test_public_landing_copy_and_city_chips_remain_intact() -> None:
         assert public_copy in source
 
 
+def test_public_landing_hides_admin_login_and_has_live_stats_defaults() -> None:
+    source = _frontend_main()
+    public_landing_match = re.search(r"const renderPublicApp = \(\) => \{(.*?)const authTokenKey", source, re.S)
+    assert public_landing_match is not None
+    public_landing_source = public_landing_match.group(1)
+
+    assert "Вход для администратора" in public_landing_source
+    assert 'class="editorial-admin-access"' in public_landing_source
+    assert "Я участница" not in public_landing_source
+    assert "Я партнёр" not in public_landing_source
+    assert 'data-login-mode="client"' not in public_landing_source
+    assert 'data-login-mode="partner"' not in public_landing_source
+    assert "editorial-login-link" not in public_landing_source
+    assert "members_count: 20" in source
+    assert "partners_count: 0" in source
+    assert "savings_total: 8200" in source
+
+
 def test_frontend_contains_admin_city_edit_and_safe_deactivate_ui() -> None:
     source = _frontend_main()
     styles = _frontend_styles()
@@ -1379,9 +1397,8 @@ def test_frontend_preserves_public_and_cabinet_contract_markers_after_password_s
     for expected in (
         "Федеральный клуб привилегий для девушек",
         "data-login-form",
-        'data-login-mode="admin"',
-        'data-login-mode="partner"',
-        'data-login-mode="client"',
+        "Вход для администратора",
+        "editorial-admin-access",
         "/api/v1/auth/login",
         "/api/v1/auth/user-login",
         "Панель администратора",

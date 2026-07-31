@@ -19,9 +19,9 @@ class LandingSettings(Base):
     __tablename__ = "landing_settings"
 
     id: Mapped[int] = mapped_column(Integer, primary_key=True)
-    members_count_base: Mapped[int] = mapped_column(Integer, nullable=False, default=125, server_default="125")
-    partners_count_display: Mapped[int] = mapped_column(Integer, nullable=False, default=18, server_default="18")
-    savings_total: Mapped[int] = mapped_column(Integer, nullable=False, default=53500, server_default="53500")
+    members_count_base: Mapped[int] = mapped_column(Integer, nullable=False, default=20, server_default="20")
+    partners_count_display: Mapped[int] = mapped_column(Integer, nullable=False, default=0, server_default="0")
+    savings_total: Mapped[int] = mapped_column(Integer, nullable=False, default=8200, server_default="8200")
     giveaway_title: Mapped[str] = mapped_column(String(255), nullable=False, default="Розыгрыш месяца", server_default="Розыгрыш месяца")
     giveaway_current: Mapped[str] = mapped_column(String(255), nullable=False, default="Приз месяца", server_default="Приз месяца")
     giveaway_subtitle: Mapped[str] = mapped_column(String(512), nullable=False, default="доступно участницам клуба", server_default="доступно участницам клуба")

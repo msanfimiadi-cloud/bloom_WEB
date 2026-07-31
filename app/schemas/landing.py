@@ -15,11 +15,11 @@ class GiveawayItem(BaseModel):
 
 
 class LandingSettingsBase(BaseModel):
-    members_count_base: int = Field(default=125, ge=0)
-    partners_count_display: int = Field(default=18, ge=0)
-    partners_count_base: int = Field(default=18, ge=0)
-    savings_total: int = Field(default=53500, ge=0)
-    savings_total_base: int = Field(default=53500, ge=0)
+    members_count_base: int = Field(default=20, ge=0)
+    partners_count_display: int = Field(default=0, ge=0)
+    partners_count_base: int = Field(default=0, ge=0)
+    savings_total: int = Field(default=8200, ge=0)
+    savings_total_base: int = Field(default=8200, ge=0)
     giveaway_title: str = "Розыгрыш месяца"
     giveaway_current: str = "Приз месяца"
     giveaway_subtitle: str = "доступно участницам клуба"
@@ -30,11 +30,11 @@ class LandingSettingsBase(BaseModel):
 class LandingSettingsRead(LandingSettingsBase):
     id: int
     updated_at: datetime
-    members_count: int = 125
+    members_count: int = 20
     members_count_real: int = 0
-    partners_count: int = 18
+    partners_count: int = 0
     partners_count_real: int = 0
-    savings_total_display: int = 53500
+    savings_total_display: int = 8200
     savings_total_real: int = 0
 
     model_config = {"from_attributes": True}

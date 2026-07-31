@@ -72,31 +72,55 @@ def test_public_landing_stats_returns_start_values(landing_client: TestClient) -
 
     assert response.status_code == 200
     data = response.json()
-    assert data["members_count"] == 125
-    assert data["members_count_base"] == 125
+    assert data["members_count"] == 20
+    assert data["members_count_base"] == 20
     assert data["members_count_real"] == 0
-    assert data["partners_count"] == 18
-    assert data["partners_count_base"] == 18
+    assert data["partners_count"] == 0
+    assert data["partners_count_base"] == 0
     assert data["partners_count_real"] == 0
-    assert data["savings_total"] == 53500
-    assert data["savings_total_base"] == 53500
+    assert data["savings_total"] == 8200
+    assert data["savings_total_base"] == 8200
     assert data["savings_total_real"] == 0
     assert data["giveaway_title"] == "Розыгрыш месяца"
     assert data["giveaway_empty_text"] == DEFAULT_GIVEAWAY_EMPTY_TEXT
 
 
-def test_public_members_count_grows_when_client_user_appears(landing_client: TestClient) -> None:
+def test_public_members_count_grows_when_client_activates_trial(landing_client: TestClient) -> None:
     with next(app.dependency_overrides[get_db]()) as session:
-        session.add(User(email="client@example.com", role=UserRole.CLIENT.value, is_active=True))
+        user = User(email="client@example.com", role=UserRole.CLIENT.value, is_active=True)
+        session.add(user)
+        session.flush()
+        session.add(
+            ClientProfile(
+                user_id=user.id,
+                is_active=True,
+                trial_subscription_used_at=datetime.now(timezone.utc),
+            )
+        )
         session.commit()
 
     response = landing_client.get("/api/v1/public/landing/stats")
 
     assert response.status_code == 200
     data = response.json()
-    assert data["members_count"] == 126
-    assert data["members_count_base"] == 125
+    assert data["members_count"] == 21
+    assert data["members_count_base"] == 20
     assert data["members_count_real"] == 1
+
+
+def test_public_members_count_ignores_client_without_trial(landing_client: TestClient) -> None:
+    with next(app.dependency_overrides[get_db]()) as session:
+        user = User(email="waiting@example.com", role=UserRole.CLIENT.value, is_active=True)
+        session.add(user)
+        session.flush()
+        session.add(ClientProfile(user_id=user.id, is_active=True))
+        session.commit()
+
+    response = landing_client.get("/api/v1/public/landing/stats")
+
+    assert response.status_code == 200
+    assert response.json()["members_count"] == 20
+    assert response.json()["members_count_real"] == 0
 
 
 def test_public_landing_stats_counts_base_plus_active_partners(landing_client: TestClient) -> None:
@@ -117,8 +141,8 @@ def test_public_landing_stats_counts_base_plus_active_partners(landing_client: T
 
     assert response.status_code == 200
     data = response.json()
-    assert data["partners_count"] == 20
-    assert data["partners_count_base"] == 18
+    assert data["partners_count"] == 2
+    assert data["partners_count_base"] == 0
     assert data["partners_count_real"] == 2
 
 
@@ -127,8 +151,8 @@ def test_public_landing_alias_returns_dynamic_stats(landing_client: TestClient) 
 
     assert response.status_code == 200
     data = response.json()
-    assert data["partners_count_base"] == 18
-    assert data["savings_total_base"] == 53500
+    assert data["partners_count_base"] == 0
+    assert data["savings_total_base"] == 8200
 
 
 def test_public_landing_stats_uses_real_savings_helper(landing_client: TestClient) -> None:
@@ -136,8 +160,8 @@ def test_public_landing_stats_uses_real_savings_helper(landing_client: TestClien
 
     assert response.status_code == 200
     data = response.json()
-    assert data["savings_total"] == 53500
-    assert data["savings_total_base"] == 53500
+    assert data["savings_total"] == 8200
+    assert data["savings_total_base"] == 8200
     assert data["savings_total_real"] == 0
 
 
@@ -179,8 +203,8 @@ def test_public_landing_stats_adds_confirmed_real_savings(landing_client: TestCl
 
     assert response.status_code == 200
     data = response.json()
-    assert data["savings_total"] == 55000
-    assert data["savings_total_base"] == 53500
+    assert data["savings_total"] == 9700
+    assert data["savings_total_base"] == 8200
     assert data["savings_total_real"] == 1500
 
 
