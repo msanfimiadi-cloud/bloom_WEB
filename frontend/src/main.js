@@ -6341,24 +6341,31 @@ const toggleUserActive = async (userId) => {
 };
 
 
-const toggleUserGiveawayExclusion = async (userId, excludeFromGiveaways) => {
+const toggleUserGiveawayExclusion = async (toggle) => {
+  const userId = toggle?.dataset.userGiveawayExclusionToggle;
   const currentUser = adminState.users.find((item) => String(item.id) === String(userId));
-  if (!currentUser || currentUser.role !== 'client') {
+  if (!toggle || !currentUser || currentUser.role !== 'client') {
     return;
   }
 
+  const previousValue = Boolean(currentUser.exclude_from_giveaways);
+  const nextValue = Boolean(toggle.checked);
+  toggle.disabled = true;
+  currentUser.exclude_from_giveaways = nextValue;
+
   try {
-    await patchJson(`/api/v1/admin/users/${userId}`, {
-      exclude_from_giveaways: Boolean(excludeFromGiveaways),
+    const updatedUser = await patchJson(`/api/v1/admin/users/${userId}`, {
+      exclude_from_giveaways: nextValue,
     });
-    await loadUsers();
+    Object.assign(currentUser, updatedUser);
     setPanelMessage(
-      excludeFromGiveaways
+      nextValue
         ? 'Клиент исключён из учёта розыгрышей.'
         : 'Клиент снова участвует в розыгрышах.',
       'success',
     );
   } catch (error) {
+    currentUser.exclude_from_giveaways = previousValue;
     setPanelMessage(error.message || 'Не удалось изменить участие клиента в розыгрышах.', 'error');
   }
 
@@ -8392,10 +8399,7 @@ const handlePartnerOfferPhotoFormSubmit = async (form) => {
 root.addEventListener('change', (event) => {
   const userGiveawayExclusionToggle = event.target.closest('[data-user-giveaway-exclusion-toggle]');
   if (userGiveawayExclusionToggle) {
-    void toggleUserGiveawayExclusion(
-      userGiveawayExclusionToggle.dataset.userGiveawayExclusionToggle,
-      userGiveawayExclusionToggle.checked,
-    );
+    void toggleUserGiveawayExclusion(userGiveawayExclusionToggle);
     return;
   }
 

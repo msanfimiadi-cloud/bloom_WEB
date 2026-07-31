@@ -5979,14 +5979,43 @@ body.is-dashboard {
   justify-items: stretch;
 }
 
+.admin-table.admin-table--users {
+  min-width: 1320px;
+  table-layout: auto;
+}
+
 .admin-table--users .admin-table-cell--actions {
-  width: 220px;
-  min-width: 220px;
-  max-width: 240px;
+  position: sticky;
+  right: 0;
+  z-index: 2;
+  width: 320px;
+  min-width: 320px;
+  max-width: 320px;
+  background: #fffdfc;
+  box-shadow: -12px 0 22px rgba(143, 81, 75, 0.08);
+}
+
+.admin-table--users thead .admin-table-cell--actions {
+  z-index: 3;
+  background: #fff7f4;
+}
+
+.admin-table--users .admin-table-actions {
+  min-width: 0;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+}
+
+.admin-table--users .admin-table-action {
+  min-width: 0;
 }
 
 .admin-user-giveaway-exclusion {
-  align-items: flex-start;
+  display: grid;
+  grid-column: 1 / -1;
+  grid-template-columns: 18px minmax(0, 1fr);
+  align-items: start;
+  width: 100%;
+  box-sizing: border-box;
   padding: 10px 11px;
   border: 1px solid rgba(143, 81, 75, 0.2);
   border-radius: 12px;
@@ -5998,9 +6027,16 @@ body.is-dashboard {
   cursor: pointer;
 }
 
+.admin-user-giveaway-exclusion:has(input:disabled) {
+  cursor: wait;
+  opacity: 0.7;
+}
+
 .admin-user-giveaway-exclusion input {
-  flex: 0 0 auto;
-  margin-top: 2px;
+  width: 16px;
+  height: 16px;
+  margin: 1px 0 0;
+  accent-color: var(--color-rose-dark);
 }
 
 .admin-table-action,

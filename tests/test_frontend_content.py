@@ -311,13 +311,21 @@ def test_admin_users_can_add_and_remove_subscription_days() -> None:
 
 def test_admin_users_can_be_excluded_from_giveaways() -> None:
     source = _frontend_main()
+    styles = _frontend_styles()
     actions_block = source.split("const renderUserActionButton = (user) =>", 1)[1].split("const renderAdminSearch", 1)[0]
+    toggle_block = source.split("const toggleUserGiveawayExclusion = async", 1)[1].split("const adjustUserSubscriptionDays", 1)[0]
 
     assert "Убрать клиента из учёта розыгрышей" in actions_block
     assert "data-user-giveaway-exclusion-toggle" in actions_block
     assert "user.exclude_from_giveaways" in actions_block
-    assert "const toggleUserGiveawayExclusion = async" in source
-    assert "exclude_from_giveaways: Boolean(excludeFromGiveaways)" in source
+    assert "toggle.disabled = true" in toggle_block
+    assert "const updatedUser = await patchJson" in toggle_block
+    assert "Object.assign(currentUser, updatedUser)" in toggle_block
+    assert "currentUser.exclude_from_giveaways = previousValue" in toggle_block
+    assert "await loadUsers()" not in toggle_block
+    assert ".admin-table.admin-table--users" in styles
+    assert "grid-template-columns: repeat(2, minmax(0, 1fr))" in styles
+    assert "position: sticky" in styles
 
 
 def test_frontend_applies_custom_selects_to_client_catalog_filters() -> None:
