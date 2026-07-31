@@ -286,7 +286,7 @@ def test_expired_event_includes_active_sessions_past_expires_at() -> None:
     assert any(item["status"] == PrivilegeVerificationStatus.active.value for item in expired_items)
 
 
-def test_alembic_heads_include_partner_stats_reset_migration() -> None:
+def test_alembic_heads_include_live_landing_statistics_migration() -> None:
     result = subprocess.run(["alembic", "heads"], check=True, capture_output=True, text=True)
 
-    assert result.stdout.strip() == "20260730_0040 (head)"
+    assert result.stdout.strip() == "20260731_0041 (head)"

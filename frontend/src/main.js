@@ -56,9 +56,9 @@ const editorialFeaturedCategories = [
 const publicLandingLegacyEffectsEnabled = false;
 
 const landingStatsFallback = {
-  members_count: 125,
-  partners_count: 18,
-  savings_total: 53500,
+  members_count: 20,
+  partners_count: 0,
+  savings_total: 8200,
   giveaway_title: 'Розыгрыш месяца',
   giveaway_current: 'Приз месяца',
   giveaway_subtitle: 'доступно участницам клуба',
@@ -322,13 +322,11 @@ const renderPublicApp = () => {
         ${landingMenuLinks.map((link) => `<a href="${link.href}" data-landing-menu-link>${link.label}</a>`).join('')}
       </nav>
       <div class="editorial-header__actions">
-        <a class="editorial-login-link" href="#login">Войти</a>
         <a class="editorial-button editorial-button--small" href="${browserAppUrl}">Стать участницей</a>
         <div class="landing-menu editorial-mobile-menu">
           <button class="landing-menu-toggle" type="button" data-landing-menu-toggle aria-expanded="false" aria-controls="landing-menu-panel">Меню</button>
           <div class="landing-menu-panel" id="landing-menu-panel" data-landing-menu-panel hidden>
             ${landingMenuLinks.map((link) => `<a href="${link.href}" data-landing-menu-link>${link.label}</a>`).join('')}
-            <a href="#login" data-landing-menu-link>Войти</a>
           </div>
         </div>
       </div>
@@ -344,8 +342,8 @@ const renderPublicApp = () => {
           <a class="editorial-text-link" href="#landing-partners">Смотреть партнёров</a>
         </div>
         <dl class="editorial-stats hero-proof-grid" aria-label="Показатели клуба">
-          <div><dt>${escapeHtml(landingStats.members_count)}+</dt><dd>участниц</dd></div>
-          <div><dt>${escapeHtml(landingStats.partners_count)}+</dt><dd>партнёров</dd></div>
+          <div><dt>${escapeHtml(landingStats.members_count)}</dt><dd>участниц</dd></div>
+          <div><dt>${escapeHtml(landingStats.partners_count)}</dt><dd>партнёров</dd></div>
           <div><dt>${escapeHtml(formatMoneyLabel(Number(landingStats.savings_total)))}</dt><dd>общая экономия</dd></div>
         </dl>
       </div>
@@ -411,40 +409,6 @@ const renderPublicApp = () => {
       </div>
     </section>
 
-    <section class="editorial-access" id="login" aria-labelledby="login-title">
-      <span class="landing-anchor" id="landing-join" aria-hidden="true"></span>
-      <div>
-        <p class="editorial-kicker">Уже с нами?</p>
-        <h2 id="login-title">Личный кабинет</h2>
-        <p>Войдите как участница или партнёр клуба — все привычные функции остаются на месте.</p>
-      </div>
-      <div class="editorial-login-card">
-        <div class="login-quick-access" aria-label="Быстрый вход" data-login-quick-card>
-          <p class="login-quick-access__title">Выберите кабинет</p>
-          <div class="login-quick-access__actions">
-            <button class="login-quick-access__button" type="button" data-login-expand-mode="client">Я участница</button>
-            <button class="login-quick-access__button" type="button" data-login-expand-mode="partner">Я партнёр</button>
-          </div>
-        </div>
-        <div class="login-details" data-login-details hidden>
-          <div class="login-mode-switch" role="tablist" aria-label="Тип входа">
-            <button class="login-mode-button is-active" type="button" data-login-mode="admin" role="tab" aria-selected="true">Администратор</button>
-            <button class="login-mode-button" type="button" data-login-mode="partner" role="tab" aria-selected="false">Партнёр</button>
-            <button class="login-mode-button" type="button" data-login-mode="client" role="tab" aria-selected="false">Клиент</button>
-          </div>
-          <form class="login-form" data-login-form>
-            <label>Логин<input type="text" name="email" autocomplete="username" placeholder="Email, телефон или логин" required /></label>
-            <label>Пароль<input type="password" name="password" autocomplete="current-password" placeholder="Введите пароль" required /></label>
-            <button type="submit">Войти</button>
-            <p class="login-message" data-login-message role="status" aria-live="polite"></p>
-          </form>
-        </div>
-        <div class="admin-dashboard" data-admin-dashboard hidden><h3>Админ-панель</h3><p>Вы вошли как: <strong data-admin-email></strong></p><button type="button" data-logout-button>Выйти</button></div>
-        <div class="admin-dashboard partner-dashboard" data-partner-dashboard hidden></div>
-        <div class="admin-dashboard client-dashboard" data-client-dashboard hidden></div>
-      </div>
-    </section>
-
     <section class="editorial-cities" id="landing-cities" aria-labelledby="city-selector-title">
       <div><p class="editorial-kicker">География клуба</p><h2 id="city-selector-title">Выберите город</h2><p class="editorial-cities__note">Чем больше мы растём, тем больше городов подключаем. Скоро появятся новые города.</p></div>
       <div class="city-choice-grid" role="radiogroup" aria-labelledby="city-selector-title">
@@ -457,6 +421,16 @@ const renderPublicApp = () => {
       <div><h2 id="business-info-title">Поддержка и контакты</h2><p>Время работы: 09:00–18:00<br>по новосибирскому времени (UTC+7)</p><a href="mailto:danka1948@mail.ru">danka1948@mail.ru</a></div>
       <div><h2>Мы на связи</h2><a href="https://t.me/Wo_ClubNSK" target="_blank" rel="noopener noreferrer">Telegram-канал</a><a href="https://t.me/app_bloom_club_bot" target="_blank" rel="noopener noreferrer">Telegram-бот</a><a href="https://vk.ru/club238169934" target="_blank" rel="noopener noreferrer">ВКонтакте</a></div>
       <div><h2>Документы</h2>${renderLegalDocumentLinks('legal-links editorial-footer__links')}</div>
+      <details class="editorial-admin-access" id="login">
+        <summary>Вход для администратора</summary>
+        <span id="landing-join" aria-hidden="true"></span>
+        <form class="login-form editorial-admin-access__form" data-login-form>
+          <label>Логин<input type="text" name="email" autocomplete="username" placeholder="Логин администратора" required /></label>
+          <label>Пароль<input type="password" name="password" autocomplete="current-password" placeholder="Введите пароль" required /></label>
+          <button type="submit">Войти</button>
+          <p class="login-message" data-login-message role="status" aria-live="polite"></p>
+        </form>
+      </details>
       <p class="editorial-footer__operator">© Bloom Club · ИП Глущенко Анастасия Дмитриевна · ИНН 541007956565 · ОГРНИП 323547600049744</p>
     </footer>
   </main>
@@ -718,7 +692,7 @@ const bindPublicElements = () => {
   partnerDashboard = document.querySelector('[data-partner-dashboard]');
   clientDashboard = document.querySelector('[data-client-dashboard]');
   syncLoginPanelState();
-  setLoginMode(activeLoginMode);
+  setLoginMode('admin');
 };
 
 const setLoginExpanded = (expanded, mode = '') => {
@@ -4578,14 +4552,14 @@ const renderAdminActivityTab = () => `
 
 
 const getAdminLandingSettings = () => ({
-  members_count_base: 125,
-  partners_count_display: 18,
-  partners_count_base: 18,
-  partners_count: 18,
+  members_count_base: 20,
+  partners_count_display: 0,
+  partners_count_base: 0,
+  partners_count: 0,
   partners_count_real: 0,
-  savings_total: 53500,
-  savings_total_base: 53500,
-  savings_total_display: 53500,
+  savings_total: 8200,
+  savings_total_base: 8200,
+  savings_total_display: 8200,
   savings_total_real: 0,
   giveaway_title: 'Розыгрыш месяца',
   giveaway_current: 'Приз месяца',
@@ -6906,7 +6880,7 @@ const handlePasswordSetupSubmit = async (form) => {
   if (message) {
     message.textContent = '';
   }
-  const { setupToken, login } = getPasswordSetupParams();
+  const { setupToken } = getPasswordSetupParams();
   const formData = new FormData(form);
   const password = String(formData.get('password') || '');
   const passwordConfirm = String(formData.get('password_confirm') || '');
@@ -6937,12 +6911,8 @@ const handlePasswordSetupSubmit = async (form) => {
     nextUrl.searchParams.delete('setup_token');
     window.history.replaceState({}, '', `${nextUrl.pathname}${nextUrl.search}${nextUrl.hash}`);
     renderPublicApp();
-    setLoginMode('client');
-    const loginInput = document.querySelector('[data-login-form] input[name="email"]');
-    if (loginInput && login) {
-      loginInput.value = login;
-    }
-    setLoginMessage('Пароль установлен. Теперь войдите в личный кабинет.');
+    setLoginMode('admin');
+    setLoginMessage('Пароль установлен. Войдите через приложение Bloom Club.');
   } catch (error) {
     if (message) {
       message.textContent = 'Ссылка недействительна или истекла. Запросите новую ссылку в VK-боте.';
@@ -8791,7 +8761,7 @@ const restorePartnerSession = async () => {
 const restoreAdminSession = async () => {
   const token = getToken();
   if (!token) {
-    await restorePartnerSession();
+    showLoginForm();
     return;
   }
 
@@ -8800,7 +8770,7 @@ const restoreAdminSession = async () => {
     await showAdminDashboard(user);
   } catch (error) {
     clearToken();
-    await restorePartnerSession();
+    showLoginForm();
   }
 };
 

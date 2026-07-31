@@ -5,6 +5,7 @@ from decimal import Decimal
 from sqlalchemy import func, select
 from sqlalchemy.orm import Session
 
+from app.models.client import ClientProfile
 from app.models.landing import DEFAULT_GIVEAWAY_EMPTY_TEXT, LandingSettings
 from app.models.partner import Partner
 from app.models.user import User, UserRole
@@ -47,9 +48,13 @@ def get_or_create_landing_settings(db: Session) -> LandingSettings:
 
 def calculate_real_members_count(db: Session) -> int:
     real_members_count = db.execute(
-        select(func.count(User.id)).where(
+        select(func.count(func.distinct(User.id)))
+        .join(ClientProfile, ClientProfile.user_id == User.id)
+        .where(
             User.role.in_(CLIENT_MEMBER_ROLES),
             User.is_active.is_(True),
+            ClientProfile.is_active.is_(True),
+            ClientProfile.trial_subscription_used_at.is_not(None),
         )
     ).scalar_one()
     return int(real_members_count or 0)
