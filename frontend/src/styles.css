@@ -5979,6 +5979,30 @@ body.is-dashboard {
   justify-items: stretch;
 }
 
+.admin-table--users .admin-table-cell--actions {
+  width: 220px;
+  min-width: 220px;
+  max-width: 240px;
+}
+
+.admin-user-giveaway-exclusion {
+  align-items: flex-start;
+  padding: 10px 11px;
+  border: 1px solid rgba(143, 81, 75, 0.2);
+  border-radius: 12px;
+  background: rgba(255, 248, 246, 0.88);
+  color: var(--color-rose-dark);
+  font-size: 0.78rem;
+  font-weight: 850;
+  line-height: 1.25;
+  cursor: pointer;
+}
+
+.admin-user-giveaway-exclusion input {
+  flex: 0 0 auto;
+  margin-top: 2px;
+}
+
 .admin-table-action,
 .admin-table-actions .admin-action-button,
 .admin-table-actions .admin-inline-action {

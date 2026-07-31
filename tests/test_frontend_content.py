@@ -309,6 +309,17 @@ def test_admin_users_can_add_and_remove_subscription_days() -> None:
     assert "days < 1 || days > 3650" in source
 
 
+def test_admin_users_can_be_excluded_from_giveaways() -> None:
+    source = _frontend_main()
+    actions_block = source.split("const renderUserActionButton = (user) =>", 1)[1].split("const renderAdminSearch", 1)[0]
+
+    assert "Убрать клиента из учёта розыгрышей" in actions_block
+    assert "data-user-giveaway-exclusion-toggle" in actions_block
+    assert "user.exclude_from_giveaways" in actions_block
+    assert "const toggleUserGiveawayExclusion = async" in source
+    assert "exclude_from_giveaways: Boolean(excludeFromGiveaways)" in source
+
+
 def test_frontend_applies_custom_selects_to_client_catalog_filters() -> None:
     source = _frontend_main()
     catalog_block = source.split("const renderClientCatalogTab = () => {", 1)[1].split("const renderClientPartnerCard", 1)[0]

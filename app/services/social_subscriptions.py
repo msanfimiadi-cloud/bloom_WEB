@@ -11,6 +11,7 @@ from sqlalchemy.orm import Session
 from app.core.config import settings
 from app.models.client import ClientProfile
 from app.models.giveaway import Giveaway, GiveawayNumber
+from app.models.user import User
 
 logger = logging.getLogger(__name__)
 
@@ -56,6 +57,13 @@ def next_number(db: Session, giveaway_id: int) -> str:
 
 
 def upsert_social_number(db: Session, giveaway_id: int, client_id: int, source: str, subscribed: bool, platform: str, community_id: str | None) -> GiveawayNumber | None:
+    excluded = db.execute(
+        select(User.exclude_from_giveaways)
+        .join(ClientProfile, ClientProfile.user_id == User.id)
+        .where(ClientProfile.id == client_id)
+    ).scalar_one_or_none()
+    if excluded:
+        return None
     now = datetime.now(timezone.utc)
     number = db.execute(select(GiveawayNumber).where(GiveawayNumber.giveaway_id == giveaway_id, GiveawayNumber.client_id == client_id, GiveawayNumber.source == source)).scalar_one_or_none()
     if subscribed:
@@ -155,7 +163,16 @@ def check_and_apply(db: Session, giveaway: Giveaway, client: ClientProfile, plat
 
 def recheck_giveaway_social_subscriptions(db: Session, giveaway: Giveaway) -> dict[str, int]:
     stats = {"checked": 0, "active": 0, "deactivated": 0, "reactivated": 0, "errors": 0}
-    rows = db.execute(select(GiveawayNumber).where(GiveawayNumber.giveaway_id == giveaway.id, GiveawayNumber.source.in_(SOCIAL_SOURCES))).scalars().all()
+    rows = db.execute(
+        select(GiveawayNumber)
+        .join(ClientProfile, ClientProfile.id == GiveawayNumber.client_id)
+        .join(User, User.id == ClientProfile.user_id)
+        .where(
+            GiveawayNumber.giveaway_id == giveaway.id,
+            GiveawayNumber.source.in_(SOCIAL_SOURCES),
+            User.exclude_from_giveaways.is_(False),
+        )
+    ).scalars().all()
     for number in rows:
         before = is_number_active(number)
         client = db.get(ClientProfile, number.client_id)

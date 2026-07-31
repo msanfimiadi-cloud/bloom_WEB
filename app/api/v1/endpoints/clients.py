@@ -761,6 +761,15 @@ def read_client_giveaway(
     )
     if current_user is None:
         return GiveawayStateRead(has_active_giveaway=True, giveaway=public, guest=True, message="login_required", social_tasks=social_task_settings(giveaway))
+    if current_user.exclude_from_giveaways:
+        return GiveawayStateRead(
+            has_active_giveaway=True,
+            giveaway=public,
+            user_numbers_count=0,
+            numbers=[],
+            message="excluded_from_giveaways",
+            social_tasks={},
+        )
     profile = _get_or_create_client_profile(db, current_user.id)
     numbers = ensure_user_numbers(db, giveaway.id, profile.id)
     for platform in ("telegram", "vk"):
@@ -790,6 +799,11 @@ def check_client_social_subscription(
     giveaway = get_active_giveaway(db)
     if giveaway is None:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="No active giveaway")
+    if current_user.exclude_from_giveaways:
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN,
+            detail="Client is excluded from giveaways",
+        )
     profile = _get_or_create_client_profile(db, current_user.id)
     result = check_and_apply(db, giveaway, profile, platform)
     db.commit()

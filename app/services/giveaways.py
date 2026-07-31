@@ -8,6 +8,7 @@ from sqlalchemy.orm import Session, selectinload
 
 from app.models.client import ClientProfile, ClientReferral
 from app.models.giveaway import Giveaway, GiveawayNumber
+from app.models.user import User
 from app.services.social_subscriptions import is_number_active
 from app.models.payment import Subscription, SubscriptionStatus
 
@@ -37,6 +38,16 @@ def has_active_access(db: Session, client_id: int, now: datetime | None = None) 
     return db.execute(select(Subscription.id).where(Subscription.client_id == client_id, Subscription.status == SubscriptionStatus.active.value, Subscription.starts_at <= now, Subscription.ends_at >= now)).scalar_one_or_none() is not None
 
 
+def is_client_excluded_from_giveaways(db: Session, client_id: int) -> bool:
+    return bool(
+        db.execute(
+            select(User.exclude_from_giveaways)
+            .join(ClientProfile, ClientProfile.user_id == User.id)
+            .where(ClientProfile.id == client_id)
+        ).scalar_one_or_none()
+    )
+
+
 def activated_referrals_count(db: Session, client_id: int, now: datetime | None = None) -> int:
     now = now or datetime.now(timezone.utc)
     return int(db.execute(select(func.count(ClientReferral.id)).join(ClientProfile, ClientProfile.id == ClientReferral.referred_client_id).join(Subscription, Subscription.client_id == ClientProfile.id).where(ClientReferral.referrer_client_id == client_id, Subscription.status == SubscriptionStatus.active.value, Subscription.starts_at <= now, Subscription.ends_at >= now)).scalar_one() or 0)
@@ -51,6 +62,8 @@ def desired_number_sources(db: Session, client_id: int, now: datetime | None = N
 
 
 def ensure_user_numbers(db: Session, giveaway_id: int, client_id: int) -> list[GiveawayNumber]:
+    if is_client_excluded_from_giveaways(db, client_id):
+        return []
     sources = desired_number_sources(db, client_id)
     existing = db.execute(select(GiveawayNumber).where(GiveawayNumber.giveaway_id == giveaway_id, GiveawayNumber.client_id == client_id).order_by(GiveawayNumber.id)).scalars().all()
     managed_existing = [number for number in existing if number.source in {"subscription", "referral"}]
@@ -73,9 +86,15 @@ def ensure_user_numbers(db: Session, giveaway_id: int, client_id: int) -> list[G
             active_numbers.append(number)
 
         while len(active_numbers) < target_count:
-            active_numbers.append(
-                create_bonus_number(db, giveaway_id=giveaway_id, client_id=client_id, source=source)
+            created = create_bonus_number(
+                db,
+                giveaway_id=giveaway_id,
+                client_id=client_id,
+                source=source,
             )
+            if created is None:
+                break
+            active_numbers.append(created)
 
         for number in active_numbers[target_count:]:
             number.is_active = False
@@ -99,7 +118,9 @@ def create_bonus_number(
     client_id: int,
     source: str,
     source_reference: str | None = None,
-) -> GiveawayNumber:
+) -> GiveawayNumber | None:
+    if is_client_excluded_from_giveaways(db, client_id):
+        return None
     if source_reference:
         existing = db.execute(
             select(GiveawayNumber).where(

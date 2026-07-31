@@ -753,7 +753,15 @@ def list_admin_giveaway_entries(
     _ = admin
     if db.get(Giveaway, giveaway_id) is None:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Giveaway not found")
-    stmt = select(GiveawayNumber, ClientProfile).join(ClientProfile, ClientProfile.id == GiveawayNumber.client_id, isouter=True).where(GiveawayNumber.giveaway_id == giveaway_id)
+    stmt = (
+        select(GiveawayNumber, ClientProfile)
+        .join(ClientProfile, ClientProfile.id == GiveawayNumber.client_id)
+        .join(User, User.id == ClientProfile.user_id)
+        .where(
+            GiveawayNumber.giveaway_id == giveaway_id,
+            User.exclude_from_giveaways.is_(False),
+        )
+    )
     if search_number: stmt = stmt.where(GiveawayNumber.number.ilike(f"%{search_number}%"))
     if source: stmt = stmt.where(GiveawayNumber.source == source)
     if active is not None: stmt = stmt.where(GiveawayNumber.is_active.is_(active), GiveawayNumber.status == ("active" if active else GiveawayNumber.status))
@@ -816,7 +824,12 @@ def recheck_admin_giveaway_participant_subscriptions(
     client_ids = set(
         db.execute(
             select(GiveawayNumber.client_id)
-            .where(GiveawayNumber.giveaway_id == giveaway_id)
+            .join(ClientProfile, ClientProfile.id == GiveawayNumber.client_id)
+            .join(User, User.id == ClientProfile.user_id)
+            .where(
+                GiveawayNumber.giveaway_id == giveaway_id,
+                User.exclude_from_giveaways.is_(False),
+            )
             .distinct()
         ).scalars().all()
     )
@@ -1275,6 +1288,7 @@ def list_admin_users(
                     "phone": user.phone,
                     "role": user.role,
                     "is_active": user.is_active,
+                    "exclude_from_giveaways": user.exclude_from_giveaways,
                     "full_name": full_name,
                     "contact_email": contact_email,
                     "selected_city_id": selected_city_id,
@@ -1443,8 +1457,17 @@ def update_admin_user(
         user.phone = next_phone
     if "role" in update_data:
         user.role = _normalize_user_role(update_data["role"])
+        if user.role != UserRole.CLIENT.value:
+            user.exclude_from_giveaways = False
     if "is_active" in update_data:
         user.is_active = update_data["is_active"]
+    if "exclude_from_giveaways" in update_data:
+        if user.role != UserRole.CLIENT.value and update_data["exclude_from_giveaways"]:
+            raise HTTPException(
+                status_code=status.HTTP_409_CONFLICT,
+                detail="Only client accounts can be excluded from giveaways",
+            )
+        user.exclude_from_giveaways = update_data["exclude_from_giveaways"]
     if "password" in update_data:
         if update_data["password"] is not None:
             user.password_hash = hash_password(_normalize_user_password(update_data["password"]))

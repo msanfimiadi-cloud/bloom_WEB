@@ -165,6 +165,40 @@ def test_admin_users_returns_401_without_token(admin_users_client: TestClient) -
     assert response.status_code == 401
 
 
+def test_admin_can_exclude_client_from_giveaways(
+    admin_users_client: TestClient,
+    admin_token: str,
+) -> None:
+    response = admin_users_client.patch(
+        "/api/v1/admin/users/2",
+        headers=_auth_headers(admin_token),
+        json={"exclude_from_giveaways": True},
+    )
+
+    assert response.status_code == 200
+    assert response.json()["exclude_from_giveaways"] is True
+
+    users = admin_users_client.get(
+        "/api/v1/admin/users",
+        headers=_auth_headers(admin_token),
+    ).json()
+    excluded = next(item for item in users if item["id"] == 2)
+    assert excluded["exclude_from_giveaways"] is True
+
+
+def test_admin_cannot_apply_giveaway_exclusion_to_non_client(
+    admin_users_client: TestClient,
+    admin_token: str,
+) -> None:
+    response = admin_users_client.patch(
+        "/api/v1/admin/users/1",
+        headers=_auth_headers(admin_token),
+        json={"exclude_from_giveaways": True},
+    )
+
+    assert response.status_code == 409
+
+
 def test_admin_can_add_days_to_active_subscription(
     admin_users_client: TestClient,
     admin_token: str,
