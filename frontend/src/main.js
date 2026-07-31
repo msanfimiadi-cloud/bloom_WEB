@@ -4784,7 +4784,7 @@ const renderUsersTab = () => {
     (item) => searchableBool(item.is_active),
   ]);
   return `
-    <div class="admin-two-column admin-two-column--wide">
+    <div class="admin-two-column admin-two-column--wide admin-two-column--users">
       <div>
         <div class="admin-section-heading"><h4>Пользователи</h4><p>Unified users для клиентских, партнёрских и административных кабинетов.</p></div>
         ${renderAdminSearch('users', 'Поиск по пользователям')}

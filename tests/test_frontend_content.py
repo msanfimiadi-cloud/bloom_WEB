@@ -323,9 +323,14 @@ def test_admin_users_can_be_excluded_from_giveaways() -> None:
     assert "Object.assign(currentUser, updatedUser)" in toggle_block
     assert "currentUser.exclude_from_giveaways = previousValue" in toggle_block
     assert "await loadUsers()" not in toggle_block
+    assert "admin-two-column--users" in source
     assert ".admin-table.admin-table--users" in styles
+    assert "min-width: 1180px" in styles
+    assert ".admin-two-column.admin-two-column--users" in styles
+    assert "grid-template-columns: minmax(0, 1fr)" in styles
     assert "grid-template-columns: repeat(2, minmax(0, 1fr))" in styles
-    assert "position: sticky" in styles
+    user_table_styles = styles.split(".admin-table.admin-table--users", 1)[1].split(".admin-user-giveaway-exclusion", 1)[0]
+    assert "position: sticky" not in user_table_styles
 
 
 def test_frontend_applies_custom_selects_to_client_catalog_filters() -> None:
