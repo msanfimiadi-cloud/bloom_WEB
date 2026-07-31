@@ -84,6 +84,17 @@ def test_frontend_title_targets_girls() -> None:
     assert f"<title>{EXPECTED_TITLE}</title>" in _frontend_index()
 
 
+def test_site_uses_the_same_icons_as_browser_app() -> None:
+    index = _frontend_index()
+    icon_names = ("favicon-32.png", "icon-192.png", "apple-touch-icon.png")
+
+    for icon_name in icon_names:
+        site_icon = FRONTEND_DIR / "public" / icon_name
+        app_icon = REPO_ROOT / "browser-mobile-app" / "public" / "docs" / "icons" / icon_name
+        assert f'href="/{icon_name}"' in index
+        assert site_icon.read_bytes() == app_icon.read_bytes()
+
+
 def test_public_frontend_does_not_render_technical_shell_copy() -> None:
     source = _frontend_public_sources()
 
