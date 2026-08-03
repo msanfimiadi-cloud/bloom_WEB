@@ -247,6 +247,26 @@ def test_admin_landing_settings_patch_updates_giveaway_empty_text(landing_client
     assert data["giveaway_empty_text"] == "Призы появятся после запуска нового розыгрыша."
 
 
+def test_admin_can_toggle_bloom_map_without_changing_landing_content(landing_client: TestClient) -> None:
+    headers = _auth_headers(landing_client)
+
+    initial = landing_client.get("/api/v1/admin/bloom-map-settings", headers=headers)
+    assert initial.status_code == 200
+    assert initial.json() == {"enabled": False}
+
+    enabled = landing_client.patch(
+        "/api/v1/admin/bloom-map-settings",
+        headers=headers,
+        json={"enabled": True},
+    )
+    assert enabled.status_code == 200
+    assert enabled.json() == {"enabled": True}
+
+    public = landing_client.get("/api/v1/public/bloom-map-settings")
+    assert public.status_code == 200
+    assert public.json() == {"enabled": True}
+
+
 def test_public_landing_stats_returns_configured_giveaway_empty_text(landing_client: TestClient) -> None:
     headers = _auth_headers(landing_client)
     response = landing_client.patch(
