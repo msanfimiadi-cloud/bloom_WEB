@@ -114,7 +114,9 @@ server {
     add_header Permissions-Policy "camera=(), microphone=(), geolocation=()" always;
     # Startup splash uses a small inline bootstrap script; unsafe-inline can be
     # removed after that script is moved to a hashed external asset.
-    add_header Content-Security-Policy "default-src 'self'; img-src 'self' data: https:; media-src 'self' blob:; font-src 'self' data:; style-src 'self' 'unsafe-inline'; script-src 'self' 'unsafe-inline'; connect-src 'self'; object-src 'none'; frame-ancestors 'none'; base-uri 'self'; form-action 'self'; manifest-src 'self'; worker-src 'self' blob:; upgrade-insecure-requests" always;
+    # Browser Mobile App embeds Yandex Maps JS API. Keep the allowlist scoped to
+    # the API loader/runtime and map tile/service hosts instead of widening CSP.
+    add_header Content-Security-Policy "default-src 'self'; img-src 'self' data: https:; media-src 'self' blob:; font-src 'self' data:; style-src 'self' 'unsafe-inline'; script-src 'self' 'unsafe-inline' https://api-maps.yandex.ru https://yastatic.net; connect-src 'self' https://api-maps.yandex.ru https://*.maps.yandex.net https://*.maps.yandex.com https://*.yandex.ru; object-src 'none'; frame-ancestors 'none'; base-uri 'self'; form-action 'self'; manifest-src 'self'; worker-src 'self' blob:; upgrade-insecure-requests" always;
     client_max_body_size 12m;
 
     location ^~ /docs/ {
