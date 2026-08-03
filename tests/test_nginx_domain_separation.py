@@ -91,6 +91,19 @@ def test_app_domain_sets_baseline_security_headers() -> None:
     assert "frame-ancestors 'none'" in block
 
 
+def test_app_domain_csp_allows_yandex_maps_runtime() -> None:
+    block = _server_block_for("app.bloomclub.ru")
+
+    assert "script-src 'self' 'unsafe-inline' https://api-maps.yandex.ru https://yastatic.net" in block
+    assert (
+        "connect-src 'self' https://api-maps.yandex.ru "
+        "https://*.maps.yandex.net https://*.maps.yandex.com https://*.yandex.ru"
+    ) in block
+
+    public_block = _server_block_for("bloomclub.ru www.bloomclub.ru")
+    assert "https://api-maps.yandex.ru" not in public_block
+
+
 def test_sensitive_login_routes_are_rate_limited_at_nginx() -> None:
     assert "limit_req_zone $binary_remote_addr zone=bloom_auth:" in NGINX_CONFIG
     assert "limit_req_status 429;" in NGINX_CONFIG
