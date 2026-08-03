@@ -8,6 +8,7 @@ import { appBuildInfo } from "./buildInfo";
 import { clearInterruptedStartupTemporaryState, detectInterruptedStartup, getStartupMarkers, setStartupPhase } from "./diagnostics/startupLifecycle";
 import { markFirstReactRenderForExecutionTrace, traceStartupStep } from "./diagnostics/startupExecutionTrace";
 import { shouldIgnoreGenericSafariScriptErrorAfterRender } from "./diagnostics/safariGenericScriptError";
+import { BLOOM_MAP_RUNTIME_ERROR_EVENT, isRecoverableYandexMapsError } from "./utils/bloomMap";
 
 type EarlyErrorSource =
   | "window_error"
@@ -548,6 +549,13 @@ window.onerror = (_message, _source, _lineno, _colno, error): boolean | void => 
 };
 
 window.onunhandledrejection = (event: PromiseRejectionEvent): void => {
+  if (isRecoverableYandexMapsError(event.reason)) {
+    event.preventDefault();
+    lifecycleTraceSafe("yandex_maps_runtime_error_nonfatal", { reason: event.reason });
+    reportClientError("yandex_maps_runtime_error_nonfatal", event.reason, { nonfatal: true });
+    window.dispatchEvent(new CustomEvent(BLOOM_MAP_RUNTIME_ERROR_EVENT));
+    return;
+  }
   lifecycleTraceSafe("unhandledrejection_overlay_trigger", {
     reason: event.reason,
   });

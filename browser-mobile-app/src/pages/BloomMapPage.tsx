@@ -3,6 +3,7 @@ import type { Partner } from "../api/types";
 import {
   buildYandexRouteUrl,
   buildTwoGisRouteUrl,
+  BLOOM_MAP_RUNTIME_ERROR_EVENT,
   distanceInKilometers,
   formatDistance,
   getPartnerCoordinates,
@@ -102,21 +103,33 @@ export function BloomMapPage({ partners, onBack, onOpenPartner }: BloomMapPagePr
 
   useEffect(() => {
     let cancelled = false;
+    let mapFailed = false;
     let map: any = null;
     const container = mapContainerRef.current;
     if (!container) return;
     setStatus("loading");
 
+    const handleMapRuntimeError = () => {
+      if (cancelled || mapFailed) return;
+      mapFailed = true;
+      map?.destroy?.();
+      map = null;
+      mapInstanceRef.current = null;
+      container.replaceChildren();
+      setStatus("error");
+    };
+    window.addEventListener(BLOOM_MAP_RUNTIME_ERROR_EVENT, handleMapRuntimeError);
+
     void (async () => {
       const apiKey = await getRuntimeKey();
-      if (cancelled) return;
+      if (cancelled || mapFailed) return;
       if (!apiKey) {
         setStatus("missing-key");
         return;
       }
       try {
         const ymaps3 = await loadYandexMaps(apiKey);
-        if (cancelled) return;
+        if (cancelled || mapFailed) return;
         const center = visiblePartners.length
           ? [visiblePartners[0].point.longitude, visiblePartners[0].point.latitude]
           : NOVOSIBIRSK_CENTER;
@@ -134,7 +147,7 @@ export function BloomMapPage({ partners, onBack, onOpenPartner }: BloomMapPagePr
           map.addChild(new ymaps3.YMapMarker({ coordinates: [point.longitude, point.latitude], zIndex: 1900 }, marker));
         });
         mapInstanceRef.current = map;
-        setStatus("ready");
+        if (!mapFailed) setStatus("ready");
       } catch {
         if (!cancelled) setStatus("error");
       }
@@ -142,6 +155,7 @@ export function BloomMapPage({ partners, onBack, onOpenPartner }: BloomMapPagePr
 
     return () => {
       cancelled = true;
+      window.removeEventListener(BLOOM_MAP_RUNTIME_ERROR_EVENT, handleMapRuntimeError);
       map?.destroy?.();
       if (mapInstanceRef.current === map) mapInstanceRef.current = null;
       container.replaceChildren();

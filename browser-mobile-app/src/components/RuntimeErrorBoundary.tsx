@@ -15,6 +15,7 @@ import { traceStartup } from "../diagnostics/startupTrace";
 import { saveCrashDump } from "../diagnostics/crashDump";
 import { reportClientError } from "../diagnostics/clientErrorReporter";
 import { hasReachedFirstVisiblePaint, isGenericSafariScriptErrorEvent } from "../diagnostics/safariGenericScriptError";
+import { isRecoverableYandexMapsError } from "../utils/bloomMap";
 
 interface RuntimeErrorBoundaryState {
   diagnostic: AppDiagnostic | null;
@@ -53,6 +54,11 @@ export class RuntimeErrorBoundary extends Component<
   };
 
   private handleUnhandledRejection = (event: PromiseRejectionEvent): void => {
+    if (isRecoverableYandexMapsError(event.reason)) {
+      event.preventDefault();
+      reportClientError("yandex_maps_runtime_error_nonfatal", event.reason, { source: "RuntimeErrorBoundary", nonfatal: true });
+      return;
+    }
     saveCrashDump("unhandledrejection", { source: "RuntimeErrorBoundary" });
     reportClientError("unhandledrejection", event.reason, { source: "RuntimeErrorBoundary" });
     this.setState({
