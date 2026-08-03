@@ -28,6 +28,7 @@ from app.core.request_security import (
     sanitize_client_error_payload,
 )
 from app.db.session import SessionLocal
+from app.services.landing_settings import get_or_create_landing_settings
 
 
 logger = logging.getLogger("app.request")
@@ -206,6 +207,12 @@ async def runtime_config(request: Request) -> JSONResponse:
     # browser never enters a false build-mismatch loop against the app version.
     if build_id == APP_VERSION and client_build_id and client_build_id != APP_VERSION:
         build_id = client_build_id
+    bloom_map_enabled = False
+    try:
+        with SessionLocal() as db:
+            bloom_map_enabled = bool(get_or_create_landing_settings(db).bloom_map_enabled)
+    except SQLAlchemyError:
+        logger.warning("runtime_config bloom_map_setting_unavailable", exc_info=True)
     response = JSONResponse({
         "ok": True,
         "service": SERVICE_NAME,
@@ -214,6 +221,7 @@ async def runtime_config(request: Request) -> JSONResponse:
         "serverTime": datetime.now(timezone.utc).isoformat(),
         "clientBuildId": client_build_id,
         "yandexMapsApiKey": settings.YANDEX_MAPS_API_KEY,
+        "bloomMapEnabled": bloom_map_enabled,
     })
     response.headers["Cache-Control"] = "no-store, no-cache, max-age=0, must-revalidate"
     response.headers["Pragma"] = "no-cache"
