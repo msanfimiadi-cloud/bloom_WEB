@@ -462,6 +462,7 @@ const adminTabs = [
   { id: 'activity', label: 'Журнал событий', group: 'Данные' },
   { id: 'cities', label: 'Города', group: 'Настройки' },
   { id: 'categories', label: 'Категории', group: 'Настройки' },
+  { id: 'bloomMap', label: 'Карта Bloom', group: 'Настройки' },
 ];
 
 const adminState = {
@@ -543,6 +544,8 @@ const adminState = {
   activityEventType: '',
   selectedPartnerIdForActivity: '',
   landingSettings: null,
+  bloomMapSettings: { enabled: false },
+  bloomMapSettingsSaving: false,
   giveawayDrawerOpen: false,
   landingSettingsSaving: false,
   giveawaySaving: false,
@@ -3917,6 +3920,10 @@ const loadAdminLandingSettings = async () => {
   adminState.landingSettings = await apiFetch('/api/v1/admin/landing-settings');
 };
 
+const loadAdminBloomMapSettings = async () => {
+  adminState.bloomMapSettings = await apiFetch('/api/v1/admin/bloom-map-settings');
+};
+
 const loadAdminPartnerPhotos = async (partnerId) => {
   if (!partnerId) return;
   adminState.partnerPhotosByPartner[partnerId] = await apiFetch(`/api/v1/admin/partners/${partnerId}/photos`);
@@ -4076,6 +4083,8 @@ const renderAdminTabContent = () => {
       return renderGiveawaysTab();
     case 'flower':
       return renderFlowerAdminTab();
+    case 'bloomMap':
+      return renderBloomMapSettingsTab();
     default:
       return renderOverviewTab();
   }
@@ -4612,6 +4621,34 @@ const renderLandingSettingsCard = () => {
         <article class="summary-card"><span>${escapeHtml(settings.giveaway_title)}</span><strong>${escapeHtml(settings.giveaway_current)}</strong><small>${escapeHtml(settings.giveaway_subtitle)}</small></article>
       </div>
       ${adminState.giveawayDrawerOpen ? renderGiveawayDrawer(settings) : ''}
+    </section>
+  `;
+};
+
+const renderBloomMapSettingsTab = () => {
+  const enabled = adminState.bloomMapSettings?.enabled === true;
+  return `
+    <div class="admin-section-heading admin-page-heading">
+      <p class="section-eyebrow section-kicker">Настройки приложения</p>
+      <h3>Карта Bloom</h3>
+      <p>Код карты и координаты партнёров остаются в проекте. Здесь можно безопасно показать или скрыть карту для всех клиенток.</p>
+    </div>
+    <section class="ui-card admin-bloom-map-settings">
+      <div class="admin-bloom-map-settings__copy">
+        <strong>${enabled ? 'Карта включена' : 'Карта выключена'}</strong>
+        <span>${enabled ? 'Кнопка «Карта Bloom» отображается в каталоге партнёров.' : 'Кнопка карты скрыта, остальной каталог работает как обычно.'}</span>
+      </div>
+      <label class="admin-feature-toggle${enabled ? ' is-enabled' : ''}">
+        <input
+          type="checkbox"
+          data-admin-bloom-map-toggle
+          ${enabled ? 'checked' : ''}
+          ${adminState.bloomMapSettingsSaving ? 'disabled' : ''}
+          aria-label="Включить или выключить Карту Bloom"
+        />
+        <span class="admin-feature-toggle__track" aria-hidden="true"><span></span></span>
+        <strong>${adminState.bloomMapSettingsSaving ? 'Сохраняем…' : enabled ? 'Включено' : 'Выключено'}</strong>
+      </label>
     </section>
   `;
 };
@@ -5900,6 +5937,8 @@ const loadActiveTabData = async () => {
       adminState.activityError = '';
       renderAdminLayout();
       await loadAdminActivity();
+    } else if (adminState.activeTab === 'bloomMap') {
+      await loadAdminBloomMapSettings();
     }
   } catch (error) {
     if (!getToken()) {
@@ -6717,6 +6756,26 @@ const submitLandingSettings = async (form) => {
   adminState.landingSettingsSaving = true;
   adminState.landingSettings = await patchJson('/api/v1/admin/landing-settings', buildLandingSettingsPayload(formData));
   adminState.landingSettingsSaving = false;
+};
+
+const toggleAdminBloomMap = async (toggle) => {
+  const previousEnabled = adminState.bloomMapSettings?.enabled === true;
+  const nextEnabled = toggle.checked;
+  adminState.bloomMapSettings = { enabled: nextEnabled };
+  adminState.bloomMapSettingsSaving = true;
+  renderAdminLayout();
+  try {
+    adminState.bloomMapSettings = await patchJson('/api/v1/admin/bloom-map-settings', {
+      enabled: nextEnabled,
+    });
+    setPanelMessage(nextEnabled ? 'Карта Bloom включена.' : 'Карта Bloom выключена.', 'success');
+  } catch (error) {
+    adminState.bloomMapSettings = { enabled: previousEnabled };
+    setPanelMessage(error.message || 'Не удалось изменить состояние Карты Bloom.', 'error');
+  } finally {
+    adminState.bloomMapSettingsSaving = false;
+    renderAdminLayout();
+  }
 };
 
 const submitLandingGiveaway = async (form) => {
@@ -8377,6 +8436,12 @@ const handlePartnerOfferPhotoFormSubmit = async (form) => {
 };
 
 root.addEventListener('change', (event) => {
+  const bloomMapToggle = event.target.closest('[data-admin-bloom-map-toggle]');
+  if (bloomMapToggle) {
+    void toggleAdminBloomMap(bloomMapToggle);
+    return;
+  }
+
   const userGiveawayExclusionToggle = event.target.closest('[data-user-giveaway-exclusion-toggle]');
   if (userGiveawayExclusionToggle) {
     void toggleUserGiveawayExclusion(userGiveawayExclusionToggle);
