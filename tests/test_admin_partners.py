@@ -162,6 +162,35 @@ def test_admin_partner_create_with_valid_city(admin_client: TestClient, admin_to
     assert data["city_name"] == "Москва"
 
 
+def test_admin_partner_coordinates_are_created_updated_and_validated(admin_client: TestClient, admin_token: str) -> None:
+    response = admin_client.post(
+        "/api/v1/admin/partners",
+        headers=_auth_headers(admin_token),
+        json=_partner_payload(latitude=55.030204, longitude=82.920430),
+    )
+
+    assert response.status_code == 200
+    partner = response.json()
+    assert partner["latitude"] == pytest.approx(55.030204)
+    assert partner["longitude"] == pytest.approx(82.920430)
+
+    update_response = admin_client.patch(
+        f"/api/v1/admin/partners/{partner['id']}",
+        headers=_auth_headers(admin_token),
+        json={"latitude": 55.0415, "longitude": 82.9346},
+    )
+    assert update_response.status_code == 200
+    assert update_response.json()["latitude"] == pytest.approx(55.0415)
+    assert update_response.json()["longitude"] == pytest.approx(82.9346)
+
+    invalid_response = admin_client.patch(
+        f"/api/v1/admin/partners/{partner['id']}",
+        headers=_auth_headers(admin_token),
+        json={"latitude": 91},
+    )
+    assert invalid_response.status_code == 422
+
+
 def test_admin_partner_create_missing_city_returns_404(admin_client: TestClient, admin_token: str) -> None:
     response = admin_client.post(
         "/api/v1/admin/partners",

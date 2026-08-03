@@ -38,6 +38,8 @@ class Partner(Base):
     telegram_url: Mapped[str | None] = mapped_column(String(512), nullable=True)
     whatsapp_url: Mapped[str | None] = mapped_column(String(512), nullable=True)
     map_url: Mapped[str | None] = mapped_column(String(512), nullable=True)
+    latitude: Mapped[Decimal | None] = mapped_column(Numeric(9, 6), nullable=True)
+    longitude: Mapped[Decimal | None] = mapped_column(Numeric(9, 6), nullable=True)
     working_hours: Mapped[str | None] = mapped_column(String(255), nullable=True)
     logo_url: Mapped[str | None] = mapped_column(String(512), nullable=True)
     cover_url: Mapped[str | None] = mapped_column(String(512), nullable=True)

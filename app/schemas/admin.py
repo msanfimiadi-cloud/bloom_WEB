@@ -150,6 +150,8 @@ class PartnerRead(BaseModel):
     telegram_url: str | None
     whatsapp_url: str | None
     map_url: str | None
+    latitude: float | None
+    longitude: float | None
     working_hours: str | None
     logo_url: str | None
     cover_url: str | None
@@ -180,6 +182,8 @@ class PartnerCreate(BaseModel):
     telegram_url: str | None = None
     whatsapp_url: str | None = None
     map_url: str | None = None
+    latitude: float | None = Field(default=None, ge=-90, le=90)
+    longitude: float | None = Field(default=None, ge=-180, le=180)
     working_hours: str | None = None
     logo_url: str | None = None
     cover_url: str | None = None
@@ -205,6 +209,8 @@ class PartnerUpdate(BaseModel):
     telegram_url: str | None = None
     whatsapp_url: str | None = None
     map_url: str | None = None
+    latitude: float | None = Field(default=None, ge=-90, le=90)
+    longitude: float | None = Field(default=None, ge=-180, le=180)
     working_hours: str | None = None
     logo_url: str | None = None
     cover_url: str | None = None

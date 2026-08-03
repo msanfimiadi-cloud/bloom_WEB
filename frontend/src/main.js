@@ -5025,6 +5025,11 @@ const renderPartnerEditForm = () => {
               <label>WhatsApp<input name="whatsapp_url" value="${escapeHtml(partner.whatsapp_url || '')}" /></label>
               <label>Instagram<input name="instagram_url" value="${escapeHtml(partner.instagram_url || '')}" /></label>
               <label>Ссылка на карту<input name="map_url" value="${escapeHtml(partner.map_url || '')}" /></label>
+              <div class="admin-form-grid partner-map-coordinates">
+                <label>Широта<input name="latitude" type="number" min="-90" max="90" step="0.000001" inputmode="decimal" value="${escapeHtml(partner.latitude ?? '')}" placeholder="55.030204" /></label>
+                <label>Долгота<input name="longitude" type="number" min="-180" max="180" step="0.000001" inputmode="decimal" value="${escapeHtml(partner.longitude ?? '')}" placeholder="82.920430" /></label>
+              </div>
+              <p class="helper-text">Координаты нужны для метки на Карте Bloom. Скопируйте их из карточки места в Яндекс Картах или 2ГИС.</p>
               <label>График работы<input name="working_hours" value="${escapeHtml(partner.working_hours || '')}" /></label>
               <label>Порядок сортировки<input name="sort_order" type="number" value="${escapeHtml(partner.sort_order ?? 0)}" /></label>
               <label class="checkbox-row"><input name="is_active" type="checkbox" ${partner.is_active ? 'checked' : ''} /> Активен</label>
@@ -5107,6 +5112,8 @@ const renderPartnerForm = () => {
             <label>Телефон<input name="phone" autocomplete="tel" placeholder="+7 900 000-00-00" /></label>
             <label>График работы<input name="working_hours" placeholder="Пн–Вс, 10:00–21:00" /></label>
             <label>Ссылка на карту<input name="map_url" type="url" placeholder="https://…" /></label>
+            <label>Широта<input name="latitude" type="number" min="-90" max="90" step="0.000001" inputmode="decimal" placeholder="55.030204" /></label>
+            <label>Долгота<input name="longitude" type="number" min="-180" max="180" step="0.000001" inputmode="decimal" placeholder="82.920430" /></label>
           </div>
         </section>
         <section class="admin-form-section">
@@ -6422,6 +6429,8 @@ const buildAdminPartnerPayload = (formData, selectedCategoryIds = null) => ({
   telegram_url: getOptionalText(formData, 'telegram_url'),
   whatsapp_url: getOptionalText(formData, 'whatsapp_url'),
   map_url: getOptionalText(formData, 'map_url'),
+  latitude: decimalOrNull(formData, 'latitude'),
+  longitude: decimalOrNull(formData, 'longitude'),
   working_hours: getOptionalText(formData, 'working_hours'),
   logo_url: getOptionalText(formData, 'logo_url'),
   cover_url: getOptionalText(formData, 'cover_url'),

@@ -206,7 +206,15 @@ async def runtime_config(request: Request) -> JSONResponse:
     # browser never enters a false build-mismatch loop against the app version.
     if build_id == APP_VERSION and client_build_id and client_build_id != APP_VERSION:
         build_id = client_build_id
-    response = JSONResponse({"ok": True, "service": SERVICE_NAME, "version": APP_VERSION, "buildId": build_id, "serverTime": datetime.now(timezone.utc).isoformat(), "clientBuildId": client_build_id})
+    response = JSONResponse({
+        "ok": True,
+        "service": SERVICE_NAME,
+        "version": APP_VERSION,
+        "buildId": build_id,
+        "serverTime": datetime.now(timezone.utc).isoformat(),
+        "clientBuildId": client_build_id,
+        "yandexMapsApiKey": settings.YANDEX_MAPS_API_KEY,
+    })
     response.headers["Cache-Control"] = "no-store, no-cache, max-age=0, must-revalidate"
     response.headers["Pragma"] = "no-cache"
     response.headers["Expires"] = "0"

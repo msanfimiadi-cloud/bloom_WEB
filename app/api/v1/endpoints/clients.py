@@ -1863,6 +1863,8 @@ def _partner_to_catalog_item(
             "telegram_url": partner.telegram_url,
             "whatsapp_url": partner.whatsapp_url,
             "map_url": partner.map_url,
+            "latitude": partner.latitude,
+            "longitude": partner.longitude,
             "working_hours": partner.working_hours,
             "logo_url": partner.logo_url,
             "cover_url": partner.cover_url,

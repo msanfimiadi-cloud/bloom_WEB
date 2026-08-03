@@ -119,6 +119,7 @@ const CLIENT_CATALOG_SOURCE = (process.env.CLIENT_CATALOG_SOURCE || 'web-client-
 const WEB_CLIENTS_API_BASE_URL = (process.env.WEB_CLIENTS_API_BASE_URL || 'https://bloomclub.ru/api/v1').replace(/\/+$/, '');
 const WEB_TELEGRAM_LOGIN_URL = `${WEB_CLIENTS_API_BASE_URL}/auth/telegram-miniapp-login`;
 const TELEGRAM_BOT_USERNAME = (process.env.TELEGRAM_BOT_USERNAME || '').replace(/^@/, '').trim();
+const YANDEX_MAPS_API_KEY = (process.env.YANDEX_MAPS_API_KEY || '').trim();
 const TELEGRAM_LOGIN_PROXY_TIMEOUT_MS = 30_000;
 const CLIENT_API_PROXY_TIMEOUT_MS = 30_000;
 const CONTENT_BLOCKS_PROXY_TIMEOUT_MS = Number(process.env.CONTENT_PROXY_TIMEOUT_MS || 20_000);
@@ -134,11 +135,11 @@ const SERVER_BUILD_ID = process.env.VITE_APP_BUILD_HASH || process.env.VITE_GIT_
 const SECURITY_HEADERS_MODE = process.env.TELEGRAM_SECURITY_HEADERS_MODE || 'report-only';
 const CONTENT_SECURITY_POLICY = [
   "default-src 'self'",
-  "script-src 'self' https://telegram.org",
+  "script-src 'self' https://telegram.org https://api-maps.yandex.ru",
   "style-src 'self' 'unsafe-inline'",
   "img-src 'self' data: blob: https:",
   "font-src 'self' data:",
-  "connect-src 'self' https://bloomclub.ru https://tg.bloomclub.ru",
+  "connect-src 'self' https://bloomclub.ru https://tg.bloomclub.ru https://api-maps.yandex.ru https://*.maps.yandex.net https://*.maps.yandex.com https://*.yandex.ru",
   "media-src 'self' https:",
   "object-src 'none'",
   "base-uri 'self'",
@@ -148,7 +149,7 @@ const CONTENT_SECURITY_POLICY = [
 const BASELINE_SECURITY_HEADERS = Object.freeze({
   'x-content-type-options': 'nosniff',
   'referrer-policy': 'no-referrer',
-  'permissions-policy': 'camera=(), microphone=(), geolocation=(), payment=()',
+  'permissions-policy': 'camera=(), microphone=(), geolocation=(self), payment=()',
   'strict-transport-security': 'max-age=15552000; includeSubDomains',
 });
 
@@ -518,6 +519,7 @@ function handleRuntimeConfig(request, response) {
     serverTime: new Date().toISOString(),
     clientBuildId: new URL(request.url || '/', 'http://127.0.0.1').searchParams.get('clientBuildId') || SERVER_BUILD_ID,
     telegramBotUsername: TELEGRAM_BOT_USERNAME,
+    yandexMapsApiKey: YANDEX_MAPS_API_KEY,
   });
 }
 
@@ -612,6 +614,7 @@ function injectCatalogBootstrap(indexHtml, payload) {
 function injectRuntimeConfig(indexHtml) {
   const script = `<script>window.__BLOOM_TG_CONFIG__=${serializeBootstrapJson({
     telegramBotUsername: TELEGRAM_BOT_USERNAME,
+    yandexMapsApiKey: YANDEX_MAPS_API_KEY,
     buildId: SERVER_BUILD_ID,
   })};</script>`;
   return injectHtmlScript(indexHtml, script);
