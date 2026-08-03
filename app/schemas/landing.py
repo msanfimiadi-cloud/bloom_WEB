@@ -53,6 +53,14 @@ class LandingSettingsUpdate(BaseModel):
     giveaway_items: list[GiveawayItem] | None = None
 
 
+class BloomMapSettingsRead(BaseModel):
+    enabled: bool = False
+
+
+class BloomMapSettingsUpdate(BaseModel):
+    enabled: bool
+
+
 class PublicLandingStatsRead(BaseModel):
     members_count: int
     members_count_base: int
