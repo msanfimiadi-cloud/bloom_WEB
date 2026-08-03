@@ -39,6 +39,7 @@ interface CatalogPageProps {
   onRetry?: () => void;
   onCancel?: () => void;
   isRecovery?: boolean;
+  isBloomMapEnabled?: boolean;
   onOpenPartner: (partner: Partner) => void;
   onOpenMap: () => void;
 }
@@ -108,6 +109,7 @@ export function CatalogPage({
   onRetry,
   onCancel,
   isRecovery = false,
+  isBloomMapEnabled = false,
   onOpenPartner,
   onOpenMap,
 }: CatalogPageProps) {
@@ -178,11 +180,13 @@ export function CatalogPage({
         <p>{description}</p>
       </div>
 
-      <button className="catalog-map-banner" type="button" onClick={onOpenMap}>
-        <span className="catalog-map-banner__pin" aria-hidden="true">✿</span>
-        <span><strong>Карта Bloom</strong><small>Все партнёры рядом — на одной карте</small></span>
-        <span aria-hidden="true">→</span>
-      </button>
+      {isBloomMapEnabled ? (
+        <button className="catalog-map-banner" type="button" onClick={onOpenMap}>
+          <span className="catalog-map-banner__pin" aria-hidden="true">✿</span>
+          <span><strong>Карта Bloom</strong><small>Все партнёры рядом — на одной карте</small></span>
+          <span aria-hidden="true">→</span>
+        </button>
+      ) : null}
 
       <label className="catalog-search" aria-label="Поиск партнёров">
         <span className="catalog-search__icon" aria-hidden="true">⌕</span>
