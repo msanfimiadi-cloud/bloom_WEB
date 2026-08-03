@@ -1706,6 +1706,8 @@ def create_admin_partner(
     )
     for field in PARTNER_TEXT_FIELDS:
         setattr(partner, field, _normalize_optional_text(getattr(payload, field)))
+    partner.latitude = payload.latitude
+    partner.longitude = payload.longitude
     if payload.access_code is not None:
         _set_partner_access_code(db, partner, payload.access_code)
 
@@ -1795,6 +1797,9 @@ def update_admin_partner(
         if field in update_data:
             setattr(partner, field, _normalize_optional_text(update_data[field]))
     for field in ("is_active", "is_verified", "sort_order"):
+        if field in update_data:
+            setattr(partner, field, update_data[field])
+    for field in ("latitude", "longitude"):
         if field in update_data:
             setattr(partner, field, update_data[field])
 
@@ -2581,6 +2586,8 @@ def _partner_to_read(partner: Partner, city_name: str | None, owner_email: str |
             "telegram_url": partner.telegram_url,
             "whatsapp_url": partner.whatsapp_url,
             "map_url": partner.map_url,
+            "latitude": partner.latitude,
+            "longitude": partner.longitude,
             "working_hours": partner.working_hours,
             "logo_url": partner.logo_url,
             "cover_url": partner.cover_url,

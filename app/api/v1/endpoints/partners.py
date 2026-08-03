@@ -95,6 +95,9 @@ def update_partner_me(
     for field in PARTNER_PROFILE_TEXT_FIELDS:
         if field in update_data:
             setattr(partner, field, _normalize_optional_text(update_data[field]))
+    for field in ("latitude", "longitude"):
+        if field in update_data:
+            setattr(partner, field, update_data[field])
 
     db.commit()
     db.refresh(partner)
@@ -628,6 +631,8 @@ def _get_partner_profile_read(db: Session, partner_id: int) -> PartnerProfileRea
             "telegram_url": partner.telegram_url,
             "whatsapp_url": partner.whatsapp_url,
             "map_url": partner.map_url,
+            "latitude": partner.latitude,
+            "longitude": partner.longitude,
             "working_hours": partner.working_hours,
             "logo_url": partner.logo_url,
             "cover_url": partner.cover_url,

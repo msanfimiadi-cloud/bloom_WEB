@@ -53,6 +53,8 @@ class Settings:
     BOT_SERVICE_TOKEN: str = os.getenv("BOT_SERVICE_TOKEN", "change-me-test-token")
     BROWSER_LOGIN_TOKEN_TTL_SECONDS: int = int(os.getenv("BROWSER_LOGIN_TOKEN_TTL_SECONDS", "900"))
     BROWSER_APP_PUBLIC_URL: str = os.getenv("BROWSER_APP_PUBLIC_URL", "https://app.bloomclub.ru")
+    # Public browser key. Keep the value in server env and restrict it by HTTP Referer in Yandex.
+    YANDEX_MAPS_API_KEY: str = os.getenv("YANDEX_MAPS_API_KEY", "")
     VK_APP_ID: str = os.getenv("VK_APP_ID", "")
     VK_APP_SECRET: str = os.getenv("VK_APP_SECRET", "")
     VK_BOT_TOKEN: str = os.getenv("VK_BOT_TOKEN", "")

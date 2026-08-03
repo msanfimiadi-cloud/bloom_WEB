@@ -192,6 +192,8 @@ class ClientPartnerCatalogItem(BaseModel):
     telegram_url: str | None
     whatsapp_url: str | None
     map_url: str | None
+    latitude: float | None
+    longitude: float | None
     working_hours: str | None
     logo_url: str | None
     cover_url: str | None

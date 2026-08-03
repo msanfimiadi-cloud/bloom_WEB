@@ -50,6 +50,7 @@ import { ErrorState } from "./components/ErrorState";
 import { LoadingState } from "./components/LoadingState";
 import { DiagnosticOverlay } from "./components/DiagnosticOverlay";
 import { CatalogPage } from "./pages/CatalogPage";
+import { BloomMapPage } from "./pages/BloomMapPage";
 import { HomePage } from "./pages/HomePage";
 import { PartnerPage } from "./pages/PartnerPage";
 import { PrivilegesPage } from "./pages/PrivilegesPage";
@@ -101,6 +102,7 @@ import { startupExecutionBegin, startupExecutionEnd, startupExecutionFail, start
 export type PageId =
   | "home"
   | "catalog"
+  | "map"
   | "partner"
   | "privileges"
   | "savings"
@@ -822,6 +824,7 @@ function getStartupPage(): PageId {
   }
 
   if (window.location.pathname === "/payment/success" || window.location.pathname === "/payment/fail") return "payment-result";
+  if (window.location.hash === "#map") return "map";
   return window.location.hash === "#catalog" ? "catalog" : "home";
 }
 
@@ -833,6 +836,7 @@ function isKnownPage(page: string): page is PageId {
   return [
     "home",
     "catalog",
+    "map",
     "partner",
     "privileges",
     "savings",
@@ -1693,7 +1697,7 @@ export default function App() {
             setPage("catalog");
             setPartnersErrorTitle("Загрузка клуба прервана");
             setPartnersError(CATALOG_RECOVERY_MESSAGE);
-          } else if (pageRef.current === "catalog") {
+          } else if (pageRef.current === "catalog" || pageRef.current === "map") {
             console.info("catalog_reload_after_bootstrap", {
               sequenceId,
               page: pageRef.current,
@@ -2645,7 +2649,7 @@ export default function App() {
   }, [authRestoreStatus, browserLoginRequired, data.partners.length, error, isBootstrapDone, isLoading, page, selectedPartner]);
 
   const activeNavPage = useMemo<PageId>(() => {
-    if (page === "partner") {
+    if (page === "partner" || page === "map") {
       return "catalog";
     }
 
@@ -3050,6 +3054,14 @@ export default function App() {
             onRetry={catalogRecoveryPending ? retryCatalogAfterRecovery : () => void loadPartners(true)}
             onCancel={cancelCatalogLoad}
             isRecovery={catalogRecoveryPending}
+            onOpenPartner={openPartner}
+            onOpenMap={() => { scrollAppToTop(); setPage("map"); }}
+          />
+        ) : null}
+        {activePage === "map" ? (
+          <BloomMapPage
+            partners={safeData.partners}
+            onBack={openCatalog}
             onOpenPartner={openPartner}
           />
         ) : null}

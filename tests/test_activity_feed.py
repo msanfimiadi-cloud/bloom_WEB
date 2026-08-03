@@ -289,4 +289,4 @@ def test_expired_event_includes_active_sessions_past_expires_at() -> None:
 def test_alembic_heads_include_live_landing_statistics_migration() -> None:
     result = subprocess.run(["alembic", "heads"], check=True, capture_output=True, text=True)
 
-    assert result.stdout.strip() == "20260731_0041 (head)"
+    assert result.stdout.strip() == "20260803_0042 (head)"
