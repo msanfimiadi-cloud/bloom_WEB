@@ -6,6 +6,18 @@ export interface BloomCoordinates {
   longitude: number;
 }
 
+export const BLOOM_MAP_RUNTIME_ERROR_EVENT = "bloom:map-runtime-error";
+
+export function isRecoverableYandexMapsError(reason: unknown): boolean {
+  const message = reason instanceof Error
+    ? reason.message
+    : typeof reason === "object" && reason && "message" in reason
+      ? String((reason as { message?: unknown }).message ?? "")
+      : String(reason ?? "");
+
+  return /api-maps\.yandex\.ru|coverage fetch failed|yandex_maps_/i.test(message);
+}
+
 function isValidCoordinates(latitude: number, longitude: number): boolean {
   return Number.isFinite(latitude)
     && Number.isFinite(longitude)
