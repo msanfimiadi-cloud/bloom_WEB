@@ -16,7 +16,7 @@ from app.models.category import Category
 from app.models.city import City
 from app.models.lead import LeadClick
 from app.models.partner import Partner, PartnerOffer, PartnerPhoto, PartnerQrLink
-from app.schemas.landing import PublicLandingStatsRead
+from app.schemas.landing import BloomMapSettingsRead, PublicLandingStatsRead
 from app.schemas.partner import (
     PublicLandingPartnerCard,
     PublicLandingPartnerListResponse,
@@ -25,10 +25,16 @@ from app.schemas.partner import (
     PublicLandingPartnerCategory,
 )
 
-from app.services.landing_settings import build_public_landing_stats
+from app.services.landing_settings import build_public_landing_stats, get_or_create_landing_settings
 from app.services.offer_savings import calculate_offer_saving_snapshot
 
 router = APIRouter(tags=["public"])
+
+
+@router.get("/api/v1/public/bloom-map-settings", response_model=BloomMapSettingsRead)
+def read_public_bloom_map_settings(db: Session = Depends(get_db)) -> BloomMapSettingsRead:
+    landing_settings = get_or_create_landing_settings(db)
+    return BloomMapSettingsRead(enabled=bool(landing_settings.bloom_map_enabled))
 
 
 def _hash_visitor_value(value: str | None) -> str | None:

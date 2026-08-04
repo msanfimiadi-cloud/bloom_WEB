@@ -14,3 +14,4 @@ def test_runtime_config_returns_200_no_store_json() -> None:
     assert response.status_code == 200
     assert response.headers["cache-control"].startswith("no-store")
     assert response.json()["service"] == "womenclub"
+    assert response.json()["bloomMapEnabled"] is False

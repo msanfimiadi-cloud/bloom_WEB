@@ -96,7 +96,12 @@ from app.schemas.engagement import (
     PartnerBotAccessRead,
     PartnerBotAccessWrite,
 )
-from app.schemas.landing import LandingSettingsRead, LandingSettingsUpdate
+from app.schemas.landing import (
+    BloomMapSettingsRead,
+    BloomMapSettingsUpdate,
+    LandingSettingsRead,
+    LandingSettingsUpdate,
+)
 from app.schemas.partner import PartnerAnalyticsRead
 from app.schemas.payment import AdminPaymentRequestRead, PaymentRequestApprove, PaymentRequestReject
 from app.services.activity_feed import build_admin_activity_feed
@@ -891,6 +896,31 @@ def update_admin_landing_settings(
     db.commit()
     db.refresh(settings)
     return LandingSettingsRead.model_validate(build_admin_landing_settings_read(db))
+
+
+@router.get("/bloom-map-settings", response_model=BloomMapSettingsRead)
+def read_admin_bloom_map_settings(
+    admin: AdminUser = Depends(require_admin),
+    db: Session = Depends(get_db),
+) -> BloomMapSettingsRead:
+    _ = admin
+    landing_settings = get_or_create_landing_settings(db)
+    return BloomMapSettingsRead(enabled=bool(landing_settings.bloom_map_enabled))
+
+
+@router.patch("/bloom-map-settings", response_model=BloomMapSettingsRead)
+def update_admin_bloom_map_settings(
+    payload: BloomMapSettingsUpdate,
+    admin: AdminUser = Depends(require_admin),
+    db: Session = Depends(get_db),
+) -> BloomMapSettingsRead:
+    _ = admin
+    landing_settings = get_or_create_landing_settings(db)
+    landing_settings.bloom_map_enabled = payload.enabled
+    db.add(landing_settings)
+    db.commit()
+    db.refresh(landing_settings)
+    return BloomMapSettingsRead(enabled=bool(landing_settings.bloom_map_enabled))
 
 
 @router.get("/me", response_model=AdminUserRead)

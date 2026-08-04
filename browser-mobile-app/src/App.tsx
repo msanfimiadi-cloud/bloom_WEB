@@ -855,6 +855,7 @@ export default function App() {
         : window.__BLOOM_PAGE_LIFECYCLE_PAGE_ID__,
   });
   const [page, setPage] = useState<PageId>(() => getStartupPage());
+  const [bloomMapEnabled, setBloomMapEnabled] = useState(false);
   const [data, setData] = useState<AppData>(emptyData);
   const [selectedPartner, setSelectedPartner] = useState<Partner | null>(null);
   const [partnerOffers, setPartnerOffers] = useState<Offer[]>([]);
@@ -922,6 +923,27 @@ export default function App() {
   const [catalogLoadRequestId, setCatalogLoadRequestId] = useState<
     number | undefined
   >(undefined);
+
+  useEffect(() => {
+    let isActive = true;
+    void fetch("/api/v1/public/bloom-map-settings", {
+      headers: { Accept: "application/json" },
+      cache: "no-store",
+    })
+      .then((response) => {
+        if (!response.ok) throw new Error(`Bloom Map settings request failed: ${response.status}`);
+        return response.json() as Promise<{ enabled?: boolean }>;
+      })
+      .then((runtimeSettings) => {
+        if (isActive) setBloomMapEnabled(runtimeSettings.enabled === true);
+      })
+      .catch(() => {
+        if (isActive) setBloomMapEnabled(false);
+      });
+    return () => {
+      isActive = false;
+    };
+  }, []);
 
   const restoreLoginCodeDrafts = useCallback(() => {
     const storedTelegramLoginCode = readLoginCodeDraft(TELEGRAM_LOGIN_CODE_DRAFT_STORAGE_KEY);
@@ -3054,11 +3076,12 @@ export default function App() {
             onRetry={catalogRecoveryPending ? retryCatalogAfterRecovery : () => void loadPartners(true)}
             onCancel={cancelCatalogLoad}
             isRecovery={catalogRecoveryPending}
+            isBloomMapEnabled={bloomMapEnabled}
             onOpenPartner={openPartner}
             onOpenMap={() => { scrollAppToTop(); setPage("map"); }}
           />
         ) : null}
-        {activePage === "map" ? (
+        {activePage === "map" && bloomMapEnabled ? (
           <BloomMapPage
             partners={safeData.partners}
             onBack={openCatalog}
