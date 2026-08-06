@@ -185,6 +185,8 @@ export interface Partner {
   website_url?: BackendText;
   site?: BackendText;
   url?: BackendText;
+  social_url?: BackendText;
+  instagram_url?: BackendText;
   vk_url?: BackendText;
   telegram_url?: BackendText;
   whatsapp?: BackendText;
