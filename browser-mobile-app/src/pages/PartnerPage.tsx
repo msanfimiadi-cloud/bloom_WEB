@@ -144,6 +144,45 @@ function SmoothImage({
 }
 
 
+function normalizeExternalUrl(value: unknown): string {
+  const rawValue = toText(value).trim();
+  if (!rawValue) {
+    return "";
+  }
+
+  const candidate = /^https?:\/\//i.test(rawValue)
+    ? rawValue
+    : `https://${rawValue.replace(/^\/+/, "")}`;
+
+  try {
+    const url = new URL(candidate);
+    return url.protocol === "http:" || url.protocol === "https:" ? url.toString() : "";
+  } catch {
+    return "";
+  }
+}
+
+function getPartnerExternalLinks(partner: Partner): Array<{ label: string; href: string }> {
+  const candidates = [
+    { label: "Instagram", value: partner.instagram_url },
+    { label: "ВКонтакте", value: partner.vk_url },
+    { label: "Telegram", value: partner.telegram_url },
+    { label: "Соцсеть", value: partner.social_url },
+    { label: "Сайт", value: partner.website_url ?? partner.website ?? partner.site },
+  ];
+  const seen = new Set<string>();
+
+  return candidates.flatMap(({ label, value }) => {
+    const href = normalizeExternalUrl(value);
+    if (!href || seen.has(href)) {
+      return [];
+    }
+
+    seen.add(href);
+    return [{ label, href }];
+  });
+}
+
 function readOfferField(offer: Offer, field: string): unknown {
   return (offer as Record<string, unknown>)[field];
 }
@@ -352,6 +391,7 @@ export function PartnerPage({
   });
   const phone = getPartnerPhone(currentPartner);
   const telHref = normalizeTelHref(phone);
+  const partnerExternalLinks = getPartnerExternalLinks(currentPartner);
   const hasAccess = isSubscriptionActive(subscription);
   const trialAvailable = isTrialEligible(profile, subscription);
   const partnerIdForActions = resolveNumericPartnerId(currentPartner)?.numericPartnerId;
@@ -641,6 +681,22 @@ export function PartnerPage({
             {getPartnerAddress(currentPartner) ? <span>🗺️ {getPartnerAddress(currentPartner)}</span> : null}
             {phone ? <span>☎️ {phone}</span> : null}
           </div>
+          {partnerExternalLinks.length ? (
+            <div className="partner-contact-card__social-links" aria-label="Ссылки партнёра">
+              {partnerExternalLinks.map(({ label, href }) => (
+                <a
+                  href={href}
+                  target="_blank"
+                  rel="noopener noreferrer"
+                  aria-label={`Открыть ${label} партнёра`}
+                  key={href}
+                >
+                  <span>{label}</span>
+                  <span aria-hidden="true">↗</span>
+                </a>
+              ))}
+            </div>
+          ) : null}
         </div>
 
         {!hasAccess ? (
