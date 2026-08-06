@@ -1937,6 +1937,7 @@ const renderPartnerGallery = (partner, photos = [], scope = 'partner') => {
             return `
               <article class="partner-gallery-item partner-gallery-card ${photo.is_active ? '' : 'is-muted'}">
                 ${safeUrl ? `<div class="partner-gallery-media" role="img" aria-label="${escapeHtml(photo.alt_text || 'Фото партнёра')}"><div class="partner-gallery-media__bg" style="background-image: url('${escapeHtml(safeUrl)}')"></div><img class="partner-gallery-media__img" src="${escapeHtml(safeUrl)}" alt="${escapeHtml(photo.alt_text || 'Фото партнёра')}" loading="lazy"></div>` : '<div class="partner-gallery-media partner-gallery-empty">Фото скрыто</div>'}
+                ${!isAdmin ? `<button class="partner-photo-delete-overlay ui-button ui-button--danger" type="button" data-partner-photo-delete="${escapeHtml(photo.id)}" aria-label="Удалить фото из галереи">Удалить фото</button>` : ''}
                 <form class="partner-gallery-actions ui-card-actions ui-action-row ui-action-row--stack-mobile" data-${isAdmin ? 'admin' : 'partner'}-gallery-form="photo" data-photo-id="${escapeHtml(photo.id)}">
                   <div class="partner-gallery-row"><span class="status-badge ${photo.is_active ? 'status-badge--success' : 'status-badge--warning'}">${photo.is_active ? 'Показывается' : 'Скрыто'}</span></div>
                   <label class="partner-gallery-order">Порядок<input name="sort_order" type="number" value="${escapeHtml(photo.sort_order || 0)}" /></label>
@@ -1944,7 +1945,6 @@ const renderPartnerGallery = (partner, photos = [], scope = 'partner') => {
                   <div class="admin-form-actions">
                     <button class="admin-inline-action ui-button ui-button--primary admin-inline-action--primary" type="submit"${isAdmin ? legacyContentDisabledAttr() : ''}>Сохранить</button>
                     <button class="admin-inline-action ui-button ui-button--secondary admin-inline-action--secondary" type="button" data-${isAdmin ? 'admin' : 'partner'}-photo-hide="${escapeHtml(photo.id)}">${photo.is_active ? 'Скрыть фото' : 'Показать фото'}</button>
-                    ${!isAdmin ? `<button class="admin-inline-action ui-button ui-button--danger admin-inline-action--danger" type="button" data-partner-photo-delete="${escapeHtml(photo.id)}">Удалить</button>` : ''}
                   </div>
                 </form>
               </article>
@@ -3760,6 +3760,7 @@ const renderPartnerGalleryTab = () => {
           <p class="form-message" data-partner-form-message="offerPhoto">${escapeHtml(partnerState.formMessages.offerPhoto || '')}</p>
           ${offerPhotos.length ? `<div class="partner-gallery-grid">${offerPhotos.map((photo) => `<article class="partner-gallery-item partner-gallery-card ${photo.is_active ? '' : 'is-muted'}">
             ${photo.url ? `<div class="partner-gallery-media" role="img" aria-label="${escapeHtml(photo.alt_text || 'Фото услуги')}"><div class="partner-gallery-media__bg" style="background-image: url('${escapeHtml(photo.url)}')"></div><img class="partner-gallery-media__img" src="${escapeHtml(photo.url)}" alt="${escapeHtml(photo.alt_text || 'Фото услуги')}" loading="lazy"></div>` : '<div class="partner-gallery-media partner-gallery-empty">Фото скрыто</div>'}
+            <button class="partner-photo-delete-overlay ui-button ui-button--danger" type="button" data-partner-offer-photo-delete="${escapeHtml(photo.id)}" data-offer-id="${escapeHtml(selectedOfferId)}" aria-label="Удалить фото услуги">Удалить фото</button>
             <form class="partner-gallery-actions ui-card-actions ui-action-row ui-action-row--stack-mobile" data-partner-offer-photo-form data-offer-id="${escapeHtml(selectedOfferId)}" data-photo-id="${escapeHtml(photo.id)}">
               <div class="partner-gallery-row"><span class="status-badge ${photo.is_active ? 'status-badge--success' : 'status-badge--warning'}">${photo.is_active ? 'Показывается' : 'Скрыто'}</span></div>
               <input type="hidden" name="is_active" value="${photo.is_active ? 'true' : 'false'}">
@@ -3767,7 +3768,6 @@ const renderPartnerGalleryTab = () => {
                 <label class="partner-gallery-order"><span>Порядок</span><input type="number" name="sort_order" value="${escapeHtml(photo.sort_order ?? 0)}"></label>
                 <button class="admin-inline-action ui-button ui-button--primary admin-inline-action--primary" type="submit">Сохранить</button>
                 <button class="admin-inline-action ui-button ui-button--secondary admin-inline-action--secondary" type="button" data-partner-offer-photo-visibility="${escapeHtml(photo.id)}" data-offer-id="${escapeHtml(selectedOfferId)}" data-next-active="${photo.is_active ? 'false' : 'true'}">${photo.is_active ? 'Скрыть' : 'Показать'}</button>
-                <button class="admin-inline-action ui-button ui-button--danger admin-inline-action--danger" type="button" data-partner-offer-photo-delete="${escapeHtml(photo.id)}" data-offer-id="${escapeHtml(selectedOfferId)}">Удалить</button>
               </div>
             </form>
           </article>`).join('')}</div>` : '<div class="partner-gallery-empty partner-empty-state compact-copy"><strong>Фото пока не добавлены.</strong><span>Загрузите первое фото, чтобы клиенты увидели ваши работы.</span></div>'}
