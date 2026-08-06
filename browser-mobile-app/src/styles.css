@@ -7529,3 +7529,48 @@ small,
   .bloom-map-state__flower, .bloom-map-card { animation: none; }
   .catalog-map-banner, .bloom-map-back, .bloom-map-locate { transition: none; }
 }
+
+/* Partner contact links */
+.partner-contact-card__social-links {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 10px;
+  margin-top: 2px;
+}
+
+.partner-contact-card__social-links a {
+  min-height: 44px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 7px;
+  padding: 10px 15px;
+  border: 1px solid rgba(91, 48, 60, 0.14);
+  border-radius: 999px;
+  background: rgba(255, 255, 255, 0.72);
+  color: #5b303c;
+  font-weight: 700;
+  line-height: 1;
+  text-decoration: none;
+  box-shadow: 0 8px 22px rgba(91, 48, 60, 0.07);
+  transition: transform 160ms ease, border-color 160ms ease, background-color 160ms ease;
+  -webkit-tap-highlight-color: transparent;
+}
+
+.partner-contact-card__social-links a:hover {
+  transform: translateY(-1px);
+  border-color: rgba(145, 46, 78, 0.28);
+  background: rgba(255, 255, 255, 0.94);
+}
+
+.partner-contact-card__social-links a:focus-visible {
+  outline: 3px solid rgba(185, 52, 98, 0.24);
+  outline-offset: 2px;
+}
+
+@media (max-width: 420px) {
+  .partner-contact-card__social-links a {
+    flex: 1 1 128px;
+  }
+}
+
