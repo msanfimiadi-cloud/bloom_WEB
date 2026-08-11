@@ -1862,6 +1862,7 @@ def _partner_to_catalog_item(
             "vk_url": partner.vk_url,
             "telegram_url": partner.telegram_url,
             "whatsapp_url": partner.whatsapp_url,
+            "booking_url": partner.booking_url,
             "map_url": partner.map_url,
             "latitude": partner.latitude,
             "longitude": partner.longitude,
