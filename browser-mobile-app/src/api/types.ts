@@ -190,6 +190,8 @@ export interface Partner {
   vk_url?: BackendText;
   telegram_url?: BackendText;
   whatsapp?: BackendText;
+  whatsapp_url?: BackendText;
+  booking_url?: BackendText;
   working_hours?: BackendText;
   hours?: BackendText;
   coordinates?: BackendText;
