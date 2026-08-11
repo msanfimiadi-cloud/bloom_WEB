@@ -144,10 +144,32 @@ function SmoothImage({
 }
 
 
-function normalizeExternalUrl(value: unknown): string {
+type PartnerLinkPlatform = "instagram" | "vk" | "telegram" | "whatsapp" | "generic";
+
+function normalizeExternalUrl(value: unknown, platform: PartnerLinkPlatform = "generic"): string {
   const rawValue = toText(value).trim();
   if (!rawValue) {
     return "";
+  }
+
+  const handle = rawValue.replace(/^@+/, "").trim();
+  if (rawValue.startsWith("@") && handle) {
+    const platformBases: Partial<Record<PartnerLinkPlatform, string>> = {
+      instagram: "https://instagram.com/",
+      vk: "https://vk.com/",
+      telegram: "https://t.me/",
+    };
+    const base = platformBases[platform];
+    if (base) {
+      return `${base}${encodeURIComponent(handle)}`;
+    }
+  }
+
+  if (platform === "whatsapp" && /^[+()\d\s-]+$/.test(rawValue)) {
+    const phone = rawValue.replace(/\D/g, "");
+    if (phone.length >= 7) {
+      return `https://wa.me/${phone}`;
+    }
   }
 
   const candidate = /^https?:\/\//i.test(rawValue)
@@ -162,18 +184,24 @@ function normalizeExternalUrl(value: unknown): string {
   }
 }
 
+function firstFilledPartnerValue(...values: unknown[]): unknown {
+  return values.find((value) => Boolean(toText(value).trim()));
+}
+
 function getPartnerExternalLinks(partner: Partner): Array<{ label: string; href: string }> {
   const candidates = [
-    { label: "Instagram", value: partner.instagram_url },
-    { label: "ВКонтакте", value: partner.vk_url },
-    { label: "Telegram", value: partner.telegram_url },
-    { label: "Соцсеть", value: partner.social_url },
-    { label: "Сайт", value: partner.website_url ?? partner.website ?? partner.site },
-  ];
+    { label: "Запись онлайн", value: partner.booking_url, platform: "generic" },
+    { label: "Instagram", value: partner.instagram_url, platform: "instagram" },
+    { label: "ВКонтакте", value: partner.vk_url, platform: "vk" },
+    { label: "Telegram", value: partner.telegram_url, platform: "telegram" },
+    { label: "WhatsApp", value: firstFilledPartnerValue(partner.whatsapp_url, partner.whatsapp), platform: "whatsapp" },
+    { label: "Соцсеть", value: partner.social_url, platform: "generic" },
+    { label: "Сайт", value: firstFilledPartnerValue(partner.website_url, partner.website, partner.site, partner.url), platform: "generic" },
+  ] as const;
   const seen = new Set<string>();
 
-  return candidates.flatMap(({ label, value }) => {
-    const href = normalizeExternalUrl(value);
+  return candidates.flatMap(({ label, value, platform }) => {
+    const href = normalizeExternalUrl(value, platform);
     if (!href || seen.has(href)) {
       return [];
     }

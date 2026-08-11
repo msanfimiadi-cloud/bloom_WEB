@@ -115,6 +115,7 @@ def _partner_payload(**overrides: object) -> dict[str, object]:
         "phone": "+79990000000",
         "website_url": "https://example.com",
         "social_url": "https://social.example.com",
+        "booking_url": "https://booking.example.com/new-partner",
         "working_hours": "10:00-20:00",
         "logo_url": "https://example.com/logo.png",
         "cover_url": "https://example.com/cover.png",
@@ -275,6 +276,7 @@ def test_admin_partner_create_update_and_list_persists_admin_fields(admin_client
             "phone": "+79991112233",
             "website_url": "https://updated.example.com",
             "social_url": "https://social.updated.example.com",
+            "booking_url": "https://booking.example.com/regression-partner",
             "description": "Updated description",
             "address": "Updated address",
             "working_hours": "09:00-21:00",
@@ -294,6 +296,7 @@ def test_admin_partner_create_update_and_list_persists_admin_fields(admin_client
     assert partner["sort_order"] == 99
     assert partner["phone"] == "+79991112233"
     assert partner["website_url"] == "https://updated.example.com"
+    assert partner["booking_url"] == "https://booking.example.com/regression-partner"
 
     list_response = admin_client.get("/api/v1/admin/partners", headers=_auth_headers(admin_token))
     assert list_response.status_code == 200

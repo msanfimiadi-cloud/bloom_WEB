@@ -24,6 +24,7 @@ class PartnerProfileRead(BaseModel):
     vk_url: str | None
     telegram_url: str | None
     whatsapp_url: str | None
+    booking_url: str | None
     map_url: str | None
     latitude: float | None
     longitude: float | None
@@ -46,6 +47,7 @@ class PartnerProfileUpdate(BaseModel):
     vk_url: str | None = None
     telegram_url: str | None = None
     whatsapp_url: str | None = None
+    booking_url: str | None = None
     map_url: str | None = None
     latitude: float | None = Field(default=None, ge=-90, le=90)
     longitude: float | None = Field(default=None, ge=-180, le=180)
