@@ -5060,6 +5060,7 @@ const renderPartnerEditForm = () => {
               <label>ВКонтакте<input name="vk_url" value="${escapeHtml(partner.vk_url || '')}" /></label>
               <label>Telegram<input name="telegram_url" value="${escapeHtml(partner.telegram_url || '')}" /></label>
               <label>WhatsApp<input name="whatsapp_url" value="${escapeHtml(partner.whatsapp_url || '')}" /></label>
+              <label>Запись онлайн<input name="booking_url" value="${escapeHtml(partner.booking_url || '')}" placeholder="https://…" /></label>
               <label>Instagram<input name="instagram_url" value="${escapeHtml(partner.instagram_url || '')}" /></label>
               <label>Ссылка на карту<input name="map_url" value="${escapeHtml(partner.map_url || '')}" /></label>
               <div class="admin-form-grid partner-map-coordinates">
@@ -5160,6 +5161,7 @@ const renderPartnerForm = () => {
             <label>ВКонтакте<input name="vk_url" type="url" placeholder="https://vk.com/…" /></label>
             <label>Telegram<input name="telegram_url" type="url" placeholder="https://t.me/…" /></label>
             <label>WhatsApp<input name="whatsapp_url" type="url" placeholder="https://wa.me/…" /></label>
+            <label>Запись онлайн<input name="booking_url" type="url" placeholder="https://…" /></label>
             <label>Instagram<input name="instagram_url" type="url" placeholder="https://instagram.com/…" /></label>
             <label>Другая ссылка<input name="social_url" type="url" placeholder="https://…" /></label>
           </div>
@@ -6467,6 +6469,7 @@ const buildAdminPartnerPayload = (formData, selectedCategoryIds = null) => ({
   vk_url: getOptionalText(formData, 'vk_url'),
   telegram_url: getOptionalText(formData, 'telegram_url'),
   whatsapp_url: getOptionalText(formData, 'whatsapp_url'),
+  booking_url: getOptionalText(formData, 'booking_url'),
   map_url: getOptionalText(formData, 'map_url'),
   latitude: decimalOrNull(formData, 'latitude'),
   longitude: decimalOrNull(formData, 'longitude'),
