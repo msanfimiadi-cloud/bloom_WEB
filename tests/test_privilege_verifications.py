@@ -90,6 +90,11 @@ def verification_client() -> Generator[TestClient, None, None]:
         client_profile = ClientProfile(
             user_id=client_user.id,
             full_name="Client One",
+            vk_user_id="1234567",
+            vk_username="client_one_vk",
+            telegram_user_id="7654321",
+            telegram_username="client_one_tg",
+            telegram_photo_url="https://cdn.example.com/client-one.jpg",
             source="seed",
             is_active=True,
         )
@@ -1451,7 +1456,17 @@ def test_partner_can_scan_own_valid_qr_by_payload_and_code(verification_client: 
     assert data["session_id"] == verification_id
     assert data["status"] == PrivilegeVerificationStatus.pending.value
     assert data["can_confirm"] is True
-    assert data["client"] == {"display_name": "Client One", "subscription_active": True}
+    assert data["client"] == {
+        "display_name": "Client One",
+        "subscription_active": True,
+        "avatar_url": "https://cdn.example.com/client-one.jpg",
+        "telegram_linked": True,
+        "telegram_username": "client_one_tg",
+        "telegram_url": "https://t.me/client_one_tg",
+        "vk_linked": True,
+        "vk_username": "client_one_vk",
+        "vk_url": "https://vk.com/client_one_vk",
+    }
     assert data["partner"] == {"id": 1, "name": "Alpha Beauty"}
     assert data["privilege"] == {"id": 1, "title": "Active Discount"}
     assert data["estimated_saving_amount"] == "200.00"
