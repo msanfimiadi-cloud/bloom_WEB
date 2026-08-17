@@ -9,7 +9,7 @@ FRONTEND_STYLES = FRONTEND_DIR / "src" / "styles.css"
 ADMIN_ENDPOINTS = REPO_ROOT / "app" / "api" / "v1" / "endpoints" / "admin.py"
 ADMIN_SCHEMAS = REPO_ROOT / "app" / "schemas" / "admin.py"
 
-EXPECTED_TITLE = "Женский клуб — федеральный клуб привилегий для девушек"
+EXPECTED_TITLE = "Bloom Club — женский клуб привилегий"
 FORBIDDEN_PUBLIC_COPY = (
     "skeleton",
     "ADMIN / PARTNER SHELL",
@@ -84,15 +84,16 @@ def test_frontend_title_targets_girls() -> None:
     assert f"<title>{EXPECTED_TITLE}</title>" in _frontend_index()
 
 
-def test_site_uses_the_same_icons_as_browser_app() -> None:
+def test_site_exposes_search_favicon_and_shared_touch_icon() -> None:
     index = _frontend_index()
-    icon_names = ("favicon-32.png", "icon-192.png", "apple-touch-icon.png")
+    favicon = FRONTEND_DIR / "public" / "favicon.svg"
+    site_touch_icon = FRONTEND_DIR / "public" / "apple-touch-icon.png"
+    app_touch_icon = REPO_ROOT / "browser-mobile-app" / "public" / "docs" / "icons" / "apple-touch-icon.png"
 
-    for icon_name in icon_names:
-        site_icon = FRONTEND_DIR / "public" / icon_name
-        app_icon = REPO_ROOT / "browser-mobile-app" / "public" / "docs" / "icons" / icon_name
-        assert f'href="/{icon_name}"' in index
-        assert site_icon.read_bytes() == app_icon.read_bytes()
+    assert 'rel="icon" type="image/svg+xml" href="/favicon.svg"' in index
+    assert 'viewBox="0 0 120 120"' in favicon.read_text(encoding="utf-8")
+    assert 'href="/apple-touch-icon.png"' in index
+    assert site_touch_icon.read_bytes() == app_touch_icon.read_bytes()
 
 
 def test_public_frontend_does_not_render_technical_shell_copy() -> None:
