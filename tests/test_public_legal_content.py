@@ -40,7 +40,7 @@ def test_public_landing_discloses_operator_and_support_contacts() -> None:
         "ИП Глущенко Анастасия Дмитриевна",
         "541007956565",
         "323547600049744",
-        "danka1948@mail.ru",
+        "bloomclub.info@mail.ru",
         "https://t.me/Wo_ClubNSK",
         "https://t.me/app_bloom_club_bot",
         "https://vk.ru/club238169934",
@@ -60,7 +60,7 @@ def test_legal_pages_are_readable_html_with_cross_links() -> None:
         assert 'href="/legal.css"' in source
         assert 'href="/"' in source
         assert "ИП Глущенко Анастасия Дмитриевна" in source
-        assert "danka1948@mail.ru" in source
+        assert "bloomclub.info@mail.ru" in source
         assert "давай дальше" not in source.lower()
         assert "конец части" not in source.lower()
         assert "630129" not in source
