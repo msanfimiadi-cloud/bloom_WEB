@@ -95,7 +95,17 @@ type PrivilegeScan = {
   estimated_saving_amount: string | number | null;
   regular_price: string | number | null;
   club_price: string | number | null;
-  client: { display_name: string | null; subscription_active: boolean };
+  client: {
+    display_name: string | null;
+    subscription_active: boolean;
+    avatar_url: string | null;
+    telegram_linked: boolean;
+    telegram_username: string | null;
+    telegram_url: string | null;
+    vk_linked: boolean;
+    vk_username: string | null;
+    vk_url: string | null;
+  };
   partner: { id: number; name: string };
   privilege: { id: number; title: string } | null;
   expires_at: string;
@@ -580,7 +590,32 @@ export default function PartnerPortalApp() {
           {error ? <p className="partner-portal__error" role="alert">{error}</p> : null}
           {scan ? (
             <article className="partner-privilege-review">
-              <p className="partner-privilege-review__client">Клиент: <strong>{scan.client.display_name || "Участница Bloom Club"}</strong></p>
+              <section className="partner-client-identity" aria-label="Карточка клиентки">
+                {scan.client.avatar_url ? (
+                  <img className="partner-client-identity__avatar" src={scan.client.avatar_url} alt="Фото профиля клиентки" />
+                ) : (
+                  <span className="partner-client-identity__avatar partner-client-identity__avatar--fallback" aria-hidden="true">
+                    {(scan.client.display_name || "B").trim().charAt(0).toUpperCase()}
+                  </span>
+                )}
+                <div className="partner-client-identity__body">
+                  <p className="partner-portal__eyebrow">Владелица кода</p>
+                  <p className="partner-privilege-review__client"><strong>{scan.client.display_name || "Участница Bloom Club"}</strong></p>
+                  <div className="partner-client-identity__links">
+                    {scan.client.telegram_url ? (
+                      <a href={scan.client.telegram_url} target="_blank" rel="noreferrer">Telegram @{scan.client.telegram_username}</a>
+                    ) : scan.client.telegram_linked ? (
+                      <span>Telegram привязан</span>
+                    ) : null}
+                    {scan.client.vk_url ? (
+                      <a href={scan.client.vk_url} target="_blank" rel="noreferrer">Открыть профиль VK</a>
+                    ) : scan.client.vk_linked ? (
+                      <span>VK привязан</span>
+                    ) : null}
+                  </div>
+                </div>
+              </section>
+              <p className="partner-client-identity__hint">Сверьте профиль с клиенткой перед подтверждением привилегии.</p>
               <h3>{scan.privilege?.title || "Привилегия партнёра"}</h3>
               <dl>
                 <div><dt>Сумма без экономии</dt><dd>{money(scan.regular_price)}</dd></div>
