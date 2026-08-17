@@ -307,6 +307,13 @@ class PartnerPrivilegeScanRequest(BaseModel):
 class PartnerPrivilegeClientRead(BaseModel):
     display_name: str | None
     subscription_active: bool
+    avatar_url: str | None = None
+    telegram_linked: bool = False
+    telegram_username: str | None = None
+    telegram_url: str | None = None
+    vk_linked: bool = False
+    vk_username: str | None = None
+    vk_url: str | None = None
 
 
 class PartnerPrivilegePartnerRead(BaseModel):
