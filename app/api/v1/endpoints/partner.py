@@ -409,6 +409,10 @@ def _scan_response(
     saving_amount = session.saving_amount if session.saving_amount is not None else saving_snapshot.saving_amount
     regular_price = session.saving_base_price if session.saving_amount is not None else saving_snapshot.regular_price
     club_price = session.saving_final_price if session.saving_amount is not None else saving_snapshot.club_price
+    telegram_username = _clean_social_username(client.telegram_username) if client is not None else None
+    vk_username = _clean_social_username(client.vk_username) if client is not None else None
+    telegram_linked = bool(client is not None and client.telegram_user_id)
+    vk_linked = bool(client is not None and client.vk_user_id)
     return PartnerPrivilegeScanResponse(
         session_id=session.id,
         status=session.status,
@@ -419,6 +423,17 @@ def _scan_response(
         client=PartnerPrivilegeClientRead(
             display_name=(client.full_name if client is not None else None) or "Client",
             subscription_active=_has_active_subscription(db, session.client_id, now),
+            avatar_url=client.telegram_photo_url if client is not None else None,
+            telegram_linked=telegram_linked,
+            telegram_username=telegram_username,
+            telegram_url=f"https://t.me/{telegram_username}" if telegram_username else None,
+            vk_linked=vk_linked,
+            vk_username=vk_username,
+            vk_url=(
+                f"https://vk.com/{vk_username or ('id' + client.vk_user_id)}"
+                if client is not None and (vk_username or client.vk_user_id)
+                else None
+            ),
         ),
         partner=PartnerPrivilegePartnerRead(id=partner.id, name=partner.name),
         privilege=(
@@ -428,3 +443,8 @@ def _scan_response(
         ),
         expires_at=session.expires_at,
     )
+
+
+def _clean_social_username(value: str | None) -> str | None:
+    normalized = (value or "").strip().lstrip("@").strip()
+    return normalized or None
