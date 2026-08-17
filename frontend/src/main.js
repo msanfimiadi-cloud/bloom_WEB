@@ -418,7 +418,7 @@ const renderPublicApp = () => {
 
     <footer class="editorial-footer" id="landing-contacts" aria-labelledby="business-info-title">
       <div class="editorial-footer__brand"><span class="editorial-brand__name">Bloom Club</span><p>Федеральный клуб привилегий для девушек.</p></div>
-      <div><h2 id="business-info-title">Поддержка и контакты</h2><p>Время работы: 09:00–18:00<br>по новосибирскому времени (UTC+7)</p><a href="mailto:danka1948@mail.ru">danka1948@mail.ru</a></div>
+      <div><h2 id="business-info-title">Поддержка и контакты</h2><p>Время работы: 09:00–18:00<br>по новосибирскому времени (UTC+7)</p><a href="mailto:bloomclub.info@mail.ru">bloomclub.info@mail.ru</a></div>
       <div><h2>Мы на связи</h2><a href="https://t.me/Wo_ClubNSK" target="_blank" rel="noopener noreferrer">Telegram-канал</a><a href="https://t.me/app_bloom_club_bot" target="_blank" rel="noopener noreferrer">Telegram-бот</a><a href="https://vk.ru/club238169934" target="_blank" rel="noopener noreferrer">ВКонтакте</a></div>
       <div><h2>Документы</h2>${renderLegalDocumentLinks('legal-links editorial-footer__links')}</div>
       <details class="editorial-admin-access" id="login">
