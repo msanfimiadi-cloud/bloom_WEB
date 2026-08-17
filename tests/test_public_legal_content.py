@@ -97,6 +97,19 @@ def test_offer_describes_refund_for_unused_subscription_period() -> None:
     assert "Автоматические безусловные возвраты" not in source
 
 
+def test_privacy_policy_discloses_client_identity_check_by_partner() -> None:
+    source = _read(LEGAL_PAGES["privacy"])
+
+    for marker in (
+        "При предъявлении кода привилегии",
+        "фотография профиля",
+        "связанные аккаунты Telegram и VK",
+        "только партнёру, для которого создан код",
+        "предотвращения передачи привилегии третьим лицам",
+    ):
+        assert marker in source
+
+
 def test_index_has_search_and_social_metadata() -> None:
     source = _read(INDEX_HTML)
 
