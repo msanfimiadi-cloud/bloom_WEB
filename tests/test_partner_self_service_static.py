@@ -47,6 +47,31 @@ def test_partner_privilege_code_requires_six_digits_before_submit() -> None:
     assert "Введите 6 цифр, которые показывает клиентка." in source
 
 
+def test_partner_privilege_review_shows_client_identity_markers() -> None:
+    source = (ROOT / "browser-mobile-app" / "src" / "PartnerPortalApp.tsx").read_text(encoding="utf-8")
+    styles = (ROOT / "browser-mobile-app" / "src" / "styles.css").read_text(encoding="utf-8")
+
+    for marker in (
+        "Владелица кода",
+        "Карточка клиентки",
+        "Сверьте профиль с клиенткой перед подтверждением привилегии.",
+        "scan.client.avatar_url",
+        "scan.client.telegram_url",
+        "scan.client.vk_url",
+        "Telegram привязан",
+        "VK привязан",
+    ):
+        assert marker in source
+
+    for marker in (
+        ".partner-client-identity",
+        ".partner-client-identity__avatar",
+        ".partner-client-identity__links",
+        ".partner-client-identity__hint",
+    ):
+        assert marker in styles
+
+
 def test_partner_editor_keeps_mobile_safe_controls_and_moderation_statuses() -> None:
     styles = (ROOT / "browser-mobile-app" / "src" / "PartnerPortal.css").read_text(encoding="utf-8")
     source = (ROOT / "browser-mobile-app" / "src" / "PartnerPortalApp.tsx").read_text(encoding="utf-8")
