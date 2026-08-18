@@ -195,6 +195,7 @@ function formatGiveawayDay(value?: unknown): string {
 }
 
 function LoginGiveawayPreview({ state, isLoading }: { state: GiveawayState | null; isLoading: boolean }) {
+  const [arePrizesOpen, setArePrizesOpen] = useState(false);
   const giveaway = state?.has_active_giveaway ? state.giveaway : null;
   const prizes = Array.isArray(giveaway?.prizes) ? giveaway.prizes : [];
 
@@ -207,14 +208,28 @@ function LoginGiveawayPreview({ state, isLoading }: { state: GiveawayState | nul
         <>
           {giveaway.title ? <span className="login-giveaway__title">{String(giveaway.title)}</span> : null}
           {prizes.length > 0 ? (
-            <ul className="login-giveaway__prizes">
-              {prizes.map((prize, index) => (
-                <li key={`${prize.place_number ?? index}-${String(prize.prize_title ?? "")}`}>
-                  <b>{prize.place_number ?? index + 1} место</b>
-                  <span>{String(prize.prize_title ?? "Приз Bloom Club")}</span>
-                </li>
-              ))}
-            </ul>
+            <>
+              <button
+                className="login-giveaway__prizes-toggle"
+                type="button"
+                aria-expanded={arePrizesOpen}
+                aria-controls="login-giveaway-prizes"
+                onClick={() => setArePrizesOpen((current) => !current)}
+              >
+                <span>{arePrizesOpen ? "Скрыть призы" : `Показать призы · ${prizes.length}`}</span>
+                <span className="login-giveaway__prizes-chevron" aria-hidden="true">⌄</span>
+              </button>
+              {arePrizesOpen ? (
+                <ul className="login-giveaway__prizes" id="login-giveaway-prizes">
+                  {prizes.map((prize, index) => (
+                    <li key={`${prize.place_number ?? index}-${String(prize.prize_title ?? "")}`}>
+                      <b>{prize.place_number ?? index + 1} место</b>
+                      <span>{String(prize.prize_title ?? "Приз Bloom Club")}</span>
+                    </li>
+                  ))}
+                </ul>
+              ) : null}
+            </>
           ) : <span className="login-giveaway__status">Призы скоро объявим.</span>}
         </>
       ) : null}
