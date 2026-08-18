@@ -27,6 +27,7 @@ interface HomePageProps {
   referralSummary?: ReferralSummary | null;
   giveawayState?: GiveawayState | null;
   isGiveawayLoading?: boolean;
+  onGiveawayStateChange?: (state: GiveawayState) => void;
 }
 
 function getCityName(city: unknown): string {
@@ -59,6 +60,7 @@ export function HomePage({
   referralSummary,
   giveawayState,
   isGiveawayLoading = false,
+  onGiveawayStateChange,
 }: HomePageProps) {
   const safeCities = Array.isArray(cities) ? cities : [];
   const safePartners = Array.isArray(partners) ? partners : [];
@@ -305,7 +307,8 @@ export function HomePage({
     try {
       const result = await checkSocialSubscription(platform);
       setSocialStatuses((current) => ({ ...current, [platform]: String(result.message || "Проверка завершена") }));
-      await getGiveawayState().catch(() => null);
+      const refreshedState = await getGiveawayState().catch(() => null);
+      if (refreshedState) onGiveawayStateChange?.(refreshedState);
       window.dispatchEvent(new CustomEvent("bloom:refresh"));
     } catch {
       setSocialStatuses((current) => ({ ...current, [platform]: "Проверка временно недоступна" }));

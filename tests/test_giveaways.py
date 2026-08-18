@@ -71,6 +71,61 @@ def test_giveaway_write_rejects_draw_date_other_than_sixteenth() -> None:
         GiveawayWrite(title="Неверная дата", ends_at=datetime(2026, 8, 20, 12, tzinfo=timezone.utc))
 
 
+@pytest.mark.parametrize(
+    ("payload", "message"),
+    [
+        ({"telegram_reward_enabled": True}, "Telegram"),
+        ({"vk_reward_enabled": True}, "VK"),
+    ],
+)
+def test_giveaway_write_rejects_incomplete_social_reward(payload: dict, message: str) -> None:
+    from pydantic import ValidationError
+    from app.schemas.giveaway import GiveawayWrite
+
+    with pytest.raises(ValidationError, match=message):
+        GiveawayWrite(title="Розыгрыш", **payload)
+
+
+def test_telegram_and_vk_subscriptions_add_two_separate_numbers(monkeypatch: pytest.MonkeyPatch) -> None:
+    from app.services import social_subscriptions
+
+    db = _session()
+    client = _client(db, "social@example.com")
+    client.telegram_user_id = "10001"
+    client.vk_user_id = "20002"
+    _active_subscription(db, client.id)
+    giveaway = Giveaway(
+        title="active",
+        is_active=True,
+        winners_count=1,
+        telegram_community_url="https://t.me/bloomclub",
+        telegram_chat_id="-1001234567890",
+        telegram_reward_enabled=True,
+        vk_community_url="https://vk.com/bloomclub",
+        vk_group_id="123456",
+        vk_reward_enabled=True,
+    )
+    db.add(giveaway)
+    db.commit()
+    ensure_user_numbers(db, giveaway.id, client.id)
+    monkeypatch.setattr(social_subscriptions, "check_telegram_membership", lambda *_: True)
+    monkeypatch.setattr(social_subscriptions, "check_vk_membership", lambda *_: True)
+
+    telegram = social_subscriptions.check_and_apply(db, giveaway, client, "telegram")
+    vk = social_subscriptions.check_and_apply(db, giveaway, client, "vk")
+    db.commit()
+
+    assert telegram.entry_active is True
+    assert vk.entry_active is True
+    numbers = db.query(GiveawayNumber).filter_by(giveaway_id=giveaway.id, client_id=client.id, status="active").all()
+    assert {number.source for number in numbers} == {
+        "subscription",
+        "telegram_subscription",
+        "vk_subscription",
+    }
+    assert len({number.number for number in numbers}) == 3
+
+
 def test_user_with_active_subscription_gets_one_base_number() -> None:
     db = _session()
     client = _client(db, "client@example.com")
