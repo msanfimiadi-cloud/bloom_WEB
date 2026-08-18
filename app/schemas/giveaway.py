@@ -2,7 +2,9 @@ from __future__ import annotations
 
 from datetime import datetime
 
-from pydantic import BaseModel, Field
+from pydantic import BaseModel, Field, model_validator
+
+from app.services.giveaways import GIVEAWAY_DRAW_DAY, is_giveaway_draw_day
 
 
 class GiveawayPrizeRead(BaseModel):
@@ -60,6 +62,14 @@ class GiveawayWrite(BaseModel):
     vk_reward_enabled: bool = False
     vk_reward_numbers: int = Field(default=1, ge=1, le=1)
 
+    @model_validator(mode="after")
+    def validate_draw_schedule(self) -> "GiveawayWrite":
+        if self.ends_at is not None and not is_giveaway_draw_day(self.ends_at):
+            raise ValueError(f"Розыгрыш должен проводиться {GIVEAWAY_DRAW_DAY}-го числа месяца")
+        if self.starts_at is not None and self.ends_at is not None and self.starts_at >= self.ends_at:
+            raise ValueError("Дата начала розыгрыша должна быть раньше даты проведения")
+        return self
+
 
 class GiveawayNumberRead(BaseModel):
     number: str
@@ -87,6 +97,7 @@ class PublicGiveawayRead(BaseModel):
     id: int
     title: str
     description: str | None = None
+    draws_at: datetime | None = None
     prizes: list[GiveawayPrizeRead] = Field(default_factory=list)
 
 

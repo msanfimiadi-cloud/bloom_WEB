@@ -1,6 +1,9 @@
 from __future__ import annotations
 
-from datetime import datetime, timedelta, timezone
+from datetime import date, datetime, timedelta, timezone
+from zoneinfo import ZoneInfo
+
+import pytest
 
 from sqlalchemy import create_engine
 from sqlalchemy.orm import Session, sessionmaker
@@ -11,7 +14,7 @@ from app.models.giveaway import Giveaway, GiveawayPrize, GiveawayNumber
 from app.models.client import ClientProfile, ClientReferral
 from app.models.payment import Subscription, SubscriptionStatus
 from app.models.user import User, UserRole
-from app.services.giveaways import get_active_giveaway, ensure_user_numbers
+from app.services.giveaways import get_active_giveaway, ensure_user_numbers, next_giveaway_draw_at
 
 
 def _session() -> Session:
@@ -50,6 +53,22 @@ def test_only_active_giveaway_returned() -> None:
     db.add_all([Giveaway(title="old", is_active=False, winners_count=1), Giveaway(title="active", is_active=True, winners_count=1)])
     db.commit()
     assert get_active_giveaway(db).title == "active"
+
+
+def test_next_giveaway_is_always_scheduled_for_the_sixteenth() -> None:
+    before_draw = next_giveaway_draw_at(datetime(2026, 8, 15, 12, tzinfo=timezone.utc))
+    after_draw = next_giveaway_draw_at(datetime(2026, 8, 16, 12, tzinfo=timezone.utc))
+
+    assert before_draw.astimezone(ZoneInfo("Asia/Novosibirsk")).date() == date(2026, 8, 16)
+    assert after_draw.astimezone(ZoneInfo("Asia/Novosibirsk")).date() == date(2026, 9, 16)
+
+
+def test_giveaway_write_rejects_draw_date_other_than_sixteenth() -> None:
+    from pydantic import ValidationError
+    from app.schemas.giveaway import GiveawayWrite
+
+    with pytest.raises(ValidationError, match="16-го числа"):
+        GiveawayWrite(title="Неверная дата", ends_at=datetime(2026, 8, 20, 12, tzinfo=timezone.utc))
 
 
 def test_user_with_active_subscription_gets_one_base_number() -> None:

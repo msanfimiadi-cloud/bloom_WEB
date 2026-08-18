@@ -245,7 +245,7 @@ export function ProfilePage({ profile, subscription, cities, onOpenSubscription,
       <form className="profile-form" onSubmit={(event: FormEvent<HTMLFormElement>) => void handleSubmit(event)}>
         <div>
           <ContentText as="h2" textKey="profile.title" fallback="Профиль" />
-          <ContentText as="p" textKey="profile.description" fallback="Пожалуйста, заполните данные ниже. Они могут понадобиться для связи с вами в случае вашей победы в ежемесячном розыгрыше." multiline />
+          <ContentText as="p" textKey="profile.description" fallback="Пожалуйста, заполните данные ниже. Они могут понадобиться для связи с вами в случае победы в ежемесячном розыгрыше 16-го числа." multiline />
         </div>
         <label>
           Имя

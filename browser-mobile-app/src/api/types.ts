@@ -417,7 +417,7 @@ export interface SocialTask { enabled?: boolean; community_url?: BackendText; re
 export interface SocialSubscriptionCheck { platform?: BackendText; subscribed?: boolean; entry_active?: boolean; entry_number?: BackendText | null; message?: BackendText; status?: BackendText; }
 export interface GiveawayState {
   has_active_giveaway?: boolean;
-  giveaway?: { id?: ApiId; title?: BackendText; description?: BackendText; prizes?: GiveawayPrize[] } | null;
+  giveaway?: { id?: ApiId; title?: BackendText; description?: BackendText; draws_at?: BackendText; prizes?: GiveawayPrize[] } | null;
   user_numbers_count?: number;
   numbers?: { number?: BackendText; source?: BackendText; status?: BackendText; is_active?: boolean }[];
   social_tasks?: Record<string, SocialTask>;

@@ -396,7 +396,7 @@ const renderPublicApp = () => {
       <div class="editorial-subscription__content">
         <p class="editorial-kicker">Одна подписка — много возможностей</p>
         <h2 id="subscription-offer-title">Всё лучшее<br><em>для тебя</em></h2>
-        <p>Доступ к привилегиям, подаркам, закрытым предложениям и розыгрышам у партнёров клуба.</p>
+        <p>Доступ к привилегиям, подаркам, закрытым предложениям и ежемесячным розыгрышам 16-го числа.</p>
         <div class="editorial-price" aria-label="349 ₽ на 30 дней"><strong>349 ₽</strong><span>на 30 дней</span></div>
         <ul>
           <li>Пробный период 15 дней, если он доступен для аккаунта</li>
@@ -2839,7 +2839,7 @@ const renderClientHome = () => {
       </section>
       <section class="summary-card client-raffle-card" aria-labelledby="client-raffle-title">
         <h4 id="client-raffle-title">Ежемесячный розыгрыш</h4>
-        <p class="compact-copy">${hasProfileContacts ? 'Контакты заполнены. Вы участвуете в розыгрышах клуба.' : 'Заполните имя, телефон и email, чтобы мы могли связаться с вами при победе.'}</p>
+        <p class="compact-copy">${hasProfileContacts ? 'Контакты заполнены. Вы участвуете в ежемесячном розыгрыше 16-го числа.' : 'Заполните имя, телефон и email, чтобы мы могли связаться с вами при победе. Розыгрыш проходит 16-го числа.'}</p>
         ${hasProfileContacts ? '' : '<button type="button" class="admin-inline-action ui-button ui-button--secondary" data-client-tab="profile">Заполнить профиль</button>'}
       </section>
       <section class="client-activity-preview" aria-labelledby="client-activity-preview-title">
@@ -4266,6 +4266,39 @@ const renderFlowerAdminTab = () => {
 
 const getGiveawayTitle = (giveaway = {}) => giveaway.title || `Розыгрыш #${giveaway.id}`;
 
+const giveawayDateTimeParts = (value = new Date()) => Object.fromEntries(
+  new Intl.DateTimeFormat('en-CA', {
+    timeZone: 'Asia/Novosibirsk',
+    year: 'numeric', month: '2-digit', day: '2-digit', hour: '2-digit', minute: '2-digit',
+    hourCycle: 'h23',
+  }).formatToParts(value).filter((part) => part.type !== 'literal').map((part) => [part.type, part.value]),
+);
+
+const formatGiveawayDateTimeInput = (value) => {
+  if (!value) return '';
+  const date = new Date(value);
+  if (Number.isNaN(date.getTime())) return '';
+  const parts = giveawayDateTimeParts(date);
+  return `${parts.year}-${parts.month}-${parts.day}T${parts.hour}:${parts.minute}`;
+};
+
+const nextGiveawayDrawInput = () => {
+  const parts = giveawayDateTimeParts();
+  let year = Number(parts.year);
+  let month = Number(parts.month);
+  if (Number(parts.day) >= 16) {
+    month += 1;
+    if (month > 12) { month = 1; year += 1; }
+  }
+  return `${year}-${String(month).padStart(2, '0')}-16T12:00`;
+};
+
+const novosibirskDateTimeToIso = (value) => {
+  if (!value) return null;
+  const withSeconds = String(value).length === 16 ? `${value}:00` : String(value);
+  return new Date(`${withSeconds}+07:00`).toISOString();
+};
+
 const resolveGiveawayForEntries = () => {
   const giveaways = Array.isArray(adminState.giveaways) ? adminState.giveaways : [];
   const editing = giveaways.find((item) => String(item.id) === String(adminState.selectedGiveawayIdForEdit));
@@ -4421,11 +4454,14 @@ const renderGiveawayPlaceRows = (giveaway = {}) => {
   }).join('');
 };
 
-const renderGiveawayForm = (giveaway = {}) => `<form class="admin-form admin-giveaway-form" data-admin-giveaway-form data-giveaway-id="${escapeHtml(giveaway.id || '')}">
+const renderGiveawayForm = (giveaway = {}) => {
+  const startsAt = formatGiveawayDateTimeInput(giveaway.starts_at) || formatGiveawayDateTimeInput(new Date());
+  const drawsAt = formatGiveawayDateTimeInput(giveaway.ends_at) || nextGiveawayDrawInput();
+  return `<form class="admin-form admin-giveaway-form" data-admin-giveaway-form data-giveaway-id="${escapeHtml(giveaway.id || '')}">
   <section class="admin-form-section"><div class="admin-form-section-heading"><span>1</span><div><h4>Основное</h4><p>Название, описание и период проведения.</p></div></div>
     <label>Название<input name="title" value="${escapeHtml(giveaway.title || '')}" placeholder="Например, Тест2" required /></label>
     <label>Описание<textarea name="description" rows="3">${escapeHtml(giveaway.description || '')}</textarea></label>
-    <div class="admin-form-grid"><label>Начало<input name="starts_at" type="datetime-local" value="${escapeHtml(String(giveaway.starts_at || '').slice(0, 16))}" /></label><label>Окончание<input name="ends_at" type="datetime-local" value="${escapeHtml(String(giveaway.ends_at || '').slice(0, 16))}" /></label><label>Количество победителей<input name="winners_count" type="number" min="0" max="100" value="${escapeHtml(giveaway.winners_count || 1)}" data-admin-giveaway-winners-count /></label></div>
+    <div class="admin-form-grid"><label>Начало участия<input name="starts_at" type="datetime-local" value="${escapeHtml(startsAt)}" required /></label><label>Дата розыгрыша — 16-е число<input name="ends_at" type="datetime-local" value="${escapeHtml(drawsAt)}" required /><small>Розыгрыши проводятся 16-го числа каждого месяца по новосибирскому времени.</small></label><label>Количество победителей<input name="winners_count" type="number" min="0" max="100" value="${escapeHtml(giveaway.winners_count || 1)}" data-admin-giveaway-winners-count /></label></div>
   </section>
   <section class="admin-form-section"><div class="admin-form-section-heading"><span>2</span><div><h4>Призы</h4><p>Количество строк меняется вместе с количеством победителей.</p></div></div><div data-admin-giveaway-place-list>${renderGiveawayPlaceRows(giveaway)}</div></section>
   <details class="admin-form-section admin-giveaway-social" ${giveaway.telegram_reward_enabled || giveaway.vk_reward_enabled ? 'open' : ''}><summary>Дополнительные номера за подписки</summary><p class="helper-text">Откройте этот блок, только если хотите начислять номера за Telegram или VK.</p>
@@ -4435,6 +4471,7 @@ const renderGiveawayForm = (giveaway = {}) => `<form class="admin-form admin-giv
   <div class="admin-form-actions"><button class="ui-button ui-button--primary" type="submit" ${adminState.giveawaySaving ? 'disabled' : ''}>${adminState.giveawaySaving ? 'Сохранение…' : 'Сохранить розыгрыш'}</button>${giveaway.id ? '<button class="ui-button ui-button--ghost" type="button" data-admin-giveaway-create>Отмена</button>' : ''}</div>
   <p class="form-message" data-form-message="giveaway">${escapeHtml(adminState.formMessages.giveaway || '')}</p>
 </form>`;
+};
 
 const renderGiveawayEntriesSelector = (selected) => {
   const giveaways = Array.isArray(adminState.giveaways) ? adminState.giveaways : [];
@@ -4496,10 +4533,11 @@ const renderGiveawaysTab = () => {
   return `<div class="giveaways-page"><div class="admin-section-heading admin-page-heading admin-page-heading--actions"><div><p class="section-eyebrow section-kicker">Розыгрыши</p><h3>Розыгрыши клуба</h3><p>Создание розыгрыша, призы, участники и выгрузка результатов — в одном разделе.</p></div><button class="ui-button ui-button--primary" type="button" data-admin-giveaway-create>Новый розыгрыш</button></div>
   <section class="ui-card giveaway-section"><h4>${selected ? `Редактирование: ${escapeHtml(getGiveawayTitle(selected))}` : 'Новый розыгрыш'}</h4>${renderGiveawayForm(selected || {})}</section>
   <section class="ui-card giveaway-section"><h4>Все розыгрыши</h4>${renderTable(
-    ['ID', 'Название', 'Статус', 'Победителей', 'Действия'],
+    ['ID', 'Название', 'Дата розыгрыша', 'Статус', 'Победителей', 'Действия'],
     adminState.giveaways.map((g) => [
       formatValue(g.id),
       formatValue(g.title),
+      formatValue(formatDateTime(g.ends_at)),
       renderActiveStatusBadge(g.is_active),
       formatValue(g.winners_count),
       renderAdminTableActions(`<button class="admin-inline-action ui-button ui-button--secondary admin-table-action" type="button" data-admin-giveaway-edit="${escapeHtml(g.id)}">Редактировать</button><button class="admin-inline-action ui-button ui-button--danger admin-inline-action--danger admin-table-action" type="button" data-admin-giveaway-delete="${escapeHtml(g.id)}">Удалить</button>`),
@@ -4516,8 +4554,8 @@ const buildGiveawayPayload = (form) => {
     title: String(fd.get('title') || '').trim(),
     description: String(fd.get('description') || '').trim(),
     is_active: fd.get('is_active') === 'on',
-    starts_at: fd.get('starts_at') ? new Date(String(fd.get('starts_at'))).toISOString() : null,
-    ends_at: fd.get('ends_at') ? new Date(String(fd.get('ends_at'))).toISOString() : null,
+    starts_at: novosibirskDateTimeToIso(fd.get('starts_at')),
+    ends_at: novosibirskDateTimeToIso(fd.get('ends_at')),
     winners_count: Number(fd.get('winners_count') || 0),
     telegram_community_url: String(fd.get('telegram_community_url') || '').trim() || null,
     telegram_chat_id: String(fd.get('telegram_chat_id') || '').trim() || null,
