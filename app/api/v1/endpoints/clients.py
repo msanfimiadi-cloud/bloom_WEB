@@ -757,6 +757,7 @@ def read_client_giveaway(
         id=giveaway.id,
         title=giveaway.title,
         description=giveaway.description,
+        draws_at=giveaway.ends_at,
         prizes=[GiveawayPrizeRead(id=p.id, place_number=p.place_number, prize_title=p.prize_title) for p in sorted(giveaway.prizes, key=lambda item: item.place_number)],
     )
     if current_user is None:

@@ -107,6 +107,7 @@ from app.schemas.payment import AdminPaymentRequestRead, PaymentRequestApprove, 
 from app.services.activity_feed import build_admin_activity_feed
 from app.services.admin_user_delete_service import delete_user_with_relations
 from app.services.landing_settings import build_admin_landing_settings_read, get_or_create_landing_settings, normalize_giveaway_items
+from app.services.giveaways import next_giveaway_draw_at
 from app.services.image_uploads import save_partner_image_upload, save_partner_offer_image_upload, save_partner_photo_image_upload, validate_image_kind
 from app.services.partner_analytics import build_partner_analytics
 from app.services.partner_access_codes import prepare_partner_access_code
@@ -592,8 +593,8 @@ def _apply_giveaway_payload(giveaway: Giveaway, payload: GiveawayWrite) -> None:
     giveaway.title = payload.title.strip()
     giveaway.description = (payload.description or '').strip() or None
     giveaway.is_active = payload.is_active
-    giveaway.starts_at = payload.starts_at
-    giveaway.ends_at = payload.ends_at
+    giveaway.starts_at = payload.starts_at or giveaway.starts_at or datetime.now(timezone.utc)
+    giveaway.ends_at = payload.ends_at or giveaway.ends_at or next_giveaway_draw_at()
     giveaway.winners_count = payload.winners_count
     giveaway.telegram_community_url = (payload.telegram_community_url or "").strip() or None
     giveaway.telegram_chat_id = (payload.telegram_chat_id or "").strip() or None

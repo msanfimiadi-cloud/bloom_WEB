@@ -2,6 +2,7 @@ from __future__ import annotations
 
 from collections import Counter
 from datetime import datetime, timezone
+from zoneinfo import ZoneInfo
 
 from sqlalchemy import func, select
 from sqlalchemy.orm import Session, selectinload
@@ -11,6 +12,27 @@ from app.models.giveaway import Giveaway, GiveawayNumber
 from app.models.user import User
 from app.services.social_subscriptions import is_number_active
 from app.models.payment import Subscription, SubscriptionStatus
+
+
+GIVEAWAY_DRAW_DAY = 16
+GIVEAWAY_TIMEZONE = ZoneInfo("Asia/Novosibirsk")
+
+
+def next_giveaway_draw_at(now: datetime | None = None) -> datetime:
+    current = aware(now or datetime.now(timezone.utc)).astimezone(GIVEAWAY_TIMEZONE)
+    year = current.year
+    month = current.month
+    if current.day >= GIVEAWAY_DRAW_DAY:
+        if month == 12:
+            year += 1
+            month = 1
+        else:
+            month += 1
+    return datetime(year, month, GIVEAWAY_DRAW_DAY, 12, 0, tzinfo=GIVEAWAY_TIMEZONE).astimezone(timezone.utc)
+
+
+def is_giveaway_draw_day(value: datetime) -> bool:
+    return aware(value).astimezone(GIVEAWAY_TIMEZONE).day == GIVEAWAY_DRAW_DAY
 
 
 def aware(dt):
@@ -30,7 +52,7 @@ def get_active_giveaway(db: Session, now: datetime | None = None) -> Giveaway | 
         if giveaway.ends_at and aware(giveaway.ends_at) < now:
             continue
         return giveaway
-    return rows[0] if rows else None
+    return None
 
 
 def has_active_access(db: Session, client_id: int, now: datetime | None = None) -> bool:

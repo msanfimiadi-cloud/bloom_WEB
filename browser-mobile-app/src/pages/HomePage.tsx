@@ -345,7 +345,7 @@ export function HomePage({
         <div className="info-panel info-panel--soft giveaway-panel">
           <p className="eyebrow">Розыгрыш</p>
           <strong>Скоро объявим новый розыгрыш</strong>
-          <p>Новый розыгрыш появится в ближайшее время.</p>
+          <p>Розыгрыши Bloom Club проводятся 16-го числа каждого месяца.</p>
         </div>
       );
     }
@@ -362,6 +362,7 @@ export function HomePage({
       <div className="info-panel info-panel--soft giveaway-panel">
         <p className="eyebrow">Розыгрыш</p>
         <strong>{toText(giveaway.title)}</strong>
+        <p className="giveaway-panel__draw-date">{giveaway.draws_at ? `Розыгрыш состоится ${formatDate(giveaway.draws_at)}` : 'Розыгрыш проводится 16-го числа каждого месяца.'}</p>
         {toText(giveaway.description) ? <p>{toText(giveaway.description)}</p> : null}
         <ul className="giveaway-panel__prizes">
           {prizes.map((prize, index) => (

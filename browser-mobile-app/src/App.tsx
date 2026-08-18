@@ -170,6 +170,60 @@ const TELEGRAM_BOT_LINK =
 const VK_BOT_LINK =
   import.meta.env.VITE_VK_BOT_LINK || "https://vk.me/club238169934";
 
+function formatGiveawayDay(value?: unknown): string {
+  const parsed = typeof value === "string" ? new Date(value) : null;
+  if (parsed && !Number.isNaN(parsed.getTime())) {
+    return new Intl.DateTimeFormat("ru-RU", {
+      day: "numeric",
+      month: "long",
+      timeZone: "Asia/Novosibirsk",
+    }).format(parsed);
+  }
+
+  const novosibirskNow = new Date(Date.now() + 7 * 60 * 60 * 1000);
+  let year = novosibirskNow.getUTCFullYear();
+  let month = novosibirskNow.getUTCMonth();
+  if (novosibirskNow.getUTCDate() > 16) {
+    month += 1;
+    if (month > 11) {
+      month = 0;
+      year += 1;
+    }
+  }
+  return new Intl.DateTimeFormat("ru-RU", { day: "numeric", month: "long", timeZone: "UTC" })
+    .format(new Date(Date.UTC(year, month, 16)));
+}
+
+function LoginGiveawayPreview({ state, isLoading }: { state: GiveawayState | null; isLoading: boolean }) {
+  const giveaway = state?.has_active_giveaway ? state.giveaway : null;
+  const prizes = Array.isArray(giveaway?.prizes) ? giveaway.prizes : [];
+
+  return (
+    <section className="login-giveaway" aria-label="Ежемесячный розыгрыш">
+      <p className="login-giveaway__eyebrow">🎁 Ежемесячный розыгрыш</p>
+      <strong>Следующий розыгрыш — {formatGiveawayDay(giveaway?.draws_at)}</strong>
+      {isLoading ? <span className="login-giveaway__status">Загружаем призы…</span> : null}
+      {!isLoading && giveaway ? (
+        <>
+          {giveaway.title ? <span className="login-giveaway__title">{String(giveaway.title)}</span> : null}
+          {prizes.length > 0 ? (
+            <ul className="login-giveaway__prizes">
+              {prizes.map((prize, index) => (
+                <li key={`${prize.place_number ?? index}-${String(prize.prize_title ?? "")}`}>
+                  <b>{prize.place_number ?? index + 1} место</b>
+                  <span>{String(prize.prize_title ?? "Приз Bloom Club")}</span>
+                </li>
+              ))}
+            </ul>
+          ) : <span className="login-giveaway__status">Призы скоро объявим.</span>}
+        </>
+      ) : null}
+      {!isLoading && !giveaway ? <span className="login-giveaway__status">Призы скоро объявим.</span> : null}
+      <p>Оформите подписку и получите номер участницы.</p>
+    </section>
+  );
+}
+
 function LoginBotLinks() {
   return (
     <section className="login-bot-links" aria-labelledby="login-bot-links-title">
@@ -887,6 +941,9 @@ export default function App() {
   const [loginReferralCode, setLoginReferralCode] = useState(() => readLoginCodeDraft(REFERRAL_CODE_DRAFT_STORAGE_KEY));
   const [loginCodeError, setLoginCodeError] = useState("");
   const [isLoginCodeSubmitting, setIsLoginCodeSubmitting] = useState(false);
+  const [loginGiveawayState, setLoginGiveawayState] = useState<GiveawayState | null>(null);
+  const [isLoginGiveawayLoading, setIsLoginGiveawayLoading] = useState(false);
+  const loginGiveawayRequestedRef = useRef(false);
   const pendingBrowserLoginRef = useRef(false);
   const [guestRestrictionMessage, setGuestRestrictionMessage] = useState(false);
   const [isCreatingPayment, setIsCreatingPayment] = useState(false);
@@ -2803,6 +2860,21 @@ export default function App() {
   const canRenderLogin = browserLoginRequired && authRestoreStatus === "unauthenticated" && !isLoading && !bootstrapPromiseRef.current;
 
   useEffect(() => {
+    if (!canRenderLogin || loginGiveawayRequestedRef.current) return;
+
+    loginGiveawayRequestedRef.current = true;
+    setIsLoginGiveawayLoading(true);
+    getGiveawayState()
+      .then((giveawayState) => {
+        if (mountedRef.current) setLoginGiveawayState(giveawayState);
+      })
+      .catch(() => undefined)
+      .finally(() => {
+        if (mountedRef.current) setIsLoginGiveawayLoading(false);
+      });
+  }, [canRenderLogin]);
+
+  useEffect(() => {
     if (browserLoginRequired && hasAnyAuthTokenForLoginGuard) {
       reportClientError("unexpected_login_screen_with_token", new Error("unexpected_login_screen_with_token"), {
         authRestoreStatus,
@@ -2880,6 +2952,7 @@ export default function App() {
             <span>Женский клуб · НСК</span>
           </div>
           <h1>{BROWSER_LOGIN_REQUIRED_MESSAGE}</h1>
+          <LoginGiveawayPreview state={loginGiveawayState} isLoading={isLoginGiveawayLoading} />
           {isLoginCodeFormOpen ? (
             <>
               <p>{LOGIN_CODE_HELP_MESSAGE}</p>
