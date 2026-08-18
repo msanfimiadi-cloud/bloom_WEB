@@ -4466,6 +4466,7 @@ const renderGiveawayForm = (giveaway = {}) => {
   <section class="admin-form-section"><div class="admin-form-section-heading"><span>2</span><div><h4>Призы</h4><p>Количество строк меняется вместе с количеством победителей.</p></div></div><div data-admin-giveaway-place-list>${renderGiveawayPlaceRows(giveaway)}</div></section>
   <details class="admin-form-section admin-giveaway-social" ${giveaway.telegram_reward_enabled || giveaway.vk_reward_enabled ? 'open' : ''}><summary>Дополнительные номера за подписки</summary><p class="helper-text">Откройте этот блок, только если хотите начислять номера за Telegram или VK.</p>
     <div class="admin-giveaway-social-grid"><fieldset><legend>Telegram</legend><label>Ссылка на канал<input name="telegram_community_url" value="${escapeHtml(giveaway.telegram_community_url || '')}" /></label><label>Chat ID<input name="telegram_chat_id" value="${escapeHtml(giveaway.telegram_chat_id || '')}" /></label><label class="checkbox-row"><input name="telegram_reward_enabled" type="checkbox" ${giveaway.telegram_reward_enabled ? 'checked' : ''} /> Начислять номер</label><input name="telegram_reward_numbers" type="hidden" value="1" /></fieldset><fieldset><legend>ВКонтакте</legend><label>Ссылка на сообщество<input name="vk_community_url" value="${escapeHtml(giveaway.vk_community_url || '')}" /></label><label>ID группы<input name="vk_group_id" value="${escapeHtml(giveaway.vk_group_id || '')}" /></label><label class="checkbox-row"><input name="vk_reward_enabled" type="checkbox" ${giveaway.vk_reward_enabled ? 'checked' : ''} /> Начислять номер</label><input name="vk_reward_numbers" type="hidden" value="1" /></fieldset></div>
+    <div class="admin-giveaway-social-actions"><button class="ui-button ui-button--primary" type="submit" data-admin-giveaway-submit="social" ${adminState.giveawaySaving ? 'disabled' : ''}>${adminState.giveawaySaving ? 'Сохранение…' : 'Сохранить настройки подписок'}</button></div>
   </details>
   <section class="admin-form-section admin-form-section--publish"><div class="admin-form-section-heading"><span>3</span><div><h4>Публикация</h4><p>Новый розыгрыш сохраняется неактивным, пока вы его не включите.</p></div></div><label class="checkbox-row"><input name="is_active" type="checkbox" ${giveaway.is_active ? 'checked' : ''} /> Показывать розыгрыш участницам</label></section>
   <div class="admin-form-actions"><button class="ui-button ui-button--primary" type="submit" ${adminState.giveawaySaving ? 'disabled' : ''}>${adminState.giveawaySaving ? 'Сохранение…' : 'Сохранить розыгрыш'}</button>${giveaway.id ? '<button class="ui-button ui-button--ghost" type="button" data-admin-giveaway-create>Отмена</button>' : ''}</div>
@@ -8723,7 +8724,7 @@ document.addEventListener('keydown', (event) => {
   }
 });
 
-const handleGiveawayFormSubmit = async (form) => {
+const handleGiveawayFormSubmit = async (form, submitMode = 'giveaway') => {
   const id = form.dataset.giveawayId;
   const payload = buildGiveawayPayload(form);
   adminState.giveawaySaving = true;
@@ -8741,8 +8742,9 @@ const handleGiveawayFormSubmit = async (form) => {
     if (savedGiveawayId) {
       await syncGiveawayEntriesSelection({ force: true });
     }
-    setFormMessage('giveaway', 'Розыгрыш сохранён.');
-    setPanelMessage('Розыгрыш сохранён', 'success');
+    const successMessage = submitMode === 'social' ? 'Настройки подписок сохранены.' : 'Розыгрыш сохранён.';
+    setFormMessage('giveaway', successMessage);
+    setPanelMessage(successMessage, 'success');
   } catch (error) {
     const message = error?.message || 'Не удалось сохранить розыгрыш.';
     setFormMessage('giveaway', message);
@@ -8805,7 +8807,8 @@ root.addEventListener('submit', (event) => {
   const giveawayForm = event.target.closest('[data-admin-giveaway-form]');
   if (giveawayForm) {
     event.preventDefault();
-    handleGiveawayFormSubmit(giveawayForm);
+    const submitMode = event.submitter?.dataset?.adminGiveawaySubmit || 'giveaway';
+    handleGiveawayFormSubmit(giveawayForm, submitMode);
     return;
   }
 
