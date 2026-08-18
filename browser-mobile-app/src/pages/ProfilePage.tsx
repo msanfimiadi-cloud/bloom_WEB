@@ -346,12 +346,12 @@ export function ProfilePage({ profile, subscription, cities, onOpenSubscription,
           const linked = Boolean(identity?.linked || (provider === "telegram" ? profile?.telegram_user_id : profile?.vk_user_id));
           const label = provider === "telegram" ? "Telegram" : "VK";
           const code = provider === "telegram" ? telegramLinkCode : vkLinkCode;
+          const username = toText(identity?.username).replace(/^@+/, "");
+          const accountLabel = username ? `@${username}` : toText(identity?.provider_user_id_masked);
           return (
             <div className="profile-linked-account" key={provider}>
               <strong>{label}</strong>
-              <span>{linked ? "Привязан" : "Не привязан"}</span>
-              {linked ? <span>{toText(identity?.username) || toText(identity?.provider_user_id_masked) || "Аккаунт Bloom Club"}</span> : null}
-              {identity?.linked_at ? <small>{toText(identity.linked_at)}</small> : null}
+              <span>{linked ? `Привязан${accountLabel ? `: ${accountLabel}` : ""}` : "Не привязан"}</span>
               {!linked ? <button className="button button--secondary" type="button" onClick={() => setLinkProvider(provider)}>Привязать {label}</button> : null}
               {linkProvider === provider ? (
                 <div>

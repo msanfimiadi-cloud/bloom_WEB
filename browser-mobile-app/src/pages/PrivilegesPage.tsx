@@ -5,6 +5,7 @@ import { useContentText } from '../content/ContentContext';
 import { formatDate, formatMoney } from '../utils/format';
 import { getOfferPrices, getOfferTitle, getPartnerName, getVerificationCode } from '../utils/partnerDisplay';
 import { toText } from '../utils/text';
+import { useMemo, useState } from 'react';
 
 interface PrivilegesPageProps {
   verifications?: Verification[] | null;
@@ -28,8 +29,8 @@ function mergeDefinedPriceSource(verification: Verification): Offer | Verificati
 function statusLabel(status: unknown): string {
   const normalized = toText(status).toLowerCase();
 
-  if (normalized === 'confirmed') {
-    return 'Подтверждена';
+  if (normalized === 'confirmed' || normalized === 'used') {
+    return 'Использована';
   }
 
   if (normalized === 'expired') {
@@ -39,8 +40,26 @@ function statusLabel(status: unknown): string {
   return 'Активна';
 }
 
+type VerificationFilter = 'active' | 'used' | 'expired';
+
+function verificationFilter(status: unknown): VerificationFilter {
+  const normalized = toText(status).toLowerCase();
+  if (normalized === 'expired') return 'expired';
+  if (normalized === 'confirmed' || normalized === 'used') return 'used';
+  return 'active';
+}
+
 export function PrivilegesPage({ verifications, emptyTitle, emptyDescription }: PrivilegesPageProps) {
   const safeVerifications = Array.isArray(verifications) ? verifications : [];
+  const [activeFilter, setActiveFilter] = useState<VerificationFilter>('active');
+  const counts = useMemo(() => safeVerifications.reduce<Record<VerificationFilter, number>>((result, verification) => {
+    result[verificationFilter(verification.status)] += 1;
+    return result;
+  }, { active: 0, used: 0, expired: 0 }), [safeVerifications]);
+  const visibleVerifications = useMemo(
+    () => safeVerifications.filter((verification) => verificationFilter(verification.status) === activeFilter),
+    [activeFilter, safeVerifications],
+  );
   const defaultEmptyTitle = useContentText('privileges.empty.title', 'Здесь появятся ваши коды привилегий');
   const defaultEmptyDescription = useContentText('privileges.empty.description', 'Выберите партнёра и получите код на нужную услугу.');
 
@@ -53,10 +72,36 @@ export function PrivilegesPage({ verifications, emptyTitle, emptyDescription }: 
       </div>
 
       {safeVerifications.length ? (
-        <div className="verification-list">
-          {safeVerifications.map((verification, index) => {
+        <>
+          <div className="verification-filters" role="tablist" aria-label="Фильтр кодов привилегий">
+            {([
+              ['active', 'Активные'],
+              ['used', 'Использованные'],
+              ['expired', 'Истёкшие'],
+            ] as const).map(([filter, label]) => (
+              <button
+                className={activeFilter === filter ? 'verification-filter verification-filter--active' : 'verification-filter'}
+                type="button"
+                role="tab"
+                aria-selected={activeFilter === filter}
+                onClick={() => setActiveFilter(filter)}
+                key={filter}
+              >
+                {label} <span>{counts[filter]}</span>
+              </button>
+            ))}
+          </div>
+          {visibleVerifications.length ? <div className="verification-list">
+          {visibleVerifications.map((verification, index) => {
             const prices = getOfferPrices(mergeDefinedPriceSource(verification));
+            const hasPriceDetails = prices.basePrice !== undefined || prices.hasValidMemberPrice || prices.hasValidSaving;
             const code = getVerificationCode(verification) || 'Код формируется';
+            const partnerName = verification.partner
+              ? getPartnerName(verification.partner)
+              : toText(verification.partner_name, 'Партнёр Bloom Club');
+            const offerTitle = verification.offer
+              ? getOfferTitle(verification.offer)
+              : toText(verification.offer_title, 'Услуга партнёра');
 
             return (
               <article className="verification-card" key={verification.id ?? index}>
@@ -65,8 +110,8 @@ export function PrivilegesPage({ verifications, emptyTitle, emptyDescription }: 
                   <strong>{code}</strong>
                 </div>
                 <div>
-                  <strong>{verification.partner ? getPartnerName(verification.partner) : 'Партнёр Bloom Club'}</strong>
-                  <p>{verification.offer ? getOfferTitle(verification.offer) : 'Услуга партнёра'}</p>
+                  <strong>{partnerName}</strong>
+                  <p>{offerTitle}</p>
                   <p>Статус: {statusLabel(verification.status)}</p>
                   <small>Действует до: {formatDate(verification.expires_at || verification.valid_until)}</small>
                   <div className="price-grid price-grid--compact">
@@ -74,11 +119,13 @@ export function PrivilegesPage({ verifications, emptyTitle, emptyDescription }: 
                     {prices.hasValidMemberPrice ? <span><small>Цена для участницы</small>{formatMoney(prices.memberPrice)}</span> : null}
                     {prices.hasValidSaving ? <span><small>Экономия</small>{formatMoney(prices.saving)}</span> : null}
                   </div>
+                  {!hasPriceDetails ? <small className="verification-card__missing-price">Данные о стоимости для этого старого кода не были сохранены.</small> : null}
                 </div>
               </article>
             );
           })}
-        </div>
+          </div> : <EmptyState title={`Нет кодов: ${activeFilter === 'active' ? 'активных' : activeFilter === 'used' ? 'использованных' : 'истёкших'}`} description="Выберите другую вкладку." />}
+        </>
       ) : (
         <EmptyState
           title={emptyTitle || defaultEmptyTitle}

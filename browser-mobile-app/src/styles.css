@@ -7584,3 +7584,127 @@ small,
     flex: 1 1 128px;
   }
 }
+
+/* Client UI audit fixes: stable media, compact history and unobstructed content. */
+.app-shell {
+  padding-bottom: calc(
+    var(--bottom-nav-reserved-height, 98px) +
+    env(safe-area-inset-bottom) +
+    32px
+  );
+}
+
+.partner-catalog-card {
+  height: 164px;
+  min-height: 164px;
+}
+
+.partner-catalog-card .image-shell,
+.partner-catalog-card .image-shell img,
+.partner-catalog-card .home-partner-tile__placeholder {
+  height: 148px;
+  min-height: 148px;
+  object-fit: cover;
+}
+
+.verification-filters {
+  display: flex;
+  gap: 8px;
+  overflow-x: auto;
+  padding: 2px 1px 6px;
+  scrollbar-width: none;
+}
+
+.verification-filters::-webkit-scrollbar {
+  display: none;
+}
+
+.verification-filter {
+  flex: 0 0 auto;
+  min-height: 42px;
+  border: 1px solid rgba(145, 46, 78, 0.16);
+  border-radius: 999px;
+  padding: 0 13px;
+  background: rgba(255, 250, 250, 0.9);
+  color: #704451;
+  font: inherit;
+  font-size: 0.84rem;
+  font-weight: 700;
+}
+
+.verification-filter span {
+  display: inline-grid;
+  min-width: 21px;
+  height: 21px;
+  place-items: center;
+  margin-left: 4px;
+  border-radius: 999px;
+  background: rgba(145, 46, 78, 0.1);
+  font-size: 0.72rem;
+}
+
+.verification-filter--active {
+  border-color: #513a41;
+  background: #513a41;
+  color: #fff;
+}
+
+.verification-filter--active span {
+  background: rgba(255, 255, 255, 0.18);
+}
+
+.verification-card__missing-price {
+  display: block;
+  margin-top: 8px;
+  color: #876d75;
+  line-height: 1.45;
+}
+
+.lightbox {
+  background: #181115 !important;
+  backdrop-filter: none !important;
+}
+
+.lightbox__frame {
+  width: min(560px, calc(100vw - 24px)) !important;
+  max-width: min(560px, calc(100vw - 24px)) !important;
+}
+
+.lightbox__image-wrap {
+  overflow: hidden;
+  border-radius: 20px;
+  background: #181115;
+}
+
+.lightbox__nav {
+  position: absolute !important;
+  top: 50% !important;
+  width: 44px;
+  height: 52px;
+  transform: translateY(-50%) !important;
+  border: 1px solid rgba(255, 255, 255, 0.25);
+  background: rgba(24, 17, 21, 0.78);
+  color: #fff;
+}
+
+.lightbox__nav--prev {
+  left: 8px !important;
+}
+
+.lightbox__nav--next {
+  right: 8px !important;
+}
+
+@media (max-width: 390px) {
+  .partner-catalog-card {
+    height: 160px;
+    min-height: 160px;
+  }
+
+  .partner-catalog-card .image-shell,
+  .partner-catalog-card .image-shell img,
+  .partner-catalog-card .home-partner-tile__placeholder {
+    height: 144px;
+    min-height: 144px;
+  }
+}
