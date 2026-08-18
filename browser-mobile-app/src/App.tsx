@@ -2927,6 +2927,7 @@ export default function App() {
             referralSummary={null}
             giveawayState={{ guest: false, has_active_giveaway: false }}
             isGiveawayLoading={false}
+            onGiveawayStateChange={() => undefined}
           />
         </AppShell>
       </ContentProvider>
@@ -3122,6 +3123,9 @@ export default function App() {
             referralSummary={safeData.referralSummary}
             giveawayState={safeData.giveawayState}
             isGiveawayLoading={isGiveawayLoading}
+            onGiveawayStateChange={(giveawayState) => {
+              setData((current) => normalizeAppData({ ...current, giveawayState }));
+            }}
           />
         ) : null}
 

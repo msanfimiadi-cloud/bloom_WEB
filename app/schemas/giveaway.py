@@ -68,6 +68,16 @@ class GiveawayWrite(BaseModel):
             raise ValueError(f"Розыгрыш должен проводиться {GIVEAWAY_DRAW_DAY}-го числа месяца")
         if self.starts_at is not None and self.ends_at is not None and self.starts_at >= self.ends_at:
             raise ValueError("Дата начала розыгрыша должна быть раньше даты проведения")
+        if self.telegram_reward_enabled and not (
+            (self.telegram_community_url or "").strip()
+            and (self.telegram_chat_id or "").strip()
+        ):
+            raise ValueError("Для номера за Telegram заполните ссылку на канал и Chat ID")
+        if self.vk_reward_enabled and not (
+            (self.vk_community_url or "").strip()
+            and (self.vk_group_id or "").strip()
+        ):
+            raise ValueError("Для номера за VK заполните ссылку на сообщество и ID группы")
         return self
 
 
