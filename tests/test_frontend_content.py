@@ -2612,3 +2612,14 @@ def test_admin_legacy_content_readonly_notice_and_flag_handling_present() -> Non
     assert "guardLegacyContentWrite" in source
     assert "data-legacy-content-form" in source
     assert "admin-readonly-notice" in styles
+
+
+def test_admin_giveaway_social_settings_have_dedicated_save_action() -> None:
+    source = _frontend_main()
+    styles = FRONTEND_STYLES.read_text(encoding="utf-8")
+
+    assert 'data-admin-giveaway-submit="social"' in source
+    assert "Сохранить настройки подписок" in source
+    assert "Настройки подписок сохранены." in source
+    assert "event.submitter?.dataset?.adminGiveawaySubmit" in source
+    assert ".admin-giveaway-social-actions" in styles

@@ -7858,6 +7858,12 @@ body.client-partner-modal-open {
   margin-top: 16px;
 }
 
+.admin-giveaway-social-actions {
+  display: flex;
+  justify-content: flex-end;
+  margin-top: 16px;
+}
+
 .giveaway-winner-details {
   padding-top: 8px;
   border-top: 1px solid rgba(201, 130, 120, 0.14);
