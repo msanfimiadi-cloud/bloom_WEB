@@ -957,8 +957,8 @@ export default function App() {
 
   const hasPendingBrowserLoginDraft = useCallback(() => (
     pendingBrowserLoginRef.current ||
-    (browserLoginRequired && (Boolean(telegramLoginCode) || Boolean(vkLoginCode) || Boolean(loginReferralCode) || hasStoredBrowserLoginDraft()))
-  ), [browserLoginRequired, telegramLoginCode, vkLoginCode, loginReferralCode]);
+    (browserLoginRequired && hasStoredBrowserLoginDraft())
+  ), [browserLoginRequired]);
 
   const preservePendingBrowserLoginFlow = useCallback((eventName: string) => {
     if (!hasPendingBrowserLoginDraft()) {
@@ -2689,6 +2689,10 @@ export default function App() {
       ? "catalog"
       : page
     : "home";
+
+  useEffect(() => {
+    scrollAppToTop();
+  }, [activePage]);
   const unknownStateDiagnostic = !isKnownPage(page)
     ? createUnknownStateDiagnostic(`Unknown page: ${page}`)
     : page === "partner" && !hasValidSelectedPartner

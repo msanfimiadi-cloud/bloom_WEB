@@ -641,17 +641,17 @@ export function PartnerPage({
             />
           )}
         </div>
+        {images.length > 1 ? (
+          <button className="lightbox__nav lightbox__nav--prev" type="button" onClick={() => shiftGallery(-1)} aria-label="Предыдущее фото">
+            ‹
+          </button>
+        ) : null}
+        {images.length > 1 ? (
+          <button className="lightbox__nav lightbox__nav--next" type="button" onClick={() => shiftGallery(1)} aria-label="Следующее фото">
+            ›
+          </button>
+        ) : null}
       </div>
-      {images.length > 1 ? (
-        <button className="lightbox__nav lightbox__nav--prev" type="button" onClick={() => shiftGallery(-1)} aria-label="Предыдущее фото">
-          ‹
-        </button>
-      ) : null}
-      {images.length > 1 ? (
-        <button className="lightbox__nav lightbox__nav--next" type="button" onClick={() => shiftGallery(1)} aria-label="Следующее фото">
-          ›
-        </button>
-      ) : null}
     </div>
   ) : null;
 

@@ -14,6 +14,8 @@ interface SavingsPageProps {
 
 export function SavingsPage({ savings, emptyTitle, emptyDescription }: SavingsPageProps) {
   const total = savings?.total ?? savings?.amount ?? 0;
+  const rawCurrency = toText(savings?.currency, '₽').trim();
+  const currency = rawCurrency.toUpperCase() === 'RUB' || rawCurrency === 'руб.' || rawCurrency === 'руб' ? '₽' : rawCurrency;
   const items = Array.isArray(savings?.items) ? savings.items : [];
   const defaultEmptyTitle = useContentText('savings.empty.title', 'Ваша экономия появится после первого использования привилегии.');
   const defaultEmptyDescription = useContentText('savings.empty.description', 'Используйте коды привилегий у партнёров — мы аккуратно соберём историю здесь.');
@@ -22,7 +24,7 @@ export function SavingsPage({ savings, emptyTitle, emptyDescription }: SavingsPa
     <section className="page">
       <div className="savings-hero">
         <ContentText as="p" className="eyebrow" textKey="savings.eyebrow" fallback="Экономия" />
-        <h1>{formatMoney(total, toText(savings?.currency, '₽'))}</h1>
+        <h1>{formatMoney(total, currency)}</h1>
         <ContentText as="p" textKey="savings.description" fallback="Здесь появится сумма вашей выгоды после использования привилегий." multiline />
       </div>
 

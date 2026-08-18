@@ -268,8 +268,10 @@ export interface Verification {
   id?: ApiId;
   partner_id?: ApiId;
   partner?: Partner | null;
+  partner_name?: BackendText;
   offer_id?: ApiId;
   offer?: Offer | null;
+  offer_title?: BackendText;
   code?: BackendText;
   display_code?: BackendText;
   token?: BackendText;

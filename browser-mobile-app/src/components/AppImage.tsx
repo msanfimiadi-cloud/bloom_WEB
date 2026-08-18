@@ -1,4 +1,4 @@
-import { useEffect, useState } from "react";
+import { useLayoutEffect, useRef, useState } from "react";
 
 interface AppImageProps {
   src?: string | null;
@@ -23,13 +23,18 @@ export function AppImage({
   fit = "cover",
   onError,
 }: AppImageProps) {
-  const [isLoaded, setIsLoaded] = useState(false);
-  const [hasError, setHasError] = useState(false);
+  const imageRef = useRef<HTMLImageElement | null>(null);
+  const [loadedSrc, setLoadedSrc] = useState("");
+  const [failedSrc, setFailedSrc] = useState("");
   const safeSrc = typeof src === "string" && src.trim() ? src : "";
+  const isLoaded = Boolean(safeSrc) && loadedSrc === safeSrc;
+  const hasError = Boolean(safeSrc) && failedSrc === safeSrc;
 
-  useEffect(() => {
-    setIsLoaded(false);
-    setHasError(false);
+  useLayoutEffect(() => {
+    const image = imageRef.current;
+    if (image?.complete && image.naturalWidth > 0) {
+      setLoadedSrc(safeSrc);
+    }
   }, [safeSrc]);
 
   if (!safeSrc || hasError) {
@@ -45,14 +50,15 @@ export function AppImage({
       <span className="image-shell__skeleton" aria-hidden="true" />
       <span className="image-shell__overlay" aria-hidden="true" />
       <img
+        ref={imageRef}
         className={className}
         src={safeSrc}
         alt={alt}
         loading={loading}
         decoding="async"
-        onLoad={() => setIsLoaded(true)}
+        onLoad={() => setLoadedSrc(safeSrc)}
         onError={() => {
-          setHasError(true);
+          setFailedSrc(safeSrc);
           onError?.();
         }}
       />
