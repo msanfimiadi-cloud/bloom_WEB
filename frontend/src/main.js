@@ -1,6 +1,3 @@
-Warning: truncated output (original token count: 116822)
-Total output lines: 8897
-
 const root = document.querySelector('#root');
 const browserAppUrl = (() => {
   const url = new URL('https://app.bloomclub.ru/');
@@ -3787,7 +3784,922 @@ const renderPartnerQrTab = () => `
     partnerState.qrLinks.map((link) => [
       formatValue(link.slug),
       link.qr_url ? `<a href="${escapeHtml(link.qr_url)}" target="_blank" rel="noreferrer">${escapeHtml(link.qr_url)}</a>` : '—',
-      link.target_url ? `<a href="${escapeHtml(link.target_url)}" target="_blank" rel="noreferrer">${escape…16822 tokens truncated…y_current || '')}" required /></label>
+      link.target_url ? `<a href="${escapeHtml(link.target_url)}" target="_blank" rel="noreferrer">${escapeHtml(link.target_url)}</a>` : '—',
+      formatValue(link.deep_link_payload),
+      renderActiveStatusFeminineBadge(link.is_active),
+    ]),
+    true,
+  ) : renderPartnerEmptyState('Пока нет QR-ссылок.', 'Создайте QR-ссылку, чтобы отслеживать переходы от клиентов.')}
+  <h4 class="table-title">Лиды</h4>
+  ${partnerState.leads.length ? renderTable(
+    ['Код ссылки', 'Лиды / переходы'],
+    partnerState.leads.map((lead) => [formatValue(lead.qr_slug), formatValue(lead.total_clicks)]),
+    true,
+  ) : renderPartnerEmptyState('Пока нет лидов.', 'Когда клиенты перейдут по QR-ссылке, они появятся здесь.')}
+`;
+
+const renderPartnerVerificationAction = (verification) => verification.status === 'active'
+  ? `<button class="admin-inline-action ui-button ui-button--secondary" type="button" data-partner-confirm-verification="${escapeHtml(verification.id)}">Подтвердить привилегию</button>`
+  : '';
+
+const renderPartnerConfirmationCard = (item) => `
+  <article class="partner-confirmation-card" data-partner-confirmation-card>
+    <div class="client-card-topline">
+      ${renderStatusBadge(formatPrivilegeStatus(item.status))}
+      <span>${escapeHtml(formatDate(item.created_at) || 'Новый код')}</span>
+    </div>
+    <h4>${formatValue(item.offer_title || 'Клубная привилегия')}</h4>
+    <p>Партнёр: <strong>${formatValue(item.partner_name)}</strong></p>
+    <div class="privilege-code privilege-code--card" aria-label="Код клиента">${formatValue(item.code)}</div>
+    <dl class="client-card-details">
+      <div><dt>Клиент</dt><dd>${formatValue(item.client_name || 'Клиент клуба')}</dd></div>
+      <div><dt>Истекает</dt><dd>${formatValue(formatDate(item.expires_at))}</dd></div>
+      <div><dt>Подтверждено</dt><dd>${formatValue(formatDate(item.confirmed_at))}</dd></div>
+    </dl>
+    ${renderPartnerVerificationAction(item) ? `<div class="client-card-actions ui-card-actions ui-action-row ui-action-row--stack-mobile">${renderPartnerVerificationAction(item)}</div>` : ''}
+  </article>
+`;
+
+const renderPartnerVerificationsTab = () => `
+  <div class="admin-section-heading"><h4>Подтверждения</h4><p>Подтверждайте активные клиентские коды до окончания срока действия.</p></div>
+  ${partnerState.verifications.length
+    ? `<div class="partner-confirmation-card-grid">${partnerState.verifications.map(renderPartnerConfirmationCard).join('')}</div>`
+    : renderPartnerEmptyState('Пока нет подтверждений.', 'Когда клиент покажет код привилегии, подтверждение появится здесь.')}
+`;
+
+const renderPartnerAnalyticsTab = () => renderAnalyticsSection(partnerState.analytics, {
+  title: 'Аналитика',
+  loading: partnerState.analyticsLoading,
+  error: partnerState.analyticsError,
+});
+
+const renderPartnerActivityTab = () => `
+  <div class="admin-section-heading admin-page-heading">
+    <p class="section-eyebrow section-kicker">Activity feed</p>
+    <h4>Активность</h4>
+    <p>Лента помогает быстро видеть, что происходит с клиентами, QR и привилегиями.</p>
+  </div>
+  ${renderActivityFeed(partnerState.activityItems, { loading: partnerState.activityLoading, error: partnerState.activityError })}
+`;
+
+const requestAdminMe = async () => {
+  const me = await apiFetch('/api/v1/admin/me');
+  adminState.legacyContentWriteEnabled = me?.legacy_content_write_enabled !== false;
+  return me;
+};
+
+const buildAdminPaymentRequestsPath = (status = adminState.paymentRequestsStatusFilter) => {
+  const params = new URLSearchParams();
+  if (status) params.set('status', status);
+  const query = params.toString();
+  return `/api/v1/admin/payment-requests${query ? `?${query}` : ''}`;
+};
+
+const postJson = (path, payload) => apiFetch(path, {
+  method: 'POST',
+  body: JSON.stringify(payload),
+});
+
+const patchJson = (path, payload) => apiFetch(path, {
+  method: 'PATCH',
+  body: JSON.stringify(payload),
+});
+
+const deleteJson = (path) => apiFetch(path, {
+  method: 'DELETE',
+});
+
+const loadAdminPaymentRequests = async (status = adminState.paymentRequestsStatusFilter) => {
+  adminState.paymentRequestsLoading = true;
+  adminState.paymentRequestsError = '';
+  try {
+    const data = await apiFetch(buildAdminPaymentRequestsPath(status));
+    adminState.paymentRequests = Array.isArray(data) ? data : Array.isArray(data?.items) ? data.items : [];
+    if (adminState.selectedPaymentRequest && !adminState.paymentRequests.some((request) => String(getPaymentRequestId(request)) === String(getPaymentRequestId(adminState.selectedPaymentRequest)))) {
+      adminState.selectedPaymentRequest = null;
+    }
+  } catch (error) {
+    adminState.paymentRequests = [];
+    adminState.paymentRequestsError = error.message || 'Не удалось загрузить заявки на оплату.';
+  } finally {
+    adminState.paymentRequestsLoading = false;
+  }
+};
+
+const loadAdminPaymentRequest = (id) => apiFetch(`/api/v1/admin/payment-requests/${id}`);
+
+const approveAdminPaymentRequest = (id, accessDays) => postJson(`/api/v1/admin/payment-requests/${id}/approve`, {
+  access_days: Number(accessDays) || 30,
+});
+
+const rejectAdminPaymentRequest = (id, comment = 'Отклонено администратором') => postJson(`/api/v1/admin/payment-requests/${id}/reject`, { comment });
+
+const loadUsers = async () => {
+  adminState.users = await apiFetch('/api/v1/admin/users');
+};
+
+const loadCities = async () => {
+  adminState.cities = await apiFetch('/api/v1/admin/cities');
+  if (adminState.selectedCityIdForEdit && !adminState.cities.some((city) => String(city.id) === String(adminState.selectedCityIdForEdit))) {
+    adminState.selectedCityIdForEdit = '';
+  }
+};
+
+const loadCategories = async () => {
+  adminState.categories = await apiFetch('/api/v1/admin/categories');
+  if (adminState.selectedCategoryIdForEdit && !adminState.categories.some((category) => String(category.id) === String(adminState.selectedCategoryIdForEdit))) {
+    adminState.selectedCategoryIdForEdit = '';
+  }
+};
+
+const loadPartners = async () => {
+  adminState.partners = await apiFetch('/api/v1/admin/partners');
+};
+
+const loadAdminLandingSettings = async () => {
+  adminState.landingSettings = await apiFetch('/api/v1/admin/landing-settings');
+};
+
+const loadAdminBloomMapSettings = async () => {
+  adminState.bloomMapSettings = await apiFetch('/api/v1/admin/bloom-map-settings');
+};
+
+const loadAdminPartnerPhotos = async (partnerId) => {
+  if (!partnerId) return;
+  adminState.partnerPhotosByPartner[partnerId] = await apiFetch(`/api/v1/admin/partners/${partnerId}/photos`);
+};
+
+const loadAdminPartnerAnalytics = async (partnerId) => {
+  if (!partnerId) return;
+  adminState.partnerAnalyticsLoading = true;
+  adminState.partnerAnalyticsError = '';
+  adminState.selectedPartnerAnalytics = adminState.partnerAnalyticsById[partnerId] || null;
+  try {
+    const analytics = await apiFetch(`/api/v1/admin/partners/${partnerId}/analytics`);
+    adminState.partnerAnalyticsById[partnerId] = analytics;
+    adminState.selectedPartnerAnalytics = analytics;
+  } catch (error) {
+    adminState.partnerAnalyticsError = error.message || 'Не удалось загрузить аналитику партнёра.';
+  } finally {
+    adminState.partnerAnalyticsLoading = false;
+  }
+};
+
+const resetAdminPartnerAnalytics = async (partnerId) => {
+  adminState.partnerAnalyticsResetting = true;
+  adminState.partnerAnalyticsError = '';
+  try {
+    const analytics = await apiFetch(`/api/v1/admin/partners/${partnerId}/analytics/reset`, { method: 'POST' });
+    adminState.partnerAnalyticsById[partnerId] = analytics;
+    adminState.selectedPartnerAnalytics = analytics;
+    return analytics;
+  } finally {
+    adminState.partnerAnalyticsResetting = false;
+  }
+};
+
+const loadLeads = async () => {
+  adminState.leads = await apiFetch('/api/v1/admin/leads/partners');
+};
+
+const loadVerifications = async () => {
+  adminState.verifications = await apiFetch('/api/v1/admin/verifications');
+};
+
+const buildAdminActivityPath = () => {
+  const params = new URLSearchParams();
+  if (adminState.activityEventType) params.set('event_type', adminState.activityEventType);
+  if (adminState.selectedPartnerIdForActivity) params.set('partner_id', adminState.selectedPartnerIdForActivity);
+  params.set('limit', '50');
+  return `/api/v1/admin/activity?${params.toString()}`;
+};
+
+const loadAdminActivity = async () => {
+  adminState.activityLoading = true;
+  adminState.activityError = '';
+  try {
+    const data = await apiFetch(buildAdminActivityPath());
+    adminState.activityItems = Array.isArray(data?.items) ? data.items : [];
+  } catch (error) {
+    if (!getToken()) throw error;
+    adminState.activityError = error.message || 'Не удалось загрузить события.';
+  } finally {
+    adminState.activityLoading = false;
+  }
+};
+
+const loadOffers = async () => {
+  if (!adminState.selectedPartnerIdForOffers) {
+    adminState.offers = [];
+    adminState.selectedOfferIdForEdit = '';
+    return;
+  }
+  adminState.offers = await apiFetch(`/api/v1/admin/partners/${adminState.selectedPartnerIdForOffers}/offers`);
+  if (adminState.selectedOfferIdForEdit && !adminState.offers.some((offer) => String(offer.id) === String(adminState.selectedOfferIdForEdit))) {
+    adminState.selectedOfferIdForEdit = '';
+  }
+};
+
+const loadContentReview = async () => {
+  const data = await apiFetch('/api/v1/admin/content-review');
+  adminState.contentReview = {
+    offers: Array.isArray(data?.offers) ? data.offers : [],
+    photos: Array.isArray(data?.photos) ? data.photos : [],
+  };
+};
+
+const loadQrLinks = async () => {
+  if (!adminState.selectedPartnerIdForQr) {
+    adminState.qrLinks = [];
+    adminState.selectedQrLinkIdForEdit = '';
+    return;
+  }
+  adminState.qrLinks = await apiFetch(`/api/v1/admin/partners/${adminState.selectedPartnerIdForQr}/qr-links`);
+  if (adminState.selectedQrLinkIdForEdit && !adminState.qrLinks.some((link) => String(link.id) === String(adminState.selectedQrLinkIdForEdit))) {
+    adminState.selectedQrLinkIdForEdit = '';
+  }
+};
+
+const legacyContentReadOnlyMessage = 'Редактирование контента перенесено в Telegram Admin Bot. Этот раздел доступен только для просмотра.';
+const isLegacyContentReadOnly = () => adminState.legacyContentWriteEnabled === false;
+const legacyContentDisabledAttr = () => isLegacyContentReadOnly() ? ` disabled title="${escapeHtml(legacyContentReadOnlyMessage)}" aria-disabled="true"` : '';
+const renderLegacyContentNotice = () => isLegacyContentReadOnly() ? `<div class="admin-readonly-notice" role="status"><strong>Read-only режим</strong><span>${escapeHtml(legacyContentReadOnlyMessage)}</span></div>` : '';
+const guardLegacyContentWrite = () => {
+  if (!isLegacyContentReadOnly()) return false;
+  setPanelMessage(legacyContentReadOnlyMessage, 'info');
+  renderAdminLayout();
+  return true;
+};
+
+const ensureAdminDictionaries = async () => {
+  await Promise.all([
+    adminState.users.length ? Promise.resolve() : loadUsers(),
+    adminState.cities.length ? Promise.resolve() : loadCities(),
+    adminState.categories.length ? Promise.resolve() : loadCategories(),
+    adminState.partners.length ? Promise.resolve() : loadPartners(),
+  ]);
+};
+
+const renderAdminLayout = () => {
+  renderDashboardApp('admin');
+  const content = renderAdminTabContent();
+  adminDashboard.innerHTML = `
+    ${adminState.panelMessage}
+    ${['overview', 'cities', 'categories', 'partners', 'offers', 'contentReview'].includes(adminState.activeTab) ? renderLegacyContentNotice() : ''}
+    <section class="admin-tab-panel">${content}</section>
+  `;
+  if (isLegacyContentReadOnly()) {
+    adminDashboard.querySelectorAll('[data-legacy-content-form] input, [data-legacy-content-form] textarea, [data-legacy-content-form] select, [data-legacy-content-form] button[type=\"submit\"]').forEach((el) => { el.disabled = true; });
+  }
+};
+
+const renderAdminTabContent = () => {
+  switch (adminState.activeTab) {
+    case 'users':
+      return renderUsersTab();
+    case 'cities':
+      return renderCitiesTab();
+    case 'categories':
+      return renderCategoriesTab();
+    case 'partners':
+      return renderPartnersTab();
+    case 'offers':
+      return renderOffersTab();
+    case 'contentReview':
+      return renderContentReviewTab();
+    case 'paymentRequests':
+      return renderAdminPaymentRequestsTab();
+    case 'payments':
+      return renderAcquiringPaymentsTab();
+    case 'qr':
+      return renderQrTab();
+    case 'verifications':
+      return renderVerificationsTab();
+    case 'partnerAccess':
+      return renderPartnerAccessTab();
+    case 'activity':
+      return renderAdminActivityTab();
+    case 'giveaways':
+      return renderGiveawaysTab();
+    case 'flower':
+      return renderFlowerAdminTab();
+    case 'bloomMap':
+      return renderBloomMapSettingsTab();
+    default:
+      return renderOverviewTab();
+  }
+};
+
+
+const loadGiveaways = async () => {
+  adminState.giveaways = await apiFetch('/api/v1/admin/giveaways');
+};
+
+const loadAcquiringPayments = async () => {
+  const query = adminState.acquiringPaymentStatusFilter ? `?status=${encodeURIComponent(adminState.acquiringPaymentStatusFilter)}` : '';
+  adminState.acquiringPayments = await apiFetch(`/api/v1/admin/payments${query}`);
+};
+
+const loadSubscriptionPlans = async () => {
+  adminState.subscriptionPlans = await apiFetch('/api/v1/admin/subscription-plans');
+};
+
+const renderAcquiringPaymentsTab = () => {
+  const rows = adminState.acquiringPayments.map((item) => [
+    formatDate(item.created_at),
+    `${escapeHtml(item.client_name || `Клиент #${item.client_profile_id}`)}<br><small>${item.telegram_user_id ? `TG ${escapeHtml(item.telegram_user_id)}` : ''} ${item.vk_user_id ? `VK ${escapeHtml(item.vk_user_id)}` : ''}</small>`,
+    escapeHtml(item.plan_name),
+    `${formatValue(item.amount)} ${escapeHtml(item.currency)}`,
+    `<strong>${escapeHtml(item.status)}</strong><br><small>${escapeHtml(item.provider_status || '—')}</small>`,
+    escapeHtml(item.payment_method || '—'),
+    `<small>${escapeHtml(item.provider_operation_id || '—')}<br>${escapeHtml(item.payment_link_id)}</small>`,
+    item.paid_at ? formatDate(item.paid_at) : '—',
+    item.subscription_id ? `#${formatValue(item.subscription_id)}` : '—',
+    `<button type="button" class="ui-button ui-button--secondary" data-payment-details="${escapeHtml(item.id)}">История</button><button type="button" class="ui-button ui-button--secondary" data-payment-sync="${escapeHtml(item.id)}">Проверить статус</button><form class="admin-form admin-form--inline" data-admin-form="paymentRefund"><input type="hidden" name="payment_id" value="${escapeHtml(item.id)}"><input name="amount" type="number" min="0.01" step="0.01" max="${escapeHtml(Number(item.amount) - Number(item.refunded_amount || 0))}" placeholder="Сумма" required><input name="reason" minlength="3" placeholder="Причина возврата" required><button type="submit" ${['approved','partially_refunded'].includes(item.status) ? '' : 'disabled'}>Вернуть</button></form>`,
+  ]);
+  const planCards = adminState.subscriptionPlans.map((plan) => `
+    <form class="admin-form admin-form--inline ui-card" data-admin-form="subscriptionPlanPrice">
+      <input type="hidden" name="plan_id" value="${escapeHtml(plan.id)}">
+      <div>
+        <p class="section-eyebrow section-kicker">Тариф подписки</p>
+        <h4>${escapeHtml(plan.name)}</h4>
+        <p>${escapeHtml(plan.duration_days)} дней · ${plan.is_active ? 'активен' : 'неактивен'}</p>
+      </div>
+      <label>Цена, ₽
+        <input name="price" type="number" min="0.01" max="1000000" step="0.01" value="${escapeHtml(Number(plan.price).toFixed(2))}" required>
+      </label>
+      <button type="submit">Сохранить цену</button>
+      <p class="form-message" data-form-message="subscriptionPlanPrice">${escapeHtml(adminState.formMessages.subscriptionPlanPrice || '')}</p>
+    </form>
+  `).join('');
+  const planSettingsHtml = `<section class="stack"><div class="admin-section-heading"><div><h4>Стоимость подписки</h4><p>Новая цена применяется только к новым платежам. Уже созданные платежи сохраняют прежнюю сумму.</p></div></div>${planCards || '<p>Тарифы пока не созданы.</p>'}</section>`;
+  const detail = adminState.selectedAcquiringPayment;
+  const detailHtml = detail ? `<section class="ui-card"><div class="admin-section-heading"><h4>История платежа #${escapeHtml(detail.payment.id)}</h4><p>${escapeHtml(detail.payment.public_id)}</p></div>${renderTable(['Источник','Событие','Статус Точки','Обработка','Получено'], (detail.events || []).map((event) => [escapeHtml(event.source), escapeHtml(event.event_type), escapeHtml(event.provider_status || '—'), `${escapeHtml(event.processing_status)}${event.processing_error ? `<br><small>${escapeHtml(event.processing_error)}</small>` : ''}`, formatDate(event.received_at)]), true, '', 'Событий пока нет.')}</section>` : '';
+  return `<div class="stack"><div class="admin-section-heading admin-page-heading"><div><p class="section-eyebrow section-kicker">Точка Банк</p><h3>Платежи</h3><p>Эквайринг, статусы, связанные подписки и возвраты.</p></div><label>Статус<select data-acquiring-payment-status><option value="">Все</option>${['created','pending','authorized','approved','failed','expired','refund_pending','partially_refunded','refunded','cancelled'].map((value) => `<option value="${value}" ${adminState.acquiringPaymentStatusFilter === value ? 'selected' : ''}>${value}</option>`).join('')}</select></label></div>${planSettingsHtml}${renderTable(['Дата','Пользователь','Тариф','Сумма','Статус','Способ','Operation / Link ID','Оплата','Подписка','Действия'], rows, true, '', 'Платежей пока нет.')}${detailHtml}</div>`;
+};
+
+const loadPartnerAccesses = async () => {
+  adminState.partnerAccesses = await apiFetch('/api/v1/admin/partner-accesses');
+};
+
+const loadFlowerTasks = async () => {
+  adminState.flowerTasks = await apiFetch('/api/v1/admin/flower/tasks');
+};
+
+const loadFlowerGarden = async () => {
+  const [settings, specialTasks] = await Promise.all([
+    apiFetch('/api/v1/admin/flower/settings'),
+    apiFetch('/api/v1/admin/flower/special-tasks'),
+  ]);
+  adminState.flowerSettings = settings;
+  adminState.flowerSpecialTasks = specialTasks;
+};
+
+const renderPartnerAccessTab = () => {
+  const rows = filterAdminRows(adminState.partnerAccesses, adminState.search.partnerAccesses, ['display_name', 'partner_name', 'provider', 'provider_user_id', 'username']);
+  const codeResult = adminState.partnerAccessCodeResult;
+  const partnerOptionsAvailable = adminState.partners.length > 0;
+  return `<div class="partner-access-page stack">
+    <div class="admin-section-heading admin-page-heading"><p class="section-eyebrow section-kicker">Доступ партнёров</p><h3>Коды для кабинета партнёра</h3><p>Выберите партнёра, сгенерируйте постоянный код и передайте его сотруднику. Telegram или VK ID для входа в кабинет не нужен.</p></div>
+
+    <form class="admin-form admin-form--inline ui-card" data-admin-form="partnerCode">
+      <h4>Выдать код для входа</h4>
+      <label>Партнёр${renderNativePartnerSelect()}</label>
+      <label>Постоянный код
+        <input name="access_code" type="text" minlength="8" maxlength="64" autocomplete="new-password" placeholder="Нажмите «Сгенерировать код»" required />
+      </label>
+      <div class="admin-form-actions">
+        <button class="ui-button ui-button--secondary" type="button" data-partner-code-generate ${partnerOptionsAvailable ? '' : 'disabled'}>Сгенерировать код</button>
+        <button class="ui-button ui-button--primary" type="submit" ${partnerOptionsAvailable ? '' : 'disabled'}>Сохранить код</button>
+      </div>
+      ${partnerOptionsAvailable ? '' : '<p class="form-message" role="alert">Партнёры не загрузились. Обновите страницу или сначала создайте партнёра.</p>'}
+      <p class="form-message" data-form-message="partnerCode">${escapeHtml(adminState.formMessages.partnerCode || '')}</p>
+    </form>
+
+    ${codeResult ? `<section class="ui-card partner-access-code-result" role="status">
+      <div class="admin-section-heading"><h4>Код готов</h4><p>Партнёр: <strong>${escapeHtml(codeResult.partnerName)}</strong>. Скопируйте код сейчас: после обновления страницы он больше не показывается.</p></div>
+      <div class="admin-form-actions">
+        <input value="${escapeHtml(codeResult.code)}" readonly data-partner-code-output aria-label="Код входа партнёра" />
+        <button class="ui-button ui-button--secondary" type="button" data-partner-code-copy>Скопировать код</button>
+      </div>
+    </section>` : ''}
+
+    <section class="ui-card stack">
+      <div class="admin-section-heading"><p class="section-eyebrow section-kicker">Telegram и VK боты</p><h4>Доступ сотрудников партнёра в ботах</h4><p>Этот блок нужен только сотрудникам, которые подтверждают привилегии через Telegram или VK. Он не создаёт код для входа в ЛК партнёра.</p></div>
+      <form class="admin-form admin-form--inline" data-admin-form="partnerAccess">
+        <label>Партнёр${renderNativePartnerSelect()}</label>
+        <label>Бот<select name="provider" required><option value="vk">VK</option><option value="telegram">Telegram</option></select></label>
+        <label>Постоянный ID<input name="provider_user_id" required placeholder="Например, 123456789" /></label>
+        <label>Имя сотрудника<input name="display_name" required placeholder="Например, Анна · кассир" /></label>
+        <label>Ник, необязательно<input name="username" placeholder="Например, anna_shop" /></label>
+        <button type="submit" ${partnerOptionsAvailable ? '' : 'disabled'}>Добавить доступ</button>
+        <p class="form-message" data-form-message="partnerAccess">${escapeHtml(adminState.formMessages.partnerAccess || '')}</p>
+      </form>
+      <div class="admin-section-heading"><h4>Сотрудники</h4><p>Доступ можно выключить без удаления истории активаций.</p></div>
+      ${renderAdminSearch('partnerAccesses', 'Поиск по сотрудникам и партнёрам')}
+      ${renderTable(['Сотрудник', 'Партнёр', 'Бот', 'Постоянный ID', 'Активаций', 'Последняя активность', 'Доступ'], rows.map((item) => [formatValue(item.display_name), formatValue(item.partner_name), item.provider === 'telegram' ? 'Telegram' : 'VK', formatValue(item.provider_user_id), formatValue(item.activation_count), formatValue(formatDate(item.last_activity_at)), `<button class="admin-inline-action ui-button ${item.is_active ? 'ui-button--danger' : 'ui-button--secondary'}" type="button" data-partner-access-toggle="${escapeHtml(item.id)}" data-next-active="${item.is_active ? 'false' : 'true'}">${item.is_active ? 'Отключить' : 'Включить'}</button>`]), true, '', 'Сотрудники пока не добавлены.')}
+    </section>
+  </div>`;
+};
+
+const bloomPositionLabels = { top_left: 'Сверху слева', top_right: 'Сверху справа', middle_left: 'По центру слева', middle_right: 'По центру справа', bottom_left: 'Снизу слева', bottom_right: 'Снизу справа' };
+
+const renderBloomCalendar = () => {
+  const [year, month] = adminState.flowerCalendarMonth.split('-').map(Number);
+  const first = new Date(Date.UTC(year, month - 1, 1));
+  const days = new Date(Date.UTC(year, month, 0)).getUTCDate();
+  const offset = (first.getUTCDay() + 6) % 7;
+  const cells = Array.from({ length: offset }, () => '<span class="bloom-calendar__day is-empty"></span>');
+  for (let day = 1; day <= days; day += 1) {
+    const iso = `${year}-${String(month).padStart(2, '0')}-${String(day).padStart(2, '0')}`;
+    const tasks = adminState.flowerSpecialTasks.filter((task) => task.starts_on <= iso && task.ends_on >= iso);
+    cells.push(`<span class="bloom-calendar__day"><strong>${day}</strong>${tasks.map((task) => `<small title="${escapeHtml(task.title)}">${escapeHtml(task.title)}</small>`).join('')}</span>`);
+  }
+  return `<div class="bloom-calendar"><div class="bloom-calendar__weekdays">${['Пн','Вт','Ср','Чт','Пт','Сб','Вс'].map((day) => `<b>${day}</b>`).join('')}</div><div class="bloom-calendar__grid">${cells.join('')}</div></div>`;
+};
+
+const bloomChartColors = ['#d46b9c', '#8b74c7', '#72a88b', '#e2a75f', '#6e9fc7', '#cf7a70'];
+const renderBloomAnalytics = () => {
+  const data = adminState.flowerAnalytics;
+  if (!data) return '';
+  const questions = data.questions.map((question) => {
+    let cursor = 0;
+    const stops = question.options.map((option, index) => { const start = cursor; cursor += Number(option.percent || 0); return `${bloomChartColors[index % bloomChartColors.length]} ${start}% ${cursor}%`; });
+    return `<article class="bloom-analytics__question"><h5>${escapeHtml(question.prompt)}</h5><div class="bloom-chart-row"><div class="bloom-pie" style="background:conic-gradient(${stops.length ? stops.join(',') : '#eee 0 100%'})" role="img" aria-label="Распределение ответов"></div><ul>${question.options.map((option, index) => `<li><i style="background:${bloomChartColors[index % bloomChartColors.length]}"></i><span>${escapeHtml(option.label)}</span><strong>${formatValue(option.percent)}% · ${formatValue(option.count)}</strong></li>`).join('')}</ul></div></article>`;
+  }).join('');
+  const rows = data.submissions.map((item) => [
+    `#${formatValue(item.client_id)}`,
+    [item.full_name, item.email, item.phone, item.telegram_username ? `TG: @${item.telegram_username}` : '', item.vk_username ? `VK: ${item.vk_username}` : ''].filter(Boolean).map(escapeHtml).join('<br>') || '—',
+    formatDate(item.completed_at),
+    item.answers.map(escapeHtml).join('<br>'),
+  ]);
+  return `<section class="ui-card bloom-analytics"><div class="admin-section-heading"><h4>Ответы: ${escapeHtml(data.title)}</h4><p>Заполнили: ${formatValue(data.submissions_count)}</p></div>${questions}${renderTable(['ID', 'Участница и контакты', 'Дата', 'Ответы'], rows, true, '', 'Ответов пока нет.')}</section>`;
+};
+
+const renderFlowerAdminTab = () => {
+  const settings = adminState.flowerSettings || {};
+  const clientUsers = adminState.users.filter((item) => item.role === 'client');
+  const clientOptions = clientUsers.map((item) => {
+    const contact = item.phone || item.contact_email || item.email || '';
+    const label = [item.display_name || item.full_name || `Пользователь #${item.id}`, contact, `ID ${item.id}`].filter(Boolean).join(' · ');
+    return `<option value="${escapeHtml(item.id)}">${escapeHtml(label)}</option>`;
+  }).join('');
+  const taskCards = adminState.flowerSpecialTasks.map((task) => `<article class="ui-card bloom-survey-card">
+    <div class="admin-section-heading"><div><h4>${escapeHtml(task.title)}</h4><p>${formatDate(task.starts_on)} — ${formatDate(task.ends_on)} · +${formatValue(task.petals)} лепестков · ответов: ${formatValue(task.submissions_count)}</p></div><div class="admin-inline-actions"><button class="admin-inline-action ui-button ${task.is_active ? 'ui-button--danger' : 'ui-button--secondary'}" type="button" data-special-task-toggle="${escapeHtml(task.id)}" data-next-active="${task.is_active ? 'false' : 'true'}">${task.is_active ? 'Остановить' : 'Запустить'}</button><button class="admin-inline-action ui-button ui-button--danger admin-inline-action--danger" type="button" data-special-task-delete="${escapeHtml(task.id)}" data-task-title="${escapeHtml(task.title)}" data-submissions-count="${escapeHtml(task.submissions_count)}">Удалить</button></div></div>
+    ${task.description ? `<p>${escapeHtml(task.description)}</p>` : ''}
+    <ol class="bloom-question-list">${task.questions.map((question) => `<li><strong>${escapeHtml(question.prompt)}</strong><small>${question.options.map((option) => escapeHtml(option.label)).join(' · ')}</small></li>`).join('') || '<li>Добавьте первый вопрос.</li>'}</ol>
+    <form class="admin-form admin-form--inline bloom-question-form" data-admin-form="flowerSpecialQuestion"><input type="hidden" name="task_id" value="${escapeHtml(task.id)}"><label>Новый вопрос<input name="prompt" required placeholder="Текст вопроса"></label><label>Варианты ответа<textarea name="options" rows="3" required placeholder="Каждый вариант с новой строки"></textarea></label><button type="submit">Добавить вопрос</button></form>
+    <button type="button" class="ui-button ui-button--secondary" data-special-task-analytics="${escapeHtml(task.id)}">Показать ответы и графики</button>
+  </article>`).join('');
+  return `<div class="flower-admin-page stack">
+    <div class="admin-section-heading admin-page-heading"><p class="section-eyebrow section-kicker">Ежедневная и недельная активность</p><h3>Сад Bloom</h3><p>Здесь настраивается игровой лепесток и специальные опросники. Эти настройки, календарь и ответы видны только администраторам.</p></div>
+    <form class="admin-form admin-form--inline ui-card" data-admin-form="flowerPetalAward"><h4>Начислить лепестки участнице</h4><p class="helper-text">Ручное начисление сразу попадёт в цветок и рейтинг текущего месяца. Операция сохранится в истории вместе с причиной.</p><label>Участница<select name="user_id" required><option value="">Выберите участницу</option>${clientOptions}</select></label><label>Количество<input name="petals" type="number" min="1" max="1000" value="1" required></label><label>Причина<textarea name="note" rows="2" minlength="2" maxlength="1000" required placeholder="Например, победа в активности клуба"></textarea></label><button type="submit" ${clientUsers.length ? '' : 'disabled'}>Начислить</button><p class="form-message" data-form-message="flowerPetalAward">${escapeHtml(adminState.formMessages.flowerPetalAward || '')}</p></form>
+    <form class="admin-form admin-form--inline ui-card" data-admin-form="flowerPetalRevoke"><h4>Забрать лепестки у участницы</h4><p class="helper-text">Списание уменьшит цветок и рейтинг текущего месяца. Баланс не может стать отрицательным, причина сохранится в истории.</p><label>Участница<select name="user_id" required><option value="">Выберите участницу</option>${clientOptions}</select></label><label>Количество<input name="petals" type="number" min="1" max="1000" value="1" required></label><label>Причина<textarea name="note" rows="2" minlength="2" maxlength="1000" required placeholder="Например, ошибочное начисление"></textarea></label><button class="ui-button ui-button--danger" type="submit" ${clientUsers.length ? '' : 'disabled'}>Забрать</button><p class="form-message" data-form-message="flowerPetalRevoke">${escapeHtml(adminState.formMessages.flowerPetalRevoke || '')}</p></form>
+    <form class="admin-form admin-form--inline ui-card" data-admin-form="flowerGardenSettings"><h4>Задание дня — найти лепесток</h4><p class="helper-text">Участница находит лепесток в карточке сада и нажимает на него один раз в день.</p><label>Размещение<select name="placement_mode"><option value="random" ${settings.placement_mode === 'random' ? 'selected' : ''}>Случайное каждый день</option><option value="manual" ${settings.placement_mode === 'manual' ? 'selected' : ''}>Выбранное администратором</option></select></label><label>Место<select name="manual_position">${Object.entries(bloomPositionLabels).map(([value,label]) => `<option value="${value}" ${settings.manual_position === value ? 'selected' : ''}>${label}</option>`).join('')}</select></label><label>Лепестков за находку<input name="daily_petals" type="number" min="1" max="20" value="${escapeHtml(settings.daily_petals || 1)}"></label><button type="submit">Сохранить</button></form>
+    <form class="admin-form admin-form--inline ui-card" data-admin-form="flowerSpecialTask"><h4>Новое специальное задание клуба</h4><label>Название<input name="title" required placeholder="Опрос недели"></label><label>Описание<textarea name="description" rows="2"></textarea></label><label>Лепестки<input name="petals" type="number" min="1" max="100" value="5" required></label><label>Начало недели<input name="starts_on" type="date" required></label><label>Окончание<input name="ends_on" type="date" required></label><button type="submit">Создать опросник</button></form>
+    <section class="ui-card"><div class="admin-section-heading"><div><h4>Календарь опросников</h4><p>По дням видно, в какую неделю действовал каждый опросник.</p></div><label>Месяц<input type="month" value="${escapeHtml(adminState.flowerCalendarMonth)}" data-bloom-calendar-month></label></div>${renderBloomCalendar()}</section>
+    <section class="stack"><div class="admin-section-heading"><h4>Специальные задания</h4><p>Кнопка появляется у участниц только в указанный период и после добавления вопросов.</p></div>${taskCards || '<div class="ui-card"><p>Опросников пока нет.</p></div>'}</section>
+    ${renderBloomAnalytics()}
+    <form class="admin-form admin-form--inline ui-card" data-admin-form="flowerSettle"><h4>Подвести итоги месяца</h4><p class="helper-text">При равном количестве лепестков участницы делят место; на границе топ-10 проводится фиксируемая системная жеребьёвка.</p><label>Месяц<input name="month" type="month" required /></label><label>Розыгрыш<select name="giveaway_id" required><option value="">Выберите розыгрыш</option>${adminState.giveaways.map((item) => `<option value="${escapeHtml(item.id)}">${escapeHtml(getGiveawayTitle(item))}</option>`).join('')}</select></label><button type="submit">Начислить номерки топ-10</button><p class="form-message" data-form-message="flowerSettle">${escapeHtml(adminState.formMessages.flowerSettle || '')}</p></form>
+  </div>`;
+};
+
+const getGiveawayTitle = (giveaway = {}) => giveaway.title || `Розыгрыш #${giveaway.id}`;
+
+const giveawayDateTimeParts = (value = new Date()) => Object.fromEntries(
+  new Intl.DateTimeFormat('en-CA', {
+    timeZone: 'Asia/Novosibirsk',
+    year: 'numeric', month: '2-digit', day: '2-digit', hour: '2-digit', minute: '2-digit',
+    hourCycle: 'h23',
+  }).formatToParts(value).filter((part) => part.type !== 'literal').map((part) => [part.type, part.value]),
+);
+
+const formatGiveawayDateTimeInput = (value) => {
+  if (!value) return '';
+  const date = new Date(value);
+  if (Number.isNaN(date.getTime())) return '';
+  const parts = giveawayDateTimeParts(date);
+  return `${parts.year}-${parts.month}-${parts.day}T${parts.hour}:${parts.minute}`;
+};
+
+const nextGiveawayDrawInput = () => {
+  const parts = giveawayDateTimeParts();
+  let year = Number(parts.year);
+  let month = Number(parts.month);
+  if (Number(parts.day) >= 16) {
+    month += 1;
+    if (month > 12) { month = 1; year += 1; }
+  }
+  return `${year}-${String(month).padStart(2, '0')}-16T12:00`;
+};
+
+const novosibirskDateTimeToIso = (value) => {
+  if (!value) return null;
+  const withSeconds = String(value).length === 16 ? `${value}:00` : String(value);
+  return new Date(`${withSeconds}+07:00`).toISOString();
+};
+
+const resolveGiveawayForEntries = () => {
+  const giveaways = Array.isArray(adminState.giveaways) ? adminState.giveaways : [];
+  const editing = giveaways.find((item) => String(item.id) === String(adminState.selectedGiveawayIdForEdit));
+  if (editing) return { giveaway: editing, source: 'editing' };
+
+  const manual = giveaways.find((item) => String(item.id) === String(adminState.selectedGiveawayIdForEntriesManual));
+  if (manual) return { giveaway: manual, source: 'manual' };
+
+  const active = giveaways.find((item) => item.is_active);
+  if (active) return { giveaway: active, source: 'active' };
+
+  if (giveaways.length === 1) return { giveaway: giveaways[0], source: 'single' };
+
+  return { giveaway: null, source: 'manual' };
+};
+
+const logSelectedGiveawayForEntries = ({ giveaway, source }) => {
+  console.info('[BLOOM_ADMIN_GIVEAWAY_ENTRIES] selected giveaway', {
+    source,
+    giveawayId: giveaway?.id || null,
+  });
+};
+
+const syncGiveawayEntriesSelection = async ({ force = false } = {}) => {
+  const selection = resolveGiveawayForEntries();
+  const selectedId = selection.giveaway?.id ? String(selection.giveaway.id) : '';
+  const previousId = String(adminState.selectedGiveawayIdForEntries || '');
+  adminState.selectedGiveawayIdForEntries = selectedId;
+  logSelectedGiveawayForEntries(selection);
+
+  if (!selectedId) {
+    adminState.giveawayEntries = null;
+    adminState.giveawayEntriesLoading = false;
+    return null;
+  }
+
+  if (!force && adminState.giveawayEntries && previousId === selectedId) {
+    return adminState.giveawayEntries;
+  }
+
+  adminState.giveawayEntries = null;
+  adminState.giveawayRecheckResult = null;
+  return loadGiveawayEntries(selectedId);
+};
+
+const getGiveawayExportFilename = (giveawayId, response) => {
+  const disposition = response.headers.get('Content-Disposition') || '';
+  const utf8Match = disposition.match(/filename\*=UTF-8''([^;]+)/i);
+  const plainMatch = disposition.match(/filename=\"?([^\";]+)\"?/i);
+  const rawFilename = utf8Match?.[1] || plainMatch?.[1] || `giveaway-${giveawayId}-entries.xlsx`;
+
+  try {
+    return decodeURIComponent(rawFilename).replace(/[\\/]/g, '-');
+  } catch (error) {
+    return rawFilename.replace(/[\\/]/g, '-');
+  }
+};
+
+const downloadBlob = (blob, filename) => {
+  const blobUrl = URL.createObjectURL(blob);
+  const link = document.createElement('a');
+  link.href = blobUrl;
+  link.download = filename;
+  link.style.display = 'none';
+  document.body.appendChild(link);
+  link.click();
+  link.remove();
+  setTimeout(() => URL.revokeObjectURL(blobUrl), 0);
+};
+
+const downloadGiveawayEntriesExcel = async (giveawayId) => {
+  if (!giveawayId) return;
+  const response = await apiFetchResponse(`/api/v1/admin/giveaways/${encodeURIComponent(giveawayId)}/entries/export.xlsx`, {
+    headers: {
+      Accept: 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet',
+    },
+    timeoutMs: 60000,
+  });
+  const blob = await response.blob();
+  downloadBlob(blob, getGiveawayExportFilename(giveawayId, response));
+};
+
+const loadGiveawayEntries = async (giveawayId) => {
+  if (!giveawayId) {
+    adminState.giveawayEntries = null;
+    adminState.giveawayEntriesLoading = false;
+    return null;
+  }
+  const endpoint = `/api/v1/admin/giveaways/${giveawayId}/entries`;
+  console.info('[BLOOM_ADMIN_GIVEAWAY_ENTRIES] request', { giveawayId, endpoint });
+  adminState.giveawayEntriesLoading = true;
+  let responseStatus = 'error';
+  try {
+    const headers = new Headers();
+    const token = getToken();
+    if (token) {
+      headers.set('Authorization', `Bearer ${token}`);
+    }
+    const response = await fetch(endpoint, { cache: 'no-store', headers });
+    responseStatus = response.status;
+    if (response.status === 401 || response.status === 403) {
+      clearToken();
+      showLoginForm();
+      throw new Error('Сессия истекла. Войдите снова.');
+    }
+    if (!response.ok) {
+      throw new Error(await buildErrorMessage(response));
+    }
+    const data = response.status === 204 ? null : await response.json();
+    const rowsCount = Array.isArray(data?.items) ? data.items.length : 0;
+    const summary = data?.summary || {};
+    console.info('[BLOOM_ADMIN_GIVEAWAY_ENTRIES] response', {
+      status: responseStatus,
+      rowsCount,
+      total: summary.total_numbers || 0,
+      active: summary.active_numbers || 0,
+      uniqueParticipants: summary.unique_participants || 0,
+    });
+    adminState.giveawayEntries = data;
+    return data;
+  } catch (error) {
+    console.info('[BLOOM_ADMIN_GIVEAWAY_ENTRIES] response', {
+      status: responseStatus,
+      rowsCount: 0,
+      total: 0,
+      active: 0,
+      uniqueParticipants: 0,
+    });
+    throw error;
+  } finally {
+    adminState.giveawayEntriesLoading = false;
+  }
+};
+
+const renderGiveawayPlaceRows = (giveaway = {}) => {
+  const count = Number(giveaway.winners_count || 1);
+  const prizes = Array.isArray(giveaway.prizes) ? giveaway.prizes : [];
+  return Array.from({ length: Math.max(0, count) }, (_, index) => {
+    const place = prizes[index] || { place_number: index + 1 };
+    return `<fieldset class="giveaway-prize-row" data-admin-giveaway-place-row>
+      <legend>${index + 1}-е место</legend>
+      <input name="place_number" type="hidden" value="${escapeHtml(place.place_number || index + 1)}" />
+      <label>Приз<input name="prize_title" value="${escapeHtml(place.prize_title || '')}" /></label>
+      <details class="giveaway-winner-details" ${place.winner_provider || place.winner_provider_user_id || place.winning_number ? 'open' : ''}>
+        <summary>Заполнить победителя после розыгрыша</summary>
+        <div class="admin-form-grid">
+          <label>Платформа<select name="winner_provider"><option value="">Не выбран</option><option value="telegram" ${place.winner_provider === 'telegram' ? 'selected' : ''}>Telegram</option><option value="vk" ${place.winner_provider === 'vk' ? 'selected' : ''}>VK</option></select></label>
+          <label>ID победителя<input name="winner_provider_user_id" value="${escapeHtml(place.winner_provider_user_id || '')}" /></label>
+          <label>Победный номер<input name="winning_number" value="${escapeHtml(place.winning_number || '')}" /></label>
+        </div>
+      </details>
+    </fieldset>`;
+  }).join('');
+};
+
+const renderGiveawayForm = (giveaway = {}) => {
+  const startsAt = formatGiveawayDateTimeInput(giveaway.starts_at) || formatGiveawayDateTimeInput(new Date());
+  const drawsAt = formatGiveawayDateTimeInput(giveaway.ends_at) || nextGiveawayDrawInput();
+  return `<form class="admin-form admin-giveaway-form" data-admin-giveaway-form data-giveaway-id="${escapeHtml(giveaway.id || '')}">
+  <section class="admin-form-section"><div class="admin-form-section-heading"><span>1</span><div><h4>Основное</h4><p>Название, описание и период проведения.</p></div></div>
+    <label>Название<input name="title" value="${escapeHtml(giveaway.title || '')}" placeholder="Например, Тест2" required /></label>
+    <label>Описание<textarea name="description" rows="3">${escapeHtml(giveaway.description || '')}</textarea></label>
+    <div class="admin-form-grid"><label>Начало участия<input name="starts_at" type="datetime-local" value="${escapeHtml(startsAt)}" required /></label><label>Дата розыгрыша — 16-е число<input name="ends_at" type="datetime-local" value="${escapeHtml(drawsAt)}" required /><small>Розыгрыши проводятся 16-го числа каждого месяца по новосибирскому времени.</small></label><label>Количество победителей<input name="winners_count" type="number" min="0" max="100" value="${escapeHtml(giveaway.winners_count || 1)}" data-admin-giveaway-winners-count /></label></div>
+  </section>
+  <section class="admin-form-section"><div class="admin-form-section-heading"><span>2</span><div><h4>Призы</h4><p>Количество строк меняется вместе с количеством победителей.</p></div></div><div data-admin-giveaway-place-list>${renderGiveawayPlaceRows(giveaway)}</div></section>
+  <details class="admin-form-section admin-giveaway-social" ${giveaway.telegram_reward_enabled || giveaway.vk_reward_enabled ? 'open' : ''}><summary>Дополнительные номера за подписки</summary><p class="helper-text">Откройте этот блок, только если хотите начислять номера за Telegram или VK.</p>
+    <div class="admin-giveaway-social-grid"><fieldset><legend>Telegram</legend><label>Ссылка на канал<input name="telegram_community_url" value="${escapeHtml(giveaway.telegram_community_url || '')}" /></label><label>Chat ID<input name="telegram_chat_id" value="${escapeHtml(giveaway.telegram_chat_id || '')}" /></label><label class="checkbox-row"><input name="telegram_reward_enabled" type="checkbox" ${giveaway.telegram_reward_enabled ? 'checked' : ''} /> Начислять номер</label><input name="telegram_reward_numbers" type="hidden" value="1" /></fieldset><fieldset><legend>ВКонтакте</legend><label>Ссылка на сообщество<input name="vk_community_url" value="${escapeHtml(giveaway.vk_community_url || '')}" /></label><label>ID группы<input name="vk_group_id" value="${escapeHtml(giveaway.vk_group_id || '')}" /></label><label class="checkbox-row"><input name="vk_reward_enabled" type="checkbox" ${giveaway.vk_reward_enabled ? 'checked' : ''} /> Начислять номер</label><input name="vk_reward_numbers" type="hidden" value="1" /></fieldset></div>
+  </details>
+  <section class="admin-form-section admin-form-section--publish"><div class="admin-form-section-heading"><span>3</span><div><h4>Публикация</h4><p>Новый розыгрыш сохраняется неактивным, пока вы его не включите.</p></div></div><label class="checkbox-row"><input name="is_active" type="checkbox" ${giveaway.is_active ? 'checked' : ''} /> Показывать розыгрыш участницам</label></section>
+  <div class="admin-form-actions"><button class="ui-button ui-button--primary" type="submit" ${adminState.giveawaySaving ? 'disabled' : ''}>${adminState.giveawaySaving ? 'Сохранение…' : 'Сохранить розыгрыш'}</button>${giveaway.id ? '<button class="ui-button ui-button--ghost" type="button" data-admin-giveaway-create>Отмена</button>' : ''}</div>
+  <p class="form-message" data-form-message="giveaway">${escapeHtml(adminState.formMessages.giveaway || '')}</p>
+</form>`;
+};
+
+const renderGiveawayEntriesSelector = (selected) => {
+  const giveaways = Array.isArray(adminState.giveaways) ? adminState.giveaways : [];
+  if (giveaways.length < 2) return '';
+  return `<label class="field admin-giveaway-entries-picker"><span>Розыгрыш для участников</span><select data-admin-giveaway-entries-select>${giveaways.map((giveaway) => `<option value="${escapeHtml(giveaway.id)}" ${String(giveaway.id) === String(selected?.id) ? 'selected' : ''}>${escapeHtml(getGiveawayTitle(giveaway))}${giveaway.is_active ? ' — активный' : ''}</option>`).join('')}</select></label>`;
+};
+
+
+const giveawayEntryStatusMeta = {
+  active: { label: '● Активен', tone: 'success' },
+  inactive: { label: '● Неактивен', tone: 'muted' },
+  revoked: { label: '● Отозван', tone: 'danger' },
+  verification_error: { label: '● Ошибка проверки', tone: 'warning' },
+};
+
+const renderGiveawayEntryStatusBadge = (status) => {
+  const normalized = String(status || '').trim().toLowerCase();
+  const meta = giveawayEntryStatusMeta[normalized] || { label: status || '—', tone: 'info' };
+  if (!status) return '—';
+  return `<span class="status-badge ui-badge ui-badge--${escapeHtml(meta.tone)} status-badge--${escapeHtml(meta.tone)}">${escapeHtml(meta.label)}</span>`;
+};
+
+const giveawayEntrySourceMeta = {
+  subscription: { label: '🟣 Bloom', tone: 'bloom' },
+  referral: { label: '🟢 Реферал', tone: 'referral' },
+  telegram_subscription: { label: '🔵 Telegram', tone: 'telegram' },
+  vk_subscription: { label: '🔷 VK', tone: 'vk' },
+  manual: { label: '🟡 Ручной', tone: 'manual' },
+};
+
+const renderGiveawayEntrySourceBadge = (source, fullLabel) => {
+  const normalized = String(source || '').trim().toLowerCase();
+  const meta = giveawayEntrySourceMeta[normalized] || { label: fullLabel || source || '—', tone: 'unknown' };
+  if (!source && !fullLabel) return '—';
+  const title = fullLabel || source || meta.label;
+  return `<span class="giveaway-source-badge giveaway-source-badge--${escapeHtml(meta.tone)}" title="${escapeHtml(title)}">${escapeHtml(meta.label)}</span>`;
+};
+
+const renderGiveawayEntriesSection = (selected) => {
+  const hasGiveaways = Array.isArray(adminState.giveaways) && adminState.giveaways.length > 0;
+  if (!hasGiveaways) return `<section class="ui-card giveaway-participants-section"><div class="admin-section-heading"><h4>Участники и номера</h4><p>Сначала создайте и сохраните розыгрыш.</p></div></section>`;
+  if (!selected) return `<section class="ui-card giveaway-participants-section"><div class="admin-section-heading"><h4>Участники и номера</h4><p>Выберите розыгрыш, чтобы открыть список участников.</p></div>${renderGiveawayEntriesSelector(selected)}</section>`;
+  const data = adminState.giveawayEntries;
+  const rows = Array.isArray(data?.items) ? data.items : [];
+  const summary = data?.summary || {};
+  return `<section class="ui-card giveaway-participants-section"><div class="admin-section-heading"><h4>Участники и номера — ${escapeHtml(getGiveawayTitle(selected))}</h4><p>Каждый номер показан отдельной строкой. Excel выгружает весь выбранный розыгрыш.</p></div>
+    ${renderGiveawayEntriesSelector(selected)}
+    <div class="admin-toolbar"><button class="ui-button ui-button--secondary" type="button" data-admin-giveaway-export="${escapeHtml(selected.id)}">Выгрузить в Excel (весь розыгрыш)</button><button class="ui-button ui-button--primary" type="button" data-admin-giveaway-participant-subscriptions-recheck="${escapeHtml(selected.id)}">Проверить подписки участников</button><button class="ui-button" type="button" data-admin-giveaway-recheck="${escapeHtml(selected.id)}">Проверить Telegram/VK</button></div>
+    ${adminState.giveawayParticipantSubscriptionResult ? `<p class="form-message">Подписки Bloom проверены: ${escapeHtml(adminState.giveawayParticipantSubscriptionResult.checked || 0)} участников, активных: ${escapeHtml(adminState.giveawayParticipantSubscriptionResult.active || 0)}, без активной подписки: ${escapeHtml(adminState.giveawayParticipantSubscriptionResult.inactive || 0)}, оплаченных: ${escapeHtml(adminState.giveawayParticipantSubscriptionResult.paid || 0)}, тестовых: ${escapeHtml(adminState.giveawayParticipantSubscriptionResult.trial || 0)}. Теперь можно выгружать Excel.</p>` : ''}
+    ${adminState.giveawayRecheckResult ? `<p class="form-message">Telegram/VK проверены: ${escapeHtml(adminState.giveawayRecheckResult.checked || 0)}, активных: ${escapeHtml(adminState.giveawayRecheckResult.active || 0)}, деактивировано: ${escapeHtml(adminState.giveawayRecheckResult.deactivated || 0)}, повторно активировано: ${escapeHtml(adminState.giveawayRecheckResult.reactivated || 0)}, ошибок: ${escapeHtml(adminState.giveawayRecheckResult.errors || 0)}</p>` : ''}
+    <div class="giveaway-entry-stats"><article><span>Всего номеров</span><strong>${escapeHtml(summary.total_numbers || 0)}</strong></article><article><span>Активных</span><strong>${escapeHtml(summary.active_numbers || 0)}</strong></article><article><span>Участников</span><strong>${escapeHtml(summary.unique_participants || 0)}</strong></article><article><span>Bloom</span><strong>${escapeHtml(summary.subscription_numbers || 0)}</strong></article><article><span>Рефералы</span><strong>${escapeHtml(summary.referral_numbers || 0)}</strong></article><article><span>Telegram</span><strong>${escapeHtml(summary.telegram_numbers || 0)}</strong></article><article><span>VK</span><strong>${escapeHtml(summary.vk_numbers || 0)}</strong></article></div>
+    ${renderTable(['Номер','Статус номера','Источник','ФИО','Client ID','Telegram ID','Telegram username','VK ID','Телефон','Email','Подписка Bloom','Тип подписки','Активна до','Дата начисления','Причина неактивности'], rows.map((i) => [formatValue(i.number), renderGiveawayEntryStatusBadge(i.status), renderGiveawayEntrySourceBadge(i.source, i.source_label), formatValue(i.owner_name), formatValue(i.client_id), formatValue(i.telegram_id), formatValue(i.telegram_username), formatValue(i.vk_id), formatValue(i.phone), formatValue(i.email), renderActiveStatusBadge(Boolean(i.subscription_is_active)), formatValue(i.subscription_type_label), formatValue(formatDateTime(i.subscription_active_until)), formatValue(formatDateTime(i.created_at)), formatValue(i.deactivation_reason)]), true, 'admin-table--compact admin-table--giveaway-entries', adminState.giveawayEntriesLoading ? 'Загрузка…' : 'В этом розыгрыше пока нет номеров')}
+  </section>`;
+};
+
+const renderGiveawaysTab = () => {
+  const selected = adminState.giveaways.find((item) => String(item.id) === String(adminState.selectedGiveawayIdForEdit));
+  const entriesSelection = resolveGiveawayForEntries();
+  return `<div class="giveaways-page"><div class="admin-section-heading admin-page-heading admin-page-heading--actions"><div><p class="section-eyebrow section-kicker">Розыгрыши</p><h3>Розыгрыши клуба</h3><p>Создание розыгрыша, призы, участники и выгрузка результатов — в одном разделе.</p></div><button class="ui-button ui-button--primary" type="button" data-admin-giveaway-create>Новый розыгрыш</button></div>
+  <section class="ui-card giveaway-section"><h4>${selected ? `Редактирование: ${escapeHtml(getGiveawayTitle(selected))}` : 'Новый розыгрыш'}</h4>${renderGiveawayForm(selected || {})}</section>
+  <section class="ui-card giveaway-section"><h4>Все розыгрыши</h4>${renderTable(
+    ['ID', 'Название', 'Дата розыгрыша', 'Статус', 'Победителей', 'Действия'],
+    adminState.giveaways.map((g) => [
+      formatValue(g.id),
+      formatValue(g.title),
+      formatValue(formatDateTime(g.ends_at)),
+      renderActiveStatusBadge(g.is_active),
+      formatValue(g.winners_count),
+      renderAdminTableActions(`<button class="admin-inline-action ui-button ui-button--secondary admin-table-action" type="button" data-admin-giveaway-edit="${escapeHtml(g.id)}">Редактировать</button><button class="admin-inline-action ui-button ui-button--danger admin-inline-action--danger admin-table-action" type="button" data-admin-giveaway-delete="${escapeHtml(g.id)}">Удалить</button>`),
+    ]),
+    true,
+    'admin-table--compact',
+    'Розыгрышей пока нет.',
+  )}</section>${renderGiveawayEntriesSection(entriesSelection.giveaway)}</div>`;
+};
+
+const buildGiveawayPayload = (form) => {
+  const fd = new FormData(form);
+  return {
+    title: String(fd.get('title') || '').trim(),
+    description: String(fd.get('description') || '').trim(),
+    is_active: fd.get('is_active') === 'on',
+    starts_at: novosibirskDateTimeToIso(fd.get('starts_at')),
+    ends_at: novosibirskDateTimeToIso(fd.get('ends_at')),
+    winners_count: Number(fd.get('winners_count') || 0),
+    telegram_community_url: String(fd.get('telegram_community_url') || '').trim() || null,
+    telegram_chat_id: String(fd.get('telegram_chat_id') || '').trim() || null,
+    telegram_reward_enabled: fd.get('telegram_reward_enabled') === 'on',
+    telegram_reward_numbers: Number(fd.get('telegram_reward_numbers') || 1),
+    vk_community_url: String(fd.get('vk_community_url') || '').trim() || null,
+    vk_group_id: String(fd.get('vk_group_id') || '').trim() || null,
+    vk_reward_enabled: fd.get('vk_reward_enabled') === 'on',
+    vk_reward_numbers: Number(fd.get('vk_reward_numbers') || 1),
+    prizes: Array.from(form.querySelectorAll('[data-admin-giveaway-place-row]')).map((row, index) => ({
+      place_number: index + 1,
+      prize_title: String(row.querySelector('[name="prize_title"]')?.value || '').trim(),
+      winner_provider: String(row.querySelector('[name="winner_provider"]')?.value || '').trim() || null,
+      winner_provider_user_id: String(row.querySelector('[name="winner_provider_user_id"]')?.value || '').trim() || null,
+      winning_number: String(row.querySelector('[name="winning_number"]')?.value || '').trim() || null,
+    })),
+  };
+};
+
+const renderAdminActivityTab = () => `
+  <div class="admin-section-heading admin-page-heading">
+    <p class="section-eyebrow section-kicker">Activity feed</p>
+    <h4>Активность</h4>
+    <p>Общая лента событий по привилегиям, QR, партнёрам и предложениям.</p>
+  </div>
+  <form class="activity-filter" data-admin-activity-filter>
+    <label>Тип события
+      ${renderCustomSelect({
+        id: 'admin-activity-event-type',
+        name: 'event_type',
+        value: adminState.activityEventType,
+        options: activityEventFilters,
+        placeholder: 'Все события',
+        label: 'Тип события',
+        data: { adminActivityEventType: true },
+        ariaLabel: 'Тип события',
+      })}
+    </label>
+  </form>
+  ${renderActivityFeed(adminState.activityItems, { loading: adminState.activityLoading, error: adminState.activityError })}
+`;
+
+
+const getAdminLandingSettings = () => ({
+  members_count_base: 20,
+  partners_count_display: 0,
+  partners_count_base: 0,
+  partners_count: 0,
+  partners_count_real: 0,
+  savings_total: 8200,
+  savings_total_base: 8200,
+  savings_total_display: 8200,
+  savings_total_real: 0,
+  giveaway_title: 'Розыгрыш месяца',
+  giveaway_current: 'Приз месяца',
+  giveaway_subtitle: 'доступно участницам клуба',
+  giveaway_empty_text: 'Информация о призах появится после настройки розыгрыша.',
+  giveaway_items: [{ title: 'Приз месяца', description: '', is_active: true, sort_order: 0 }],
+  ...(adminState.landingSettings || {}),
+});
+
+const renderAdminGiveawayItems = (items = []) => {
+  const list = Array.isArray(items) && items.length ? items : [{ title: '', description: '', is_active: true, sort_order: 0 }];
+  return list.map((item, index) => `
+    <article class="giveaway-prize-row" data-giveaway-prize-row>
+      <label>Приз<input name="giveaway_item_title" value="${escapeHtml(item.title || '')}" placeholder="Название приза" /></label>
+      <label>Описание<input name="giveaway_item_description" value="${escapeHtml(item.description || '')}" placeholder="Короткое описание" /></label>
+      <label>Порядок<input name="giveaway_item_sort_order" type="number" value="${escapeHtml(item.sort_order ?? index)}" /></label>
+      <label class="checkbox-row"><input name="giveaway_item_is_active_${index}" type="checkbox" ${item.is_active === false ? '' : 'checked'} /> Активен</label>
+      <button class="admin-inline-action ui-button ui-button--danger" type="button" data-admin-giveaway-remove-prize${legacyContentDisabledAttr()}>Удалить</button>
+    </article>
+  `).join('');
+};
+
+const renderLandingSettingsCard = () => {
+  const settings = getAdminLandingSettings();
+  const partnersCountBase = Number(settings.partners_count_base ?? settings.partners_count_display ?? 0);
+  const partnersCountPreview = Number(settings.partners_count ?? partnersCountBase + Number(settings.partners_count_real || 0));
+  const savingsTotalBase = Number(settings.savings_total_base ?? settings.savings_total ?? 0);
+  const savingsTotalPreview = Number(settings.savings_total_display ?? savingsTotalBase + Number(settings.savings_total_real || 0));
+  return `
+    <section class="quick-actions-panel admin-landing-settings" aria-labelledby="landing-settings-title">
+      <div class="admin-section-heading">
+        <h4 id="landing-settings-title">Настройки главной</h4>
+        <p>Управляйте публичными показателями hero mini-cards и розыгрышем месяца.</p>
+      </div>
+      <form class="admin-form admin-form--inline" data-admin-form="landingSettings" data-legacy-content-form>
+        <label>Базовое число девушек<input name="members_count_base" type="number" min="0" value="${escapeHtml(settings.members_count_base)}" required /></label>
+        <label>Базовое число партнёров<input name="partners_count_display" type="number" min="0" value="${escapeHtml(partnersCountBase)}" required /></label>
+        <label>Базовая сумма экономии<input name="savings_total" type="number" min="0" value="${escapeHtml(savingsTotalBase)}" required /></label>
+        <div class="admin-form-actions">
+          <button class="ui-button ui-button--primary" type="submit"${legacyContentDisabledAttr()}>Сохранить показатели</button>
+          <button class="ui-button ui-button--secondary" type="button" data-admin-giveaway-open${legacyContentDisabledAttr()}>Розыгрыш месяца</button>
+        </div>
+        <p class="form-message" data-form-message="landingSettings">${escapeHtml(adminState.formMessages.landingSettings || '')}</p>
+      </form>
+      <div class="summary-grid summary-grid--compact">
+        <article class="summary-card"><span>Девушек внутри</span><strong>${escapeHtml(settings.members_count_base)} + клиентки</strong><small>База плюс реальные client/member/customer</small></article>
+        <article class="summary-card"><span>Партнёров</span><strong>${escapeHtml(partnersCountPreview)}</strong><small>База + активные партнёры</small></article>
+        <article class="summary-card"><span>Экономия</span><strong>${escapeHtml(formatMoneyLabel(savingsTotalPreview))}</strong><small>База + реальная экономия</small></article>
+        <article class="summary-card"><span>${escapeHtml(settings.giveaway_title)}</span><strong>${escapeHtml(settings.giveaway_current)}</strong><small>${escapeHtml(settings.giveaway_subtitle)}</small></article>
+      </div>
+      ${adminState.giveawayDrawerOpen ? renderGiveawayDrawer(settings) : ''}
+    </section>
+  `;
+};
+
+const renderBloomMapSettingsTab = () => {
+  const enabled = adminState.bloomMapSettings?.enabled === true;
+  return `
+    <div class="admin-section-heading admin-page-heading">
+      <p class="section-eyebrow section-kicker">Настройки приложения</p>
+      <h3>Карта Bloom</h3>
+      <p>Код карты и координаты партнёров остаются в проекте. Здесь можно безопасно показать или скрыть карту для всех клиенток.</p>
+    </div>
+    <section class="ui-card admin-bloom-map-settings">
+      <div class="admin-bloom-map-settings__copy">
+        <strong>${enabled ? 'Карта включена' : 'Карта выключена'}</strong>
+        <span>${enabled ? 'Кнопка «Карта Bloom» отображается в каталоге партнёров.' : 'Кнопка карты скрыта, остальной каталог работает как обычно.'}</span>
+      </div>
+      <label class="admin-feature-toggle${enabled ? ' is-enabled' : ''}">
+        <input
+          type="checkbox"
+          data-admin-bloom-map-toggle
+          ${enabled ? 'checked' : ''}
+          ${adminState.bloomMapSettingsSaving ? 'disabled' : ''}
+          aria-label="Включить или выключить Карту Bloom"
+        />
+        <span class="admin-feature-toggle__track" aria-hidden="true"><span></span></span>
+        <strong>${adminState.bloomMapSettingsSaving ? 'Сохраняем…' : enabled ? 'Включено' : 'Выключено'}</strong>
+      </label>
+    </section>
+  `;
+};
+
+const renderGiveawayDrawer = (settings) => `
+  <aside class="admin-side-drawer admin-giveaway-drawer" aria-label="Розыгрыш месяца">
+    <form class="admin-form" data-admin-form="landingGiveaway" data-legacy-content-form>
+      <div class="admin-section-heading">
+        <h4>Розыгрыш месяца</h4>
+        <p>Первый активный приз с меньшим порядком сортировки показывается на главной.</p>
+      </div>
+      <label>Название блока<input name="giveaway_title" value="${escapeHtml(settings.giveaway_title || '')}" required /></label>
+      <label>Название текущего розыгрыша<input name="giveaway_current" value="${escapeHtml(settings.giveaway_current || '')}" required /></label>
       <label>Описание<textarea name="giveaway_subtitle" rows="3" required>${escapeHtml(settings.giveaway_subtitle || '')}</textarea></label>
       <label>Текст, если призы ещё не заполнены<textarea name="giveaway_empty_text" rows="3">${escapeHtml(settings.giveaway_empty_text || '')}</textarea><small>Показывается на главной, когда призы розыгрыша ещё не настроены.</small></label>
       <div class="giveaway-prize-list" data-admin-giveaway-prize-list>
