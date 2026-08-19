@@ -457,6 +457,7 @@ const adminTabs = [
   { id: 'offers', label: 'Привилегии', group: 'Продвижение' },
   { id: 'qr', label: 'QR и лиды', group: 'Продвижение' },
   { id: 'giveaways', label: 'Розыгрыши', group: 'Продвижение' },
+  { id: 'extraNumbers', label: 'Дополнительные номерки', group: 'Продвижение' },
   { id: 'flower', label: 'Сад Bloom', group: 'Продвижение' },
   { id: 'users', label: 'Пользователи', group: 'Данные' },
   { id: 'activity', label: 'Журнал событий', group: 'Данные' },
@@ -557,6 +558,8 @@ const adminState = {
   selectedGiveawayIdForEdit: '',
   selectedGiveawayIdForEntries: '',
   selectedGiveawayIdForEntriesManual: '',
+  selectedGiveawayIdForSocialSettings: '',
+  selectedGiveawayIdForSocialSettingsManual: '',
 };
 
 const adminPartnerWizardSteps = [
@@ -4081,6 +4084,8 @@ const renderAdminTabContent = () => {
       return renderAdminActivityTab();
     case 'giveaways':
       return renderGiveawaysTab();
+    case 'extraNumbers':
+      return renderSocialGiveawaySettingsTab();
     case 'flower':
       return renderFlowerAdminTab();
     case 'bloomMap':
@@ -4315,6 +4320,22 @@ const resolveGiveawayForEntries = () => {
   return { giveaway: null, source: 'manual' };
 };
 
+const resolveGiveawayForSocialSettings = () => {
+  const giveaways = Array.isArray(adminState.giveaways) ? adminState.giveaways : [];
+  const manual = giveaways.find((item) => String(item.id) === String(adminState.selectedGiveawayIdForSocialSettingsManual));
+  if (manual) return { giveaway: manual, source: 'manual' };
+
+  const persisted = giveaways.find((item) => String(item.id) === String(adminState.selectedGiveawayIdForSocialSettings));
+  if (persisted) return { giveaway: persisted, source: 'persisted' };
+
+  const active = giveaways.find((item) => item.is_active);
+  if (active) return { giveaway: active, source: 'active' };
+
+  if (giveaways.length === 1) return { giveaway: giveaways[0], source: 'single' };
+
+  return { giveaway: giveaways[0] || null, source: 'fallback' };
+};
+
 const logSelectedGiveawayForEntries = ({ giveaway, source }) => {
   console.info('[BLOOM_ADMIN_GIVEAWAY_ENTRIES] selected giveaway', {
     source,
@@ -4464,14 +4485,38 @@ const renderGiveawayForm = (giveaway = {}) => {
     <div class="admin-form-grid"><label>Начало участия<input name="starts_at" type="datetime-local" value="${escapeHtml(startsAt)}" required /></label><label>Дата розыгрыша — 16-е число<input name="ends_at" type="datetime-local" value="${escapeHtml(drawsAt)}" required /><small>Розыгрыши проводятся 16-го числа каждого месяца по новосибирскому времени.</small></label><label>Количество победителей<input name="winners_count" type="number" min="0" max="100" value="${escapeHtml(giveaway.winners_count || 1)}" data-admin-giveaway-winners-count /></label></div>
   </section>
   <section class="admin-form-section"><div class="admin-form-section-heading"><span>2</span><div><h4>Призы</h4><p>Количество строк меняется вместе с количеством победителей.</p></div></div><div data-admin-giveaway-place-list>${renderGiveawayPlaceRows(giveaway)}</div></section>
-  <details class="admin-form-section admin-giveaway-social" ${giveaway.telegram_reward_enabled || giveaway.vk_reward_enabled ? 'open' : ''}><summary>Дополнительные номера за подписки</summary><p class="helper-text">Откройте этот блок, только если хотите начислять номера за Telegram или VK.</p>
-    <div class="admin-giveaway-social-grid"><fieldset><legend>Telegram</legend><label>Ссылка на канал<input name="telegram_community_url" value="${escapeHtml(giveaway.telegram_community_url || '')}" /></label><label>Chat ID<input name="telegram_chat_id" value="${escapeHtml(giveaway.telegram_chat_id || '')}" /></label><label class="checkbox-row"><input name="telegram_reward_enabled" type="checkbox" ${giveaway.telegram_reward_enabled ? 'checked' : ''} /> Начислять номер</label><input name="telegram_reward_numbers" type="hidden" value="1" /></fieldset><fieldset><legend>ВКонтакте</legend><label>Ссылка на сообщество<input name="vk_community_url" value="${escapeHtml(giveaway.vk_community_url || '')}" /></label><label>ID группы<input name="vk_group_id" value="${escapeHtml(giveaway.vk_group_id || '')}" /></label><label class="checkbox-row"><input name="vk_reward_enabled" type="checkbox" ${giveaway.vk_reward_enabled ? 'checked' : ''} /> Начислять номер</label><input name="vk_reward_numbers" type="hidden" value="1" /></fieldset></div>
-    <div class="admin-giveaway-social-actions"><button class="ui-button ui-button--primary" type="submit" data-admin-giveaway-submit="social" ${adminState.giveawaySaving ? 'disabled' : ''}>${adminState.giveawaySaving ? 'Сохранение…' : 'Сохранить настройки подписок'}</button></div>
-  </details>
   <section class="admin-form-section admin-form-section--publish"><div class="admin-form-section-heading"><span>3</span><div><h4>Публикация</h4><p>Новый розыгрыш сохраняется неактивным, пока вы его не включите.</p></div></div><label class="checkbox-row"><input name="is_active" type="checkbox" ${giveaway.is_active ? 'checked' : ''} /> Показывать розыгрыш участницам</label></section>
   <div class="admin-form-actions"><button class="ui-button ui-button--primary" type="submit" ${adminState.giveawaySaving ? 'disabled' : ''}>${adminState.giveawaySaving ? 'Сохранение…' : 'Сохранить розыгрыш'}</button>${giveaway.id ? '<button class="ui-button ui-button--ghost" type="button" data-admin-giveaway-create>Отмена</button>' : ''}</div>
   <p class="form-message" data-form-message="giveaway">${escapeHtml(adminState.formMessages.giveaway || '')}</p>
 </form>`;
+};
+
+const renderSocialGiveawaySettingsSelector = (selected) => {
+  const giveaways = Array.isArray(adminState.giveaways) ? adminState.giveaways : [];
+  return `<label class="field"><span>Розыгрыш</span><select data-admin-social-giveaway-select>${giveaways.map((giveaway) => `<option value="${escapeHtml(giveaway.id)}" ${String(giveaway.id) === String(selected?.id) ? 'selected' : ''}>${escapeHtml(getGiveawayTitle(giveaway))}${giveaway.is_active ? ' — активный' : ''}</option>`).join('')}</select></label>`;
+};
+
+const renderSocialGiveawaySettingsTab = () => {
+  const giveaways = Array.isArray(adminState.giveaways) ? adminState.giveaways : [];
+  const selection = resolveGiveawayForSocialSettings();
+  const selected = selection.giveaway;
+  adminState.selectedGiveawayIdForSocialSettings = selected?.id ? String(selected.id) : '';
+
+  if (!giveaways.length) {
+    return `<section class="ui-card giveaway-section"><div class="admin-section-heading"><h4>Дополнительные номерки</h4><p>Сначала создайте розыгрыш.</p></div></section>`;
+  }
+
+  return `<div class="stack">
+    <section class="ui-card giveaway-section">
+      <div class="admin-section-heading admin-page-heading"><div><p class="section-eyebrow section-kicker">Дополнительные номерки</p><h3>Telegram и VK для розыгрышей</h3><p>Настройки соцподписок сохраняются отдельно, поэтому обычное редактирование розыгрыша больше не затирает ссылку, Chat ID и флаги начисления.</p></div></div>
+      <form class="admin-form" data-admin-social-giveaway-settings-form data-giveaway-id="${escapeHtml(selected?.id || '')}">
+        ${renderSocialGiveawaySettingsSelector(selected)}
+        <div class="admin-giveaway-social-grid"><fieldset><legend>Telegram</legend><label>Ссылка на канал<input name="telegram_community_url" value="${escapeHtml(selected?.telegram_community_url || '')}" /></label><label>Chat ID<input name="telegram_chat_id" value="${escapeHtml(selected?.telegram_chat_id || '')}" /></label><label class="checkbox-row"><input name="telegram_reward_enabled" type="checkbox" ${selected?.telegram_reward_enabled ? 'checked' : ''} /> Начислять номер</label><input name="telegram_reward_numbers" type="hidden" value="1" /></fieldset><fieldset><legend>ВКонтакте</legend><label>Ссылка на сообщество<input name="vk_community_url" value="${escapeHtml(selected?.vk_community_url || '')}" /></label><label>ID группы<input name="vk_group_id" value="${escapeHtml(selected?.vk_group_id || '')}" /></label><label class="checkbox-row"><input name="vk_reward_enabled" type="checkbox" ${selected?.vk_reward_enabled ? 'checked' : ''} /> Начислять номер</label><input name="vk_reward_numbers" type="hidden" value="1" /></fieldset></div>
+        <div class="admin-giveaway-social-actions"><button class="ui-button ui-button--primary" type="submit" data-admin-giveaway-submit="social" ${adminState.giveawaySaving ? 'disabled' : ''}>${adminState.giveawaySaving ? 'Сохранение…' : 'Сохранить настройки подписок'}</button></div>
+        <p class="form-message" data-form-message="socialGiveawaySettings">${escapeHtml(adminState.formMessages.socialGiveawaySettings || '')}</p>
+      </form>
+    </section>
+  </div>`;
 };
 
 const renderGiveawayEntriesSelector = (selected) => {
@@ -4558,6 +4603,19 @@ const buildGiveawayPayload = (form) => {
     starts_at: novosibirskDateTimeToIso(fd.get('starts_at')),
     ends_at: novosibirskDateTimeToIso(fd.get('ends_at')),
     winners_count: Number(fd.get('winners_count') || 0),
+    prizes: Array.from(form.querySelectorAll('[data-admin-giveaway-place-row]')).map((row, index) => ({
+      place_number: index + 1,
+      prize_title: String(row.querySelector('[name="prize_title"]')?.value || '').trim(),
+      winner_provider: String(row.querySelector('[name="winner_provider"]')?.value || '').trim() || null,
+      winner_provider_user_id: String(row.querySelector('[name="winner_provider_user_id"]')?.value || '').trim() || null,
+      winning_number: String(row.querySelector('[name="winning_number"]')?.value || '').trim() || null,
+    })),
+  };
+};
+
+const buildSocialGiveawaySettingsPayload = (form) => {
+  const fd = new FormData(form);
+  return {
     telegram_community_url: String(fd.get('telegram_community_url') || '').trim() || null,
     telegram_chat_id: String(fd.get('telegram_chat_id') || '').trim() || null,
     telegram_reward_enabled: fd.get('telegram_reward_enabled') === 'on',
@@ -4566,13 +4624,6 @@ const buildGiveawayPayload = (form) => {
     vk_group_id: String(fd.get('vk_group_id') || '').trim() || null,
     vk_reward_enabled: fd.get('vk_reward_enabled') === 'on',
     vk_reward_numbers: Number(fd.get('vk_reward_numbers') || 1),
-    prizes: Array.from(form.querySelectorAll('[data-admin-giveaway-place-row]')).map((row, index) => ({
-      place_number: index + 1,
-      prize_title: String(row.querySelector('[name="prize_title"]')?.value || '').trim(),
-      winner_provider: String(row.querySelector('[name="winner_provider"]')?.value || '').trim() || null,
-      winner_provider_user_id: String(row.querySelector('[name="winner_provider_user_id"]')?.value || '').trim() || null,
-      winning_number: String(row.querySelector('[name="winning_number"]')?.value || '').trim() || null,
-    })),
   };
 };
 
@@ -5971,6 +6022,10 @@ const loadActiveTabData = async () => {
     } else if (adminState.activeTab === 'giveaways') {
       await loadGiveaways();
       await syncGiveawayEntriesSelection({ force: true });
+    } else if (adminState.activeTab === 'extraNumbers') {
+      await loadGiveaways();
+      const socialSelection = resolveGiveawayForSocialSettings();
+      adminState.selectedGiveawayIdForSocialSettings = socialSelection.giveaway?.id ? String(socialSelection.giveaway.id) : '';
     } else if (adminState.activeTab === 'flower') {
       await Promise.all([loadFlowerGarden(), loadGiveaways(), loadUsers()]);
     } else if (adminState.activeTab === 'activity') {
@@ -8591,6 +8646,15 @@ root.addEventListener('change', (event) => {
     return;
   }
 
+  const socialGiveawaySelect = event.target.closest('[data-admin-social-giveaway-select]');
+  if (socialGiveawaySelect) {
+    adminState.selectedGiveawayIdForSocialSettingsManual = socialGiveawaySelect.value;
+    adminState.selectedGiveawayIdForSocialSettings = socialGiveawaySelect.value;
+    setFormMessage('socialGiveawaySettings');
+    renderAdminLayout();
+    return;
+  }
+
   const paymentAccessDaysInput = event.target.closest('[data-admin-payment-access-days]');
   if (paymentAccessDaysInput) {
     adminState.paymentApprovalDays = Math.max(1, Number(paymentAccessDaysInput.value) || 30);
@@ -8755,6 +8819,40 @@ const handleGiveawayFormSubmit = async (form, submitMode = 'giveaway') => {
   }
 };
 
+const handleSocialGiveawaySettingsSubmit = async (form) => {
+  const giveawayId = form.dataset.giveawayId;
+  if (!giveawayId) {
+    setFormMessage('socialGiveawaySettings', 'Сначала выберите розыгрыш.');
+    renderAdminLayout();
+    return;
+  }
+  const payload = buildSocialGiveawaySettingsPayload(form);
+  adminState.giveawaySaving = true;
+  setFormMessage('socialGiveawaySettings', 'Сохранение…');
+  setPanelMessage();
+  renderAdminLayout();
+
+  try {
+    const savedGiveaway = await apiFetch(`/api/v1/admin/giveaways/${giveawayId}/social-settings`, {
+      method: 'PUT',
+      body: JSON.stringify(payload),
+      timeoutMs: 30000,
+    });
+    adminState.selectedGiveawayIdForSocialSettings = savedGiveaway?.id ? String(savedGiveaway.id) : String(giveawayId);
+    adminState.selectedGiveawayIdForSocialSettingsManual = adminState.selectedGiveawayIdForSocialSettings;
+    await loadGiveaways();
+    setFormMessage('socialGiveawaySettings', 'Настройки подписок сохранены.');
+    setPanelMessage('Настройки подписок сохранены.', 'success');
+  } catch (error) {
+    const message = error?.message || 'Не удалось сохранить настройки подписок.';
+    setFormMessage('socialGiveawaySettings', message);
+    setPanelMessage(message, 'error');
+  } finally {
+    adminState.giveawaySaving = false;
+    renderAdminLayout();
+  }
+};
+
 root.addEventListener('input', (event) => {
   const countInput = event.target.closest('[data-admin-giveaway-winners-count]');
   if (!countInput) return;
@@ -8807,8 +8905,17 @@ root.addEventListener('submit', (event) => {
   const giveawayForm = event.target.closest('[data-admin-giveaway-form]');
   if (giveawayForm) {
     event.preventDefault();
-    const submitMode = event.submitter?.dataset?.adminGiveawaySubmit || 'giveaway';
-    handleGiveawayFormSubmit(giveawayForm, submitMode);
+    handleGiveawayFormSubmit(giveawayForm, 'giveaway');
+    return;
+  }
+
+  const socialGiveawaySettingsForm = event.target.closest('[data-admin-social-giveaway-settings-form]');
+  if (socialGiveawaySettingsForm) {
+    event.preventDefault();
+    const submitMode = event.submitter?.dataset?.adminGiveawaySubmit || 'social';
+    if (submitMode === 'social') {
+      handleSocialGiveawaySettingsSubmit(socialGiveawaySettingsForm);
+    }
     return;
   }
 

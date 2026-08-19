@@ -53,6 +53,17 @@ class GiveawayWrite(BaseModel):
     ends_at: datetime | None = None
     winners_count: int = Field(default=1, ge=0, le=100)
     prizes: list[GiveawayPrizeWrite] = Field(default_factory=list)
+
+    @model_validator(mode="after")
+    def validate_draw_schedule(self) -> "GiveawayWrite":
+        if self.ends_at is not None and not is_giveaway_draw_day(self.ends_at):
+            raise ValueError(f"Розыгрыш должен проводиться {GIVEAWAY_DRAW_DAY}-го числа месяца")
+        if self.starts_at is not None and self.ends_at is not None and self.starts_at >= self.ends_at:
+            raise ValueError("Дата начала розыгрыша должна быть раньше даты проведения")
+        return self
+
+
+class SocialGiveawaySettingsWrite(BaseModel):
     telegram_community_url: str | None = None
     telegram_chat_id: str | None = None
     telegram_reward_enabled: bool = False
@@ -63,11 +74,7 @@ class GiveawayWrite(BaseModel):
     vk_reward_numbers: int = Field(default=1, ge=1, le=1)
 
     @model_validator(mode="after")
-    def validate_draw_schedule(self) -> "GiveawayWrite":
-        if self.ends_at is not None and not is_giveaway_draw_day(self.ends_at):
-            raise ValueError(f"Розыгрыш должен проводиться {GIVEAWAY_DRAW_DAY}-го числа месяца")
-        if self.starts_at is not None and self.ends_at is not None and self.starts_at >= self.ends_at:
-            raise ValueError("Дата начала розыгрыша должна быть раньше даты проведения")
+    def validate_social_reward_requirements(self) -> "SocialGiveawaySettingsWrite":
         if self.telegram_reward_enabled and not (
             (self.telegram_community_url or "").strip()
             and (self.telegram_chat_id or "").strip()
