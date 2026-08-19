@@ -78,12 +78,12 @@ def test_giveaway_write_rejects_draw_date_other_than_sixteenth() -> None:
         ({"vk_reward_enabled": True}, "VK"),
     ],
 )
-def test_giveaway_write_rejects_incomplete_social_reward(payload: dict, message: str) -> None:
+def test_social_giveaway_settings_reject_incomplete_social_reward(payload: dict, message: str) -> None:
     from pydantic import ValidationError
-    from app.schemas.giveaway import GiveawayWrite
+    from app.schemas.giveaway import SocialGiveawaySettingsWrite
 
     with pytest.raises(ValidationError, match=message):
-        GiveawayWrite(title="Розыгрыш", **payload)
+        SocialGiveawaySettingsWrite(**payload)
 
 
 def test_telegram_and_vk_subscriptions_add_two_separate_numbers(monkeypatch: pytest.MonkeyPatch) -> None:

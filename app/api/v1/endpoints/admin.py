@@ -71,7 +71,7 @@ from app.schemas.admin import (
     PartnerUpdate,
 )
 from app.schemas.auth import AdminUserRead
-from app.schemas.giveaway import GiveawayRead, GiveawayWrite, GiveawayPrizeRead, GiveawayPrizeWrite
+from app.schemas.giveaway import GiveawayRead, GiveawayWrite, GiveawayPrizeRead, GiveawayPrizeWrite, SocialGiveawaySettingsWrite
 from app.schemas.engagement import (
     AdminPetalAwardRead,
     AdminPetalAwardWrite,
@@ -596,14 +596,6 @@ def _apply_giveaway_payload(giveaway: Giveaway, payload: GiveawayWrite) -> None:
     giveaway.starts_at = payload.starts_at or giveaway.starts_at or datetime.now(timezone.utc)
     giveaway.ends_at = payload.ends_at or giveaway.ends_at or next_giveaway_draw_at()
     giveaway.winners_count = payload.winners_count
-    giveaway.telegram_community_url = (payload.telegram_community_url or "").strip() or None
-    giveaway.telegram_chat_id = (payload.telegram_chat_id or "").strip() or None
-    giveaway.telegram_reward_enabled = payload.telegram_reward_enabled
-    giveaway.telegram_reward_numbers = payload.telegram_reward_numbers
-    giveaway.vk_community_url = (payload.vk_community_url or "").strip() or None
-    giveaway.vk_group_id = (payload.vk_group_id or "").strip() or None
-    giveaway.vk_reward_enabled = payload.vk_reward_enabled
-    giveaway.vk_reward_numbers = payload.vk_reward_numbers
 
     requested_prizes = _validate_giveaway_prizes(payload)
     existing_by_place = {prize.place_number: prize for prize in giveaway.prizes}
@@ -619,6 +611,17 @@ def _apply_giveaway_payload(giveaway: Giveaway, payload: GiveawayWrite) -> None:
             existing_prize = GiveawayPrize()
             giveaway.prizes.append(existing_prize)
         _copy_giveaway_prize_fields(existing_prize, requested_prize)
+
+
+def _apply_social_giveaway_settings_payload(giveaway: Giveaway, payload: SocialGiveawaySettingsWrite) -> None:
+    giveaway.telegram_community_url = (payload.telegram_community_url or "").strip() or None
+    giveaway.telegram_chat_id = (payload.telegram_chat_id or "").strip() or None
+    giveaway.telegram_reward_enabled = payload.telegram_reward_enabled
+    giveaway.telegram_reward_numbers = payload.telegram_reward_numbers
+    giveaway.vk_community_url = (payload.vk_community_url or "").strip() or None
+    giveaway.vk_group_id = (payload.vk_group_id or "").strip() or None
+    giveaway.vk_reward_enabled = payload.vk_reward_enabled
+    giveaway.vk_reward_numbers = payload.vk_reward_numbers
 
 
 @router.get("/giveaways", response_model=list[GiveawayRead])
@@ -656,6 +659,27 @@ def update_admin_giveaway(giveaway_id: int, payload: GiveawayWrite, admin: Admin
     except IntegrityError as exc:
         db.rollback()
         raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="Giveaway could not be saved because of conflicting data") from exc
+    giveaway = db.execute(select(Giveaway).options(selectinload(Giveaway.prizes)).where(Giveaway.id == giveaway_id)).scalar_one()
+    return _giveaway_to_read(giveaway)
+
+
+@router.put("/giveaways/{giveaway_id}/social-settings", response_model=GiveawayRead)
+def update_admin_giveaway_social_settings(
+    giveaway_id: int,
+    payload: SocialGiveawaySettingsWrite,
+    admin: AdminUser = Depends(require_admin),
+    db: Session = Depends(get_db),
+) -> GiveawayRead:
+    _ = admin
+    giveaway = db.execute(select(Giveaway).options(selectinload(Giveaway.prizes)).where(Giveaway.id == giveaway_id)).scalar_one_or_none()
+    if giveaway is None:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Giveaway not found")
+    _apply_social_giveaway_settings_payload(giveaway, payload)
+    try:
+        db.commit()
+    except IntegrityError as exc:
+        db.rollback()
+        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="Giveaway social settings could not be saved") from exc
     giveaway = db.execute(select(Giveaway).options(selectinload(Giveaway.prizes)).where(Giveaway.id == giveaway_id)).scalar_one()
     return _giveaway_to_read(giveaway)
 
