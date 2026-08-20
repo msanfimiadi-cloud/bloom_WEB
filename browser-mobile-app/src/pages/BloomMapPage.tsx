@@ -40,6 +40,8 @@ type YandexMapsV2 = {
   Placemark: new (coordinates: [number, number], properties?: Record<string, any>, options?: Record<string, any>) => any;
   GeoObjectCollection: new (_?: Record<string, any>, options?: Record<string, any>) => {
     add: (item: any) => void;
+    removeAll?: () => void;
+    getBounds?: () => any;
   };
   templateLayoutFactory?: {
     createClass: (html: string) => any;
@@ -92,6 +94,10 @@ function partnerKey(partner: Partner): string {
 export function BloomMapPage({ partners, onBack, onOpenPartner }: BloomMapPageProps) {
   const mapContainerRef = useRef<HTMLDivElement | null>(null);
   const mapInstanceRef = useRef<any>(null);
+  const ymapsRef = useRef<YandexMapsV2 | null>(null);
+  const markersCollectionRef = useRef<any>(null);
+  const hasAppliedInitialViewportRef = useRef(false);
+  const lastViewportCategoryRef = useRef<string | null>(null);
   const [status, setStatus] = useState<MapStatus>("loading");
   const [selectedCategory, setSelectedCategory] = useState("Все");
   const [selectedPartnerId, setSelectedPartnerId] = useState<string | null>(null);
@@ -113,7 +119,6 @@ export function BloomMapPage({ partners, onBack, onOpenPartner }: BloomMapPagePr
   useEffect(() => {
     let cancelled = false;
     let mapFailed = false;
-    let map: any = null;
     const container = mapContainerRef.current;
     if (!container) return;
     setStatus("loading");
@@ -121,9 +126,10 @@ export function BloomMapPage({ partners, onBack, onOpenPartner }: BloomMapPagePr
     const handleMapRuntimeError = () => {
       if (cancelled || mapFailed) return;
       mapFailed = true;
-      map?.destroy?.();
-      map = null;
+      mapInstanceRef.current?.destroy?.();
       mapInstanceRef.current = null;
+      markersCollectionRef.current = null;
+      ymapsRef.current = null;
       container.replaceChildren();
       setStatus("error");
     };
@@ -139,16 +145,17 @@ export function BloomMapPage({ partners, onBack, onOpenPartner }: BloomMapPagePr
       try {
         const ymaps = await loadYandexMaps(apiKey);
         if (cancelled || mapFailed) return;
+        ymapsRef.current = ymaps;
         ymaps.ready(() => {
           if (cancelled || mapFailed) return;
-          const center = visiblePartners.length
-            ? [visiblePartners[0].point.latitude, visiblePartners[0].point.longitude]
+          const center = mapPartners.length
+            ? [mapPartners[0].point.latitude, mapPartners[0].point.longitude]
             : [NOVOSIBIRSK_CENTER[1], NOVOSIBIRSK_CENTER[0]];
-          map = new ymaps.Map(
+          const map = new ymaps.Map(
             container,
             {
               center,
-              zoom: visiblePartners.length ? 12 : 11,
+              zoom: mapPartners.length ? 12 : 11,
               controls: ["zoomControl"],
             },
             {
@@ -156,35 +163,9 @@ export function BloomMapPage({ partners, onBack, onOpenPartner }: BloomMapPagePr
               yandexMapDisablePoiInteractivity: true,
             },
           );
-
-          const iconLayout = ymaps.templateLayoutFactory?.createClass(
-            '<div class="bloom-map-marker"><span aria-hidden="true">✿</span></div>',
-          );
           const collection = new ymaps.GeoObjectCollection();
-
-          visiblePartners.forEach(({ partner, point }) => {
-            const placemark = new ymaps.Placemark(
-              [point.latitude, point.longitude],
-              {
-                hintContent: getPartnerName(partner),
-                balloonContent: getPartnerName(partner),
-              },
-              iconLayout
-                ? {
-                    iconLayout,
-                    iconShape: {
-                      type: "Circle",
-                      coordinates: [18, 18],
-                      radius: 18,
-                    },
-                  }
-                : {},
-            );
-            placemark.events?.add?.("click", () => setSelectedPartnerId(partnerKey(partner)));
-            collection.add(placemark);
-          });
-
           map.geoObjects?.add?.(collection);
+          markersCollectionRef.current = collection;
           mapInstanceRef.current = map;
           if (!mapFailed) setStatus("ready");
         });
@@ -196,11 +177,74 @@ export function BloomMapPage({ partners, onBack, onOpenPartner }: BloomMapPagePr
     return () => {
       cancelled = true;
       window.removeEventListener(BLOOM_MAP_RUNTIME_ERROR_EVENT, handleMapRuntimeError);
-      map?.destroy?.();
-      if (mapInstanceRef.current === map) mapInstanceRef.current = null;
+      mapInstanceRef.current?.destroy?.();
+      mapInstanceRef.current = null;
+      markersCollectionRef.current = null;
+      ymapsRef.current = null;
       container.replaceChildren();
     };
-  }, [visiblePartners]);
+  }, []);
+
+  useEffect(() => {
+    if (status !== "ready") return;
+    const ymaps = ymapsRef.current;
+    const map = mapInstanceRef.current;
+    if (!ymaps || !map) return;
+
+    let collection = markersCollectionRef.current;
+    if (!collection) {
+      collection = new ymaps.GeoObjectCollection();
+      map.geoObjects?.add?.(collection);
+      markersCollectionRef.current = collection;
+    }
+
+    collection.removeAll?.();
+    const nextViewportCategory = selectedCategory;
+
+    visiblePartners.forEach(({ partner, point }) => {
+      const placemark = new ymaps.Placemark(
+        [point.latitude, point.longitude],
+        {
+          hintContent: getPartnerName(partner),
+          balloonContent: getPartnerName(partner),
+        },
+        {
+          preset: "islands#redIcon",
+          iconColor: "#b84d72",
+        },
+      );
+      placemark.events?.add?.("click", () => setSelectedPartnerId(partnerKey(partner)));
+      collection.add(placemark);
+    });
+
+    const shouldRefreshViewport =
+      !hasAppliedInitialViewportRef.current
+      || lastViewportCategoryRef.current !== nextViewportCategory;
+
+    if (shouldRefreshViewport) {
+      if (visiblePartners.length > 1) {
+        const bounds = collection.getBounds?.();
+        if (bounds) {
+          map.setBounds?.(bounds, {
+            checkZoomRange: true,
+            duration: 180,
+            zoomMargin: 24,
+          });
+        }
+      } else if (visiblePartners.length === 1) {
+        map.setCenter?.(
+          [visiblePartners[0].point.latitude, visiblePartners[0].point.longitude],
+          13,
+          { duration: 180 },
+        );
+      } else {
+        map.setCenter?.([NOVOSIBIRSK_CENTER[1], NOVOSIBIRSK_CENTER[0]], 11, { duration: 180 });
+      }
+
+      hasAppliedInitialViewportRef.current = true;
+      lastViewportCategoryRef.current = nextViewportCategory;
+    }
+  }, [selectedCategory, status, visiblePartners]);
 
   const locateUser = () => {
     if (!navigator.geolocation) {
