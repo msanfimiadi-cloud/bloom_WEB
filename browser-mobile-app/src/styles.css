@@ -7582,6 +7582,10 @@ small,
 .bloom-map-state--compact { inset: auto 14px 14px; border-radius: 20px; padding: 16px; background: rgba(255,250,248,.94); }
 .bloom-map-state__flower { font-size: 42px; color: #b74e72; animation: bloomMapPulse 1.5s ease-in-out infinite; }
 @keyframes bloomMapPulse { 50% { transform: scale(1.12) rotate(6deg); } }
+.bloom-map-selected-badge { position: absolute; left: 14px; right: 14px; top: 14px; z-index: 4; padding: 12px 14px; border: 1px solid rgba(137,34,69,.12); border-radius: 22px; background: rgba(255,252,250,.92); box-shadow: 0 12px 30px rgba(77,43,52,.14); backdrop-filter: blur(14px); animation: bloomMapCardIn 180ms cubic-bezier(0.23, 1, 0.32, 1) both; }
+.bloom-map-selected-badge__eyebrow { display: block; margin-bottom: 4px; color: #9d4764; font-size: 11px; font-weight: 700; letter-spacing: .08em; text-transform: uppercase; }
+.bloom-map-selected-badge strong { display: block; color: #4e2c35; font-size: 17px; line-height: 1.15; }
+.bloom-map-selected-badge small { display: block; margin-top: 3px; color: #7c6269; font-size: 12px; }
 .bloom-map-marker { width: 46px; height: 52px; border: 3px solid #fff; border-radius: 50% 50% 50% 12px; background: linear-gradient(145deg, #c6577c, #8f2648); color: #fff; transform: translate(-50%, -88%) rotate(-8deg); box-shadow: 0 8px 22px rgba(93, 27, 51, .34); display: grid; place-items: center; cursor: pointer; }
 .bloom-map-marker span { font-size: 24px; transform: rotate(8deg); }
 .bloom-map-marker:active { scale: .92; }
@@ -7600,6 +7604,7 @@ small,
 
 @media (max-width: 390px) {
   .bloom-map-locate span { display: none; }
+  .bloom-map-selected-badge { left: 10px; right: 10px; top: 10px; padding: 11px 12px; }
   .bloom-map-card { grid-template-columns: 76px 1fr; }
   .bloom-map-card > img, .bloom-map-card__placeholder { width: 76px; height: 96px; }
   .bloom-map-card__actions { grid-template-columns: 1fr 1fr; }
@@ -7607,7 +7612,7 @@ small,
 }
 
 @media (prefers-reduced-motion: reduce) {
-  .bloom-map-state__flower, .bloom-map-card { animation: none; }
+  .bloom-map-state__flower, .bloom-map-selected-badge, .bloom-map-card { animation: none; }
   .catalog-map-banner, .bloom-map-back, .bloom-map-locate { transition: none; }
 }
 
