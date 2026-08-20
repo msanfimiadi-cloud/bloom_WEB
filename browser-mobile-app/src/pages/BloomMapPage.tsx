@@ -34,6 +34,17 @@ type MapStatus = "loading" | "ready" | "missing-key" | "error";
 const NOVOSIBIRSK_CENTER: [number, number] = [82.92043, 55.030204];
 const MAP_SCRIPT_ID = "bloom-yandex-maps-api";
 let runtimeKeyPromise: Promise<string> | null = null;
+type YandexMapsV2 = {
+  ready: (callback: () => void) => void;
+  Map: new (container: HTMLElement, state: Record<string, any>, options?: Record<string, any>) => any;
+  Placemark: new (coordinates: [number, number], properties?: Record<string, any>, options?: Record<string, any>) => any;
+  GeoObjectCollection: new (_?: Record<string, any>, options?: Record<string, any>) => {
+    add: (item: any) => void;
+  };
+  templateLayoutFactory?: {
+    createClass: (html: string) => any;
+  };
+};
 
 function getInjectedRuntimeKey(): string {
   const runtime = (window as Window & { __BLOOM_TG_CONFIG__?: { yandexMapsApiKey?: string } }).__BLOOM_TG_CONFIG__;
@@ -50,10 +61,9 @@ async function getRuntimeKey(): Promise<string> {
   return runtimeKeyPromise;
 }
 
-async function loadYandexMaps(apiKey: string): Promise<Record<string, any>> {
-  const existing = (window as Window & { ymaps3?: Record<string, any> }).ymaps3;
+async function loadYandexMaps(apiKey: string): Promise<YandexMapsV2> {
+  const existing = (window as Window & { ymaps?: YandexMapsV2 }).ymaps;
   if (existing) {
-    await existing.ready;
     return existing;
   }
 
@@ -61,18 +71,17 @@ async function loadYandexMaps(apiKey: string): Promise<Record<string, any>> {
     ?? Object.assign(document.createElement("script"), {
       id: MAP_SCRIPT_ID,
       async: true,
-      src: `https://api-maps.yandex.ru/v3/?apikey=${encodeURIComponent(apiKey)}&lang=ru_RU`,
+      src: `https://api-maps.yandex.ru/2.1/?apikey=${encodeURIComponent(apiKey)}&lang=ru_RU`,
     });
   if (!script.isConnected) document.head.appendChild(script);
 
   await new Promise<void>((resolve, reject) => {
-    if ((window as Window & { ymaps3?: unknown }).ymaps3) return resolve();
+    if ((window as Window & { ymaps?: unknown }).ymaps) return resolve();
     script.addEventListener("load", () => resolve(), { once: true });
     script.addEventListener("error", () => reject(new Error("yandex_maps_script_failed")), { once: true });
   });
-  const loaded = (window as Window & { ymaps3?: Record<string, any> }).ymaps3;
+  const loaded = (window as Window & { ymaps?: YandexMapsV2 }).ymaps;
   if (!loaded) throw new Error("yandex_maps_unavailable");
-  await loaded.ready;
   return loaded;
 }
 
@@ -128,26 +137,57 @@ export function BloomMapPage({ partners, onBack, onOpenPartner }: BloomMapPagePr
         return;
       }
       try {
-        const ymaps3 = await loadYandexMaps(apiKey);
+        const ymaps = await loadYandexMaps(apiKey);
         if (cancelled || mapFailed) return;
-        const center = visiblePartners.length
-          ? [visiblePartners[0].point.longitude, visiblePartners[0].point.latitude]
-          : NOVOSIBIRSK_CENTER;
-        map = new ymaps3.YMap(container, { location: { center, zoom: visiblePartners.length ? 12 : 11 } });
-        map.addChild(new ymaps3.YMapDefaultSchemeLayer({ theme: "light" }));
-        map.addChild(new ymaps3.YMapDefaultFeaturesLayer({ zIndex: 1800 }));
-        visiblePartners.forEach(({ partner, point }) => {
-          const marker = document.createElement("button");
-          marker.type = "button";
-          marker.className = "bloom-map-marker";
-          marker.setAttribute("aria-label", `Открыть ${getPartnerName(partner)}`);
-          marker.title = getPartnerName(partner);
-          marker.innerHTML = '<span aria-hidden="true">✿</span>';
-          marker.addEventListener("click", () => setSelectedPartnerId(partnerKey(partner)));
-          map.addChild(new ymaps3.YMapMarker({ coordinates: [point.longitude, point.latitude], zIndex: 1900 }, marker));
+        ymaps.ready(() => {
+          if (cancelled || mapFailed) return;
+          const center = visiblePartners.length
+            ? [visiblePartners[0].point.latitude, visiblePartners[0].point.longitude]
+            : [NOVOSIBIRSK_CENTER[1], NOVOSIBIRSK_CENTER[0]];
+          map = new ymaps.Map(
+            container,
+            {
+              center,
+              zoom: visiblePartners.length ? 12 : 11,
+              controls: ["zoomControl"],
+            },
+            {
+              suppressMapOpenBlock: true,
+              yandexMapDisablePoiInteractivity: true,
+            },
+          );
+
+          const iconLayout = ymaps.templateLayoutFactory?.createClass(
+            '<div class="bloom-map-marker"><span aria-hidden="true">✿</span></div>',
+          );
+          const collection = new ymaps.GeoObjectCollection();
+
+          visiblePartners.forEach(({ partner, point }) => {
+            const placemark = new ymaps.Placemark(
+              [point.latitude, point.longitude],
+              {
+                hintContent: getPartnerName(partner),
+                balloonContent: getPartnerName(partner),
+              },
+              iconLayout
+                ? {
+                    iconLayout,
+                    iconShape: {
+                      type: "Circle",
+                      coordinates: [18, 18],
+                      radius: 18,
+                    },
+                  }
+                : {},
+            );
+            placemark.events?.add?.("click", () => setSelectedPartnerId(partnerKey(partner)));
+            collection.add(placemark);
+          });
+
+          map.geoObjects?.add?.(collection);
+          mapInstanceRef.current = map;
+          if (!mapFailed) setStatus("ready");
         });
-        mapInstanceRef.current = map;
-        if (!mapFailed) setStatus("ready");
       } catch {
         if (!cancelled) setStatus("error");
       }
@@ -173,7 +213,7 @@ export function BloomMapPage({ partners, onBack, onOpenPartner }: BloomMapPagePr
         const point = { latitude: coords.latitude, longitude: coords.longitude };
         setUserPoint(point);
         setLocationMessage("Расстояние до партнёров рассчитано.");
-        mapInstanceRef.current?.update?.({ location: { center: [point.longitude, point.latitude], zoom: 13, duration: 300 } });
+        mapInstanceRef.current?.setCenter?.([point.latitude, point.longitude], 13, { duration: 300 });
       },
       () => setLocationMessage("Не удалось получить геопозицию. Проверьте разрешение браузера."),
       { enableHighAccuracy: false, timeout: 8000, maximumAge: 120000 },
