@@ -1,3 +1,4 @@
+import "../partner-image-presentation.css";
 import type { Partner } from "../api/types";
 import { AppImage } from "./AppImage";
 import {
