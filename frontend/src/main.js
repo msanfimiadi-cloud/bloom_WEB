@@ -5108,6 +5108,121 @@ const renderPublishReadiness = (partner) => {
   `;
 };
 
+const getPartnerLocationDrafts = (partner = null) => {
+  const locations = Array.isArray(partner?.locations) ? partner.locations : [];
+  if (locations.length) {
+    return locations.map((location, index) => ({
+      id: location?.id ?? '',
+      name: location?.name || `Филиал ${index + 1}`,
+      address: location?.address || '',
+      phone: location?.phone || '',
+      map_url: location?.map_url || '',
+      latitude: location?.latitude ?? '',
+      longitude: location?.longitude ?? '',
+      working_hours: location?.working_hours || '',
+      sort_order: location?.sort_order ?? index,
+      is_active: location?.is_active !== false,
+    }));
+  }
+
+  return [{
+    id: '',
+    name: 'Основной филиал',
+    address: partner?.address || '',
+    phone: partner?.phone || '',
+    map_url: partner?.map_url || '',
+    latitude: partner?.latitude ?? '',
+    longitude: partner?.longitude ?? '',
+    working_hours: partner?.working_hours || '',
+    sort_order: 0,
+    is_active: true,
+  }];
+};
+
+const renderPartnerLocationFields = (location = {}, index = 0) => `
+  <article class="partner-location-editor" data-partner-location-item>
+    <input type="hidden" name="location_id" value="${escapeHtml(location.id ?? '')}" />
+    <input type="hidden" name="location_is_active_value" value="${location.is_active !== false ? 'true' : 'false'}" />
+    <div class="admin-section-heading text-stack">
+      <h5 class="section-title">Адрес / филиал ${index + 1}</h5>
+      <p class="helper-text compact-copy">Клиентка сможет выбрать этот филиал в карточке партнёра.</p>
+    </div>
+    <div class="admin-form-grid">
+      <label>Название филиала<input name="location_name" value="${escapeHtml(location.name || '')}" placeholder="Например, Центр / ТЦ Галерея" /></label>
+      <label>Телефон филиала<input name="location_phone" value="${escapeHtml(location.phone || '')}" placeholder="+7 900 000-00-00" /></label>
+      <label class="admin-form-grid-span-2">Адрес<input name="location_address" value="${escapeHtml(location.address || '')}" placeholder="Город, улица, дом" /></label>
+      <label>Ссылка на карту<input name="location_map_url" value="${escapeHtml(location.map_url || '')}" placeholder="https://…" /></label>
+      <label>График работы<input name="location_working_hours" value="${escapeHtml(location.working_hours || '')}" placeholder="Пн–Вс, 10:00–21:00" /></label>
+      <label>Широта<input name="location_latitude" type="number" min="-90" max="90" step="0.000001" inputmode="decimal" value="${escapeHtml(location.latitude ?? '')}" placeholder="55.030204" /></label>
+      <label>Долгота<input name="location_longitude" type="number" min="-180" max="180" step="0.000001" inputmode="decimal" value="${escapeHtml(location.longitude ?? '')}" placeholder="82.920430" /></label>
+      <label>Порядок сортировки<input name="location_sort_order" type="number" value="${escapeHtml(location.sort_order ?? index)}" /></label>
+    </div>
+    <div class="ui-action-row ui-action-row--between ui-action-row--stack-mobile">
+      <label class="checkbox-row"><input data-location-active-toggle type="checkbox" ${location.is_active !== false ? 'checked' : ''} /> Филиал активен</label>
+      <button class="ui-button ui-button--ghost" type="button" data-admin-partner-location-remove>Удалить филиал</button>
+    </div>
+  </article>
+`;
+
+const renderPartnerLocationsSection = (partner = null) => {
+  const locations = getPartnerLocationDrafts(partner);
+  return `
+    <section class="admin-partner-locations">
+      <div class="admin-section-heading text-stack">
+        <h4 class="section-title">Филиалы и адреса</h4>
+        <p class="section-description compact-copy">Добавьте один или несколько адресов. Услуги и привилегии можно будет привязывать к конкретному филиалу.</p>
+      </div>
+      <div class="partner-locations-list" data-partner-locations-list>
+        ${locations.map((location, index) => renderPartnerLocationFields(location, index)).join('')}
+      </div>
+      <div class="ui-action-row">
+        <button class="ui-button ui-button--secondary" type="button" data-admin-partner-location-add>+ Добавить ещё адрес</button>
+      </div>
+    </section>
+  `;
+};
+
+const getPartnerLocationOptions = (partnerId) => {
+  const partner = adminState.partners.find((item) => String(item.id) === String(partnerId));
+  const locations = Array.isArray(partner?.locations) ? partner.locations : [];
+  return locations
+    .filter((location) => location && location.id !== undefined && location.id !== null)
+    .map((location, index) => [
+      location.id,
+      location.name || location.address || `Филиал ${index + 1}`,
+    ]);
+};
+
+const refreshPartnerLocationTitles = (container) => {
+  if (!container) return;
+  Array.from(container.querySelectorAll('[data-partner-location-item]')).forEach((item, index) => {
+    const title = item.querySelector('.section-title');
+    if (title) {
+      title.textContent = `Адрес / филиал ${index + 1}`;
+    }
+  });
+};
+
+const addAdminPartnerLocationRow = (button) => {
+  const section = button.closest('.admin-partner-locations');
+  const list = section?.querySelector('[data-partner-locations-list]');
+  if (!list) return;
+  const nextIndex = list.querySelectorAll('[data-partner-location-item]').length;
+  list.insertAdjacentHTML('beforeend', renderPartnerLocationFields({
+    id: '',
+    name: `Филиал ${nextIndex + 1}`,
+    address: '',
+    phone: '',
+    map_url: '',
+    latitude: '',
+    longitude: '',
+    working_hours: '',
+    sort_order: nextIndex,
+    is_active: true,
+  }, nextIndex));
+  refreshPartnerLocationTitles(list);
+};
+
 const renderPartnerEditForm = () => {
   const partner = adminState.partners.find((item) => String(item.id) === String(adminState.selectedPartnerIdForEdit));
   const photos = adminState.partnerPhotosByPartner[adminState.selectedPartnerIdForEdit] || [];
@@ -5143,8 +5258,6 @@ const renderPartnerEditForm = () => {
               <label>Постоянный код для ЛК партнёра<input name="access_code" type="text" minlength="8" maxlength="64" autocomplete="new-password" placeholder="${partner.access_code_configured ? 'Оставьте пустым, чтобы сохранить текущий код' : 'Например, BLOOM-CAFE-01'}" /><small class="helper-text">${partner.access_code_configured ? 'Код уже установлен. Введите новый только для замены.' : 'Выдайте этот код партнёру для входа на app.bloomclub.ru/partner.'}</small></label>
               <label>Название<input name="name" required value="${escapeHtml(partner.name || '')}" /></label>
               <label>Описание<textarea name="description" rows="3">${escapeHtml(partner.description || '')}</textarea></label>
-              <label>Адрес<input name="address" value="${escapeHtml(partner.address || '')}" /></label>
-              <label>Телефон<input name="phone" value="${escapeHtml(partner.phone || '')}" /></label>
               <label>Сайт<input name="website_url" value="${escapeHtml(partner.website_url || '')}" /></label>
               <label>Соцсеть<input name="social_url" value="${escapeHtml(partner.social_url || '')}" /></label>
               <label>ВКонтакте<input name="vk_url" value="${escapeHtml(partner.vk_url || '')}" /></label>
@@ -5152,16 +5265,10 @@ const renderPartnerEditForm = () => {
               <label>WhatsApp<input name="whatsapp_url" value="${escapeHtml(partner.whatsapp_url || '')}" /></label>
               <label>Запись онлайн<input name="booking_url" value="${escapeHtml(partner.booking_url || '')}" placeholder="https://…" /></label>
               <label>Instagram<input name="instagram_url" value="${escapeHtml(partner.instagram_url || '')}" /></label>
-              <label>Ссылка на карту<input name="map_url" value="${escapeHtml(partner.map_url || '')}" /></label>
-              <div class="admin-form-grid partner-map-coordinates">
-                <label>Широта<input name="latitude" type="number" min="-90" max="90" step="0.000001" inputmode="decimal" value="${escapeHtml(partner.latitude ?? '')}" placeholder="55.030204" /></label>
-                <label>Долгота<input name="longitude" type="number" min="-180" max="180" step="0.000001" inputmode="decimal" value="${escapeHtml(partner.longitude ?? '')}" placeholder="82.920430" /></label>
-              </div>
-              <p class="helper-text">Координаты нужны для метки на Карте Bloom. Скопируйте их из карточки места в Яндекс Картах или 2ГИС.</p>
-              <label>График работы<input name="working_hours" value="${escapeHtml(partner.working_hours || '')}" /></label>
               <label>Порядок сортировки<input name="sort_order" type="number" value="${escapeHtml(partner.sort_order ?? 0)}" /></label>
               <label class="checkbox-row"><input name="is_active" type="checkbox" ${partner.is_active ? 'checked' : ''} /> Активен</label>
               <label class="checkbox-row"><input name="is_verified" type="checkbox" ${partner.is_verified ? 'checked' : ''} /> Проверен</label>
+              ${renderPartnerLocationsSection(partner)}
               <details class="partner-profile-advanced">
                 <summary>URL изображения</summary>
                 <p class="helper-text form-message compact-copy">URL — дополнительное поле для /uploads/ и /assets/.</p>
@@ -5234,15 +5341,8 @@ const renderPartnerForm = () => {
           <label>Короткое описание<textarea name="description" rows="4" placeholder="Чем занимается партнёр и какую пользу получает участница"></textarea></label>
         </section>
         <section class="admin-form-section">
-          <div class="admin-form-section-heading"><span>2</span><div><h4>Контакты</h4><p>Показываются клиентке в карточке партнёра.</p></div></div>
-          <div class="admin-form-grid">
-            <label>Адрес<input name="address" placeholder="Город, улица, дом" /></label>
-            <label>Телефон<input name="phone" autocomplete="tel" placeholder="+7 900 000-00-00" /></label>
-            <label>График работы<input name="working_hours" placeholder="Пн–Вс, 10:00–21:00" /></label>
-            <label>Ссылка на карту<input name="map_url" type="url" placeholder="https://…" /></label>
-            <label>Широта<input name="latitude" type="number" min="-90" max="90" step="0.000001" inputmode="decimal" placeholder="55.030204" /></label>
-            <label>Долгота<input name="longitude" type="number" min="-180" max="180" step="0.000001" inputmode="decimal" placeholder="82.920430" /></label>
-          </div>
+          <div class="admin-form-section-heading"><span>2</span><div><h4>Филиалы и адреса</h4><p>Можно сразу добавить несколько салонов или точек.</p></div></div>
+          ${renderPartnerLocationsSection()}
         </section>
         <section class="admin-form-section">
           <div class="admin-form-section-heading"><span>3</span><div><h4>Сайт и соцсети</h4><p>Заполняйте только те каналы, которыми партнёр пользуется.</p></div></div>
@@ -5454,11 +5554,13 @@ const renderOfferEditForm = () => {
   if (!offer) {
     return '';
   }
+  const locationOptions = getPartnerLocationOptions(adminState.selectedPartnerIdForOffers);
 
   return `
     <form class="admin-form admin-form--inline admin-offer-form" data-admin-form="offerEdit" data-legacy-content-form data-offer-id="${escapeHtml(offer.id)}">
       <h4>Редактировать предложение</h4>
       <label>Название<input name="title" required value="${escapeHtml(offer.title || '')}" /></label>
+      <label>Филиал${renderSelect('location_id', [['', 'Все филиалы / общее предложение'], ...locationOptions], false, offer.location_id || '', null, { label: 'Филиал' })}</label>
       <label>Краткая выгода<input name="benefit_text" value="${escapeHtml(offer.benefit_text || '')}" /></label>
       <label>Описание<textarea name="description" rows="3">${escapeHtml(offer.description || '')}</textarea></label>
       <label>Условия<textarea name="conditions" rows="3">${escapeHtml(offer.conditions || '')}</textarea></label>
@@ -5493,6 +5595,7 @@ const renderOfferCreateForm = () => `
   <form class="admin-form admin-form--inline admin-offer-form" data-admin-form="offer" data-legacy-content-form>
     <h4>Новое предложение</h4>
     <label>Название предложения<input name="title" required /></label>
+    <label>Филиал${renderSelect('location_id', [['', 'Все филиалы / общее предложение'], ...getPartnerLocationOptions(adminState.selectedPartnerIdForOffers)], false, '', null, { label: 'Филиал' })}</label>
     <label>Краткая выгода<input name="benefit_text" /></label>
     <label>Описание<textarea name="description" rows="3"></textarea></label>
     <label>Условия<textarea name="conditions" rows="3"></textarea></label>
@@ -6548,33 +6651,79 @@ const getAdminPartnerPayloadCategoryIds = (formData, selectedCategoryIds = null)
     .filter((id) => Number.isInteger(id) && id > 0);
 };
 
-const buildAdminPartnerPayload = (formData, selectedCategoryIds = null) => ({
-  ...(String(formData.get('access_code') || '').trim() ? { access_code: String(formData.get('access_code')).trim() } : {}),
-  city_id: Number(formData.get('city_id')),
-  category_slug: getOptionalText(formData, 'category_slug'),
-  owner_user_id: formData.get('owner_user_id') ? Number(formData.get('owner_user_id')) : null,
-  name: getOptionalText(formData, 'name'),
-  description: getOptionalText(formData, 'description'),
-  address: getOptionalText(formData, 'address'),
-  phone: getOptionalText(formData, 'phone'),
-  website_url: getOptionalText(formData, 'website_url'),
-  social_url: getOptionalText(formData, 'social_url'),
-  instagram_url: getOptionalText(formData, 'instagram_url'),
-  vk_url: getOptionalText(formData, 'vk_url'),
-  telegram_url: getOptionalText(formData, 'telegram_url'),
-  whatsapp_url: getOptionalText(formData, 'whatsapp_url'),
-  booking_url: getOptionalText(formData, 'booking_url'),
-  map_url: getOptionalText(formData, 'map_url'),
-  latitude: decimalOrNull(formData, 'latitude'),
-  longitude: decimalOrNull(formData, 'longitude'),
-  working_hours: getOptionalText(formData, 'working_hours'),
-  logo_url: getOptionalText(formData, 'logo_url'),
-  cover_url: getOptionalText(formData, 'cover_url'),
-  is_active: formData.has('is_active'),
-  is_verified: formData.has('is_verified'),
-  sort_order: Number(formData.get('sort_order') || 0),
-  category_ids: getAdminPartnerPayloadCategoryIds(formData, selectedCategoryIds),
-});
+const buildPartnerLocationsPayload = (formData) => {
+  const ids = formData.getAll('location_id');
+  const names = formData.getAll('location_name');
+  const addresses = formData.getAll('location_address');
+  const phones = formData.getAll('location_phone');
+  const mapUrls = formData.getAll('location_map_url');
+  const latitudes = formData.getAll('location_latitude');
+  const longitudes = formData.getAll('location_longitude');
+  const workingHours = formData.getAll('location_working_hours');
+  const sortOrders = formData.getAll('location_sort_order');
+  const activeFlags = formData.getAll('location_is_active_value');
+
+  return addresses.map((_, index) => {
+    const address = String(addresses[index] || '').trim();
+    const name = String(names[index] || '').trim();
+    const phone = String(phones[index] || '').trim();
+    const mapUrl = String(mapUrls[index] || '').trim();
+    const latitude = String(latitudes[index] || '').trim();
+    const longitude = String(longitudes[index] || '').trim();
+    const workingHour = String(workingHours[index] || '').trim();
+    const rawId = String(ids[index] || '').trim();
+
+    if (!address && !name && !phone && !mapUrl && !latitude && !longitude && !workingHour) {
+      return null;
+    }
+
+    return {
+      ...(rawId ? { id: Number(rawId) } : {}),
+      name: name || null,
+      address: address || null,
+      phone: phone || null,
+      map_url: mapUrl || null,
+      latitude: latitude || null,
+      longitude: longitude || null,
+      working_hours: workingHour || null,
+      sort_order: Number(String(sortOrders[index] || index).trim() || index),
+      is_active: String(activeFlags[index] || '').trim() !== 'false',
+    };
+  }).filter(Boolean);
+};
+
+const buildAdminPartnerPayload = (formData, selectedCategoryIds = null) => {
+  const locations = buildPartnerLocationsPayload(formData);
+  const primaryLocation = locations[0] || null;
+  return {
+    ...(String(formData.get('access_code') || '').trim() ? { access_code: String(formData.get('access_code')).trim() } : {}),
+    city_id: Number(formData.get('city_id')),
+    category_slug: getOptionalText(formData, 'category_slug'),
+    owner_user_id: formData.get('owner_user_id') ? Number(formData.get('owner_user_id')) : null,
+    name: getOptionalText(formData, 'name'),
+    description: getOptionalText(formData, 'description'),
+    address: primaryLocation?.address || null,
+    phone: primaryLocation?.phone || null,
+    website_url: getOptionalText(formData, 'website_url'),
+    social_url: getOptionalText(formData, 'social_url'),
+    instagram_url: getOptionalText(formData, 'instagram_url'),
+    vk_url: getOptionalText(formData, 'vk_url'),
+    telegram_url: getOptionalText(formData, 'telegram_url'),
+    whatsapp_url: getOptionalText(formData, 'whatsapp_url'),
+    booking_url: getOptionalText(formData, 'booking_url'),
+    map_url: primaryLocation?.map_url || null,
+    latitude: primaryLocation?.latitude || null,
+    longitude: primaryLocation?.longitude || null,
+    working_hours: primaryLocation?.working_hours || null,
+    logo_url: getOptionalText(formData, 'logo_url'),
+    cover_url: getOptionalText(formData, 'cover_url'),
+    is_active: formData.has('is_active'),
+    is_verified: formData.has('is_verified'),
+    sort_order: Number(formData.get('sort_order') || 0),
+    category_ids: getAdminPartnerPayloadCategoryIds(formData, selectedCategoryIds),
+    locations,
+  };
+};
 
 const submitPartner = async (form) => {
   if (guardLegacyContentWrite()) return;
@@ -6606,6 +6755,7 @@ const buildOfferTextPayload = (formData) => {
   const requiresOrderAmount = formData.has('requires_order_amount');
   return {
     title: getOptionalText(formData, 'title'),
+    location_id: formData.get('location_id') ? Number(formData.get('location_id')) : null,
     benefit_text: getOptionalText(formData, 'benefit_text'),
     description: getOptionalText(formData, 'description'),
     conditions: getOptionalText(formData, 'conditions'),
@@ -7745,6 +7895,25 @@ root.addEventListener('click', async (event) => {
     return;
   }
 
+  const partnerLocationAdd = event.target.closest('[data-admin-partner-location-add]');
+  if (partnerLocationAdd) {
+    addAdminPartnerLocationRow(partnerLocationAdd);
+    return;
+  }
+
+  const partnerLocationRemove = event.target.closest('[data-admin-partner-location-remove]');
+  if (partnerLocationRemove) {
+    const list = partnerLocationRemove.closest('[data-partner-locations-list]');
+    const items = list ? Array.from(list.querySelectorAll('[data-partner-location-item]')) : [];
+    if (items.length <= 1) {
+      setPanelMessage('У партнёра должен остаться хотя бы один адрес.', 'error');
+      return;
+    }
+    partnerLocationRemove.closest('[data-partner-location-item]')?.remove();
+    refreshPartnerLocationTitles(list);
+    return;
+  }
+
   const partnerAnalyticsReset = event.target.closest('[data-admin-partner-analytics-reset]');
   if (partnerAnalyticsReset) {
     const partnerId = partnerAnalyticsReset.dataset.adminPartnerAnalyticsReset;
@@ -8564,6 +8733,16 @@ root.addEventListener('change', (event) => {
       fixedPricing.querySelectorAll('input').forEach((input) => {
         input.disabled = requiresOrderAmount;
       });
+    }
+    return;
+  }
+
+  const locationActiveToggle = event.target.closest('[data-location-active-toggle]');
+  if (locationActiveToggle) {
+    const row = locationActiveToggle.closest('[data-partner-location-item]');
+    const hiddenInput = row?.querySelector('input[name="location_is_active_value"]');
+    if (hiddenInput) {
+      hiddenInput.value = locationActiveToggle.checked ? 'true' : 'false';
     }
     return;
   }

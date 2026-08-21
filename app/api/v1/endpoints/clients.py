@@ -8,7 +8,7 @@ import hmac
 import secrets
 import string
 
-from fastapi import APIRouter, Depends, HTTPException, status
+from fastapi import APIRouter, Depends, HTTPException, Query, status
 from sqlalchemy import func, or_, select, update
 from sqlalchemy.exc import IntegrityError
 from sqlalchemy.orm import Session, selectinload
@@ -22,7 +22,7 @@ from app.models.city import City
 from app.models.category import Category
 from app.models.client import AccountLinkingChallenge, BrowserLoginCode, ClientIdentityLink, ClientProfile, ClientReferral, GiveawayEntry, ReferralSubscriptionReward, VkLinkCode, VkLinkCodeStatus
 from app.models.giveaway import Giveaway, GiveawayNumber
-from app.models.partner import OfferPhoto, Partner, PartnerOffer, PartnerPhoto
+from app.models.partner import OfferPhoto, Partner, PartnerLocation, PartnerOffer, PartnerPhoto
 from app.models.payment import PaymentReceipt, PaymentRequest, PaymentRequestStatus, Subscription, SubscriptionStatus
 from app.models.verification import PrivilegeVerificationSession, PrivilegeVerificationStatus
 from app.models.user import User
@@ -41,6 +41,7 @@ from app.schemas.client import (
     ClientCreateVerificationRequest,
     ClientPartnerCatalogItem,
     ClientPartnerCategoryRead,
+    ClientPartnerLocationRead,
     ClientPartnerOfferRead,
     ClientPartnerPhotoRead,
     ClientProfileRead,
@@ -78,6 +79,12 @@ from app.services.offer_savings import (
     calculate_offer_saving_snapshot,
     calculate_percentage_saving_snapshot,
     offer_requires_order_amount,
+)
+from app.services.partner_locations import (
+    ensure_partner_location,
+    location_or_partner_field,
+    primary_partner_location,
+    resolved_partner_locations_payload,
 )
 from app.services.site_credentials import (
     decrypt_site_password,
@@ -1138,7 +1145,7 @@ def list_client_catalog_partners(
     statement = (
         select(Partner, City.name.label("city_name"))
         .join(City, Partner.city_id == City.id)
-        .options(selectinload(Partner.categories))
+        .options(selectinload(Partner.categories), selectinload(Partner.locations))
         .where(Partner.is_active.is_(True))
         .order_by(Partner.sort_order.asc(), Partner.id.asc())
     )
@@ -1175,7 +1182,14 @@ def create_client_partner_verification(
     profile = _get_or_create_client_profile(db, current_user.id)
     partner, _city_name = _get_active_partner_row_or_404(db, partner_id)
     request_payload = payload or ClientCreateVerificationRequest()
-    offer = _resolve_partner_offer_for_verification(db, partner.id, request_payload.offer_id, request_payload.privilege_id)
+    location = ensure_partner_location(db, partner.id, request_payload.location_id)
+    offer = _resolve_partner_offer_for_verification(
+        db,
+        partner.id,
+        request_payload.offer_id,
+        request_payload.privilege_id,
+        location.id if location is not None else None,
+    )
     requires_order_amount = offer_requires_order_amount(offer)
     if requires_order_amount and request_payload.order_amount is None:
         raise HTTPException(
@@ -1200,6 +1214,7 @@ def create_client_partner_verification(
     session = PrivilegeVerificationSession(
         client_id=profile.id,
         partner_id=partner.id,
+        location_id=location.id if location is not None else None,
         offer_id=offer.id if offer is not None else None,
         code=generate_unique_display_code(db, partner.id, now=now),
         token=_generate_unique_privilege_session_token(db),
@@ -1217,7 +1232,7 @@ def create_client_partner_verification(
     db.add(session)
     db.commit()
     db.refresh(session)
-    return _client_verification_to_read(session, partner.name, offer)
+    return _client_verification_to_read(session, partner.name, offer, location)
 
 
 @router.get("/me/verifications", response_model=list[ClientVerificationRead])
@@ -1305,14 +1320,24 @@ def read_client_partner(
 @router.get("/partners/{partner_id}/offers", response_model=list[ClientPartnerOfferRead])
 def list_client_partner_offers(
     partner_id: int,
+    location_id: int | None = Query(default=None),
     db: Session = Depends(get_db),
 ) -> list[ClientPartnerOfferRead]:
-    _get_active_partner_row_or_404(db, partner_id)
-    offers = db.execute(
+    partner, _city_name = _get_active_partner_row_or_404(db, partner_id)
+    selected_location = ensure_partner_location(db, partner.id, location_id)
+    statement = (
         select(PartnerOffer)
         .where(PartnerOffer.partner_id == partner_id, PartnerOffer.is_active.is_(True))
         .order_by(PartnerOffer.sort_order.asc(), PartnerOffer.id.asc())
-    ).scalars().all()
+    )
+    if selected_location is not None:
+        statement = statement.where(
+            or_(
+                PartnerOffer.location_id == selected_location.id,
+                PartnerOffer.location_id.is_(None),
+            )
+        )
+    offers = db.execute(statement).scalars().all()
     photos_by_offer = _active_photos_by_offer(db, [offer.id for offer in offers])
     return [_partner_offer_to_read(offer, photos_by_offer.get(offer.id, [])) for offer in offers]
 
@@ -1664,7 +1689,7 @@ def _get_active_partner_row_or_404(
     row = db.execute(
         select(Partner, City.name.label("city_name"))
         .join(City, Partner.city_id == City.id)
-        .options(selectinload(Partner.categories))
+        .options(selectinload(Partner.categories), selectinload(Partner.locations))
         .where(Partner.id == partner_id, Partner.is_active.is_(True))
     ).one_or_none()
     if row is None:
@@ -1673,14 +1698,25 @@ def _get_active_partner_row_or_404(
     return partner, city_name
 
 
-def _get_active_partner_offer_or_404(db: Session, partner_id: int, offer_id: int) -> PartnerOffer:
-    offer = db.execute(
-        select(PartnerOffer).where(
+def _get_active_partner_offer_or_404(
+    db: Session,
+    partner_id: int,
+    offer_id: int,
+    location_id: int | None = None,
+) -> PartnerOffer:
+    statement = select(PartnerOffer).where(
             PartnerOffer.id == offer_id,
             PartnerOffer.partner_id == partner_id,
             PartnerOffer.is_active.is_(True),
         )
-    ).scalar_one_or_none()
+    if location_id is not None:
+        statement = statement.where(
+            or_(
+                PartnerOffer.location_id == location_id,
+                PartnerOffer.location_id.is_(None),
+            )
+        )
+    offer = db.execute(statement).scalar_one_or_none()
     if offer is None:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail=OFFER_NOT_FOUND_DETAIL)
     return offer
@@ -1691,10 +1727,11 @@ def _resolve_partner_offer_for_verification(
     partner_id: int,
     offer_id: int | None,
     privilege_id: int | None,
+    location_id: int | None = None,
 ) -> PartnerOffer | None:
     selected_offer_id = _selected_offer_id(offer_id, privilege_id)
     if selected_offer_id is not None:
-        return _get_active_partner_offer_or_404(db, partner_id, selected_offer_id)
+        return _get_active_partner_offer_or_404(db, partner_id, selected_offer_id, location_id)
     return None
 
 
@@ -1732,6 +1769,7 @@ def _client_verification_to_read(
     session: PrivilegeVerificationSession,
     partner_name: str | None,
     offer: PartnerOffer | str | None,
+    location: PartnerLocation | None = None,
 ) -> ClientVerificationRead:
     offer_title = offer.title if isinstance(offer, PartnerOffer) else offer
     base_price, final_price, discount_percent, saving_amount = _client_verification_prices(session, offer)
@@ -1746,6 +1784,9 @@ def _client_verification_to_read(
             "client_id": session.client_id,
             "partner_id": session.partner_id,
             "partner_name": partner_name,
+            "location_id": session.location_id,
+            "location_name": location.name if location is not None else (session.location.name if session.location is not None else None),
+            "location_address": location.address if location is not None else (session.location.address if session.location is not None else None),
             "offer_id": session.offer_id,
             "offer_title": offer_title,
             "code": session.code,
@@ -1827,6 +1868,7 @@ def _partner_to_catalog_item(
     first = active_categories[0] if active_categories else None
     photo_url = photos[0].url if photos else None
     image_url = photo_url or partner.cover_url or partner.logo_url
+    primary_location = primary_partner_location(partner)
     return ClientPartnerCatalogItem.model_validate(
         {
             "id": partner.id,
@@ -1855,8 +1897,9 @@ def _partner_to_catalog_item(
             "category_slugs": [c.slug for c in active_categories],
             "name": partner.name,
             "description": partner.description,
-            "address": partner.address,
-            "phone": partner.phone,
+            "address": location_or_partner_field(primary_location, partner, "address"),
+            "locations": [ClientPartnerLocationRead.model_validate(item) for item in resolved_partner_locations_payload(partner)],
+            "phone": location_or_partner_field(primary_location, partner, "phone"),
             "website_url": partner.website_url,
             "social_url": partner.social_url,
             "instagram_url": partner.instagram_url,
@@ -1864,10 +1907,10 @@ def _partner_to_catalog_item(
             "telegram_url": partner.telegram_url,
             "whatsapp_url": partner.whatsapp_url,
             "booking_url": partner.booking_url,
-            "map_url": partner.map_url,
-            "latitude": partner.latitude,
-            "longitude": partner.longitude,
-            "working_hours": partner.working_hours,
+            "map_url": location_or_partner_field(primary_location, partner, "map_url"),
+            "latitude": location_or_partner_field(primary_location, partner, "latitude"),
+            "longitude": location_or_partner_field(primary_location, partner, "longitude"),
+            "working_hours": location_or_partner_field(primary_location, partner, "working_hours"),
             "logo_url": partner.logo_url,
             "cover_url": partner.cover_url,
             "image_url": image_url,
@@ -1915,6 +1958,8 @@ def _partner_offer_to_read(offer: PartnerOffer, photos: list[dict[str, object]] 
         {
             "id": offer.id,
             "partner_id": offer.partner_id,
+            "location_id": offer.location_id,
+            "location_name": offer.location.name if offer.location is not None else None,
             "title": offer.title,
             "description": offer.description,
             "benefit_text": offer.benefit_text,

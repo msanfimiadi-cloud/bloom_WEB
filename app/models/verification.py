@@ -25,6 +25,7 @@ class PrivilegeVerificationSession(Base):
     id: Mapped[int] = mapped_column(Integer, primary_key=True)
     client_id: Mapped[int] = mapped_column(ForeignKey("client_profiles.id"), nullable=False, index=True)
     partner_id: Mapped[int] = mapped_column(ForeignKey("partners.id"), nullable=False, index=True)
+    location_id: Mapped[int | None] = mapped_column(ForeignKey("partner_locations.id", ondelete="SET NULL"), nullable=True, index=True)
     offer_id: Mapped[int | None] = mapped_column(ForeignKey("partner_offers.id"), nullable=True)
     code: Mapped[str] = mapped_column(String(12), nullable=False, index=True)
     token: Mapped[str | None] = mapped_column(String(128), nullable=True, unique=True, index=True)
@@ -51,5 +52,6 @@ class PrivilegeVerificationSession(Base):
 
     client: Mapped["ClientProfile"] = relationship("ClientProfile", back_populates="verification_sessions")
     partner: Mapped["Partner"] = relationship("Partner", back_populates="verification_sessions", foreign_keys=[partner_id])
+    location: Mapped["PartnerLocation | None"] = relationship("PartnerLocation", back_populates="verification_sessions")
     offer: Mapped["PartnerOffer | None"] = relationship("PartnerOffer", back_populates="verification_sessions")
     confirmed_by_partner: Mapped["Partner | None"] = relationship("Partner", foreign_keys=[confirmed_by_partner_id])

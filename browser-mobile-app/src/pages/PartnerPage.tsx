@@ -20,8 +20,13 @@ import {
   getPartnerAddress,
   getPartnerCategories,
   getPartnerCity,
+  getPartnerCoverImage,
   getPartnerDescription,
   getPartnerImages,
+  getPartnerLocationAddress,
+  getPartnerLocationLabel,
+  getPartnerLocations,
+  getPartnerLogoImage,
   getPartnerName,
   getPartnerPhone,
   normalizeTelHref,
@@ -128,7 +133,7 @@ function SmoothImage({
   className?: string;
   loading?: "eager" | "lazy";
   onError?: () => void;
-  fit?: "cover" | "contain";
+  fit?: "cover" | "contain" | "smart";
 }) {
   return (
     <AppImage
@@ -295,7 +300,7 @@ interface PartnerPageProps {
   profile: ClientProfile | null;
   subscription: Subscription | null;
   onBack: () => void;
-  onVerifyOffer: (partnerId: ApiId, offerId: ApiId, orderAmount?: number) => Promise<Verification>;
+  onVerifyOffer: (partnerId: ApiId, offerId: ApiId, locationId?: ApiId | null, orderAmount?: number) => Promise<Verification>;
   onOpenSubscription: () => void;
   onActivateTrial: () => Promise<Subscription>;
   onRetryOffers: () => void;
@@ -316,12 +321,15 @@ export function PartnerPage({
   onRetryOffers,
 }: PartnerPageProps) {
   const safeOffers = Array.isArray(offers) ? offers : [];
+  const partnerLocations = getPartnerLocations(partner);
+  const partnerLocationIdsKey = partnerLocations.map((location, index) => String(location.id ?? `fallback-${index}`)).join("|");
   const [selectedVerification, setSelectedVerification] = useState<Verification | null>(null);
   const [selectedOffer, setSelectedOffer] = useState<Offer | null>(null);
   const [pendingAmountOffer, setPendingAmountOffer] = useState<Offer | null>(null);
   const [orderAmountInput, setOrderAmountInput] = useState("");
   const [orderAmountError, setOrderAmountError] = useState("");
   const [loadingOfferId, setLoadingOfferId] = useState<ApiId | null>(null);
+  const [selectedLocationId, setSelectedLocationId] = useState<ApiId | null>(null);
   const [message, setMessage] = useState("");
   const [isActivatingTrial, setIsActivatingTrial] = useState(false);
   const [galleryIndex, setGalleryIndex] = useState<number | null>(null);
@@ -365,6 +373,11 @@ export function PartnerPage({
   }, [partner?.id]);
 
   useEffect(() => {
+    const firstSelectableLocation = partnerLocations.find((location) => isNumericApiId(location.id)) ?? null;
+    setSelectedLocationId(firstSelectableLocation?.id ?? null);
+  }, [partner?.id, partnerLocationIdsKey]);
+
+  useEffect(() => {
     if (
       selectedOffer &&
       !safeOffers.some((offer) => offer.id === selectedOffer.id)
@@ -392,7 +405,17 @@ export function PartnerPage({
     };
   }, [galleryIndex, pendingAmountOffer, selectedVerification]);
 
-  const images = partner ? getPartnerImages(partner).filter((image) => !failedImageUrls.includes(image)) : [];
+  const coverImage = getPartnerCoverImage(partner ?? undefined);
+  const logoImage = getPartnerLogoImage(partner ?? undefined);
+  const images = partner
+    ? Array.from(
+        new Set(
+          [coverImage, ...getPartnerImages(partner).filter((image) => image !== logoImage)].filter(
+            (image): image is string => Boolean(image) && !failedImageUrls.includes(image ?? ""),
+          ),
+        ),
+      )
+    : [];
   const selectedGalleryImage = galleryIndex !== null ? images[galleryIndex] : null;
 
   useEffect(() => {
@@ -411,18 +434,44 @@ export function PartnerPage({
   }
 
   const currentPartner = partner;
-  const mapsUrl = buildPartnerMapsUrl({
+  const selectedLocation =
+    partnerLocations.find((location) => String(location.id ?? "") === String(selectedLocationId ?? "")) ?? null;
+  const locationAddress = selectedLocation ? getPartnerLocationAddress(selectedLocation) : getPartnerAddress(currentPartner);
+  const locationPhone =
+    selectedLocation && toText(selectedLocation.phone)
+      ? toText(selectedLocation.phone)
+      : getPartnerPhone(currentPartner);
+  const locationLatitude = selectedLocation?.latitude ?? currentPartner.latitude ?? currentPartner.lat;
+  const locationLongitude = selectedLocation?.longitude ?? currentPartner.longitude ?? currentPartner.lon;
+  const partnerMapsUrl = buildPartnerMapsUrl({
     mapUrl: currentPartner.map_url,
-    latitude: currentPartner.latitude ?? currentPartner.lat,
-    longitude: currentPartner.longitude ?? currentPartner.lon,
-    address: getPartnerAddress(currentPartner),
+    latitude: locationLatitude,
+    longitude: locationLongitude,
+    address: locationAddress,
   });
-  const phone = getPartnerPhone(currentPartner);
+  const mapsUrl =
+    selectedLocation && toText(selectedLocation.map_url)
+      ? buildPartnerMapsUrl({
+          mapUrl: toText(selectedLocation.map_url),
+          latitude: locationLatitude,
+          longitude: locationLongitude,
+          address: locationAddress,
+        })
+      : partnerMapsUrl;
+  const phone = locationPhone;
   const telHref = normalizeTelHref(phone);
   const partnerExternalLinks = getPartnerExternalLinks(currentPartner);
   const hasAccess = isSubscriptionActive(subscription);
   const trialAvailable = isTrialEligible(profile, subscription);
   const partnerIdForActions = resolveNumericPartnerId(currentPartner)?.numericPartnerId;
+  const visibleOffers = selectedLocation && isNumericApiId(selectedLocation.id)
+    ? safeOffers.filter((offer) => {
+        if (!isNumericApiId(offer.location_id)) {
+          return true;
+        }
+        return String(offer.location_id) === String(selectedLocation.id);
+      })
+    : safeOffers;
 
   function getVerificationErrorMessage(error: unknown): string {
     if (isTimeoutError(error)) {
@@ -456,7 +505,7 @@ export function PartnerPage({
     setLoadingOfferId(offer.id);
 
     try {
-      const verification = await onVerifyOffer(partnerIdForActions, offer.id, orderAmount);
+      const verification = await onVerifyOffer(partnerIdForActions, offer.id, selectedLocation?.id ?? null, orderAmount);
       setPendingAmountOffer(null);
       setOrderAmountInput("");
       setOrderAmountError("");
@@ -665,13 +714,13 @@ export function PartnerPage({
           {hasGallery ? (
             <div className="partner-gallery">
               <button className="partner-gallery__main" type="button" onClick={() => openGallery(0)} aria-label="Открыть фото партнёра">
-                <SmoothImage className="partner-detail__image" src={images[0]} alt={getPartnerName(currentPartner)} loading="eager" onError={() => handleImageError(images[0])} />
+                <SmoothImage className="partner-detail__image" src={images[0]} alt={getPartnerName(currentPartner)} loading="eager" fit="smart" onError={() => handleImageError(images[0])} />
               </button>
               {images.length > 1 ? (
                 <div className="partner-gallery__thumbs">
                   {images.slice(1, 5).map((image, index) => (
                     <button className="partner-gallery__thumb" type="button" onClick={() => openGallery(index + 1)} key={image} aria-label={`Открыть фото ${index + 2}`}>
-                      <SmoothImage src={image} alt="" onError={() => handleImageError(image)} />
+                      <SmoothImage src={image} alt="" fit="smart" onError={() => handleImageError(image)} />
                     </button>
                   ))}
                 </div>
@@ -684,6 +733,13 @@ export function PartnerPage({
             </div>
           )}
           <div className="partner-detail__info-card">
+            {logoImage ? (
+              <div className="partner-detail__brand-row">
+                <span className="partner-detail__brand-logo" aria-hidden="true">
+                  <AppImage src={logoImage} alt="" fit="contain" placeholder={getPartnerName(currentPartner).slice(0, 1) || "Bloom"} />
+                </span>
+              </div>
+            ) : null}
             <p className="eyebrow">{[getPartnerCity(currentPartner), getPartnerCategories(currentPartner).join(" • ")].filter(Boolean).join(" • ") || "Партнёр Bloom Club"}</p>
             <h1>{getPartnerName(currentPartner)}</h1>
             <p>{getPartnerDescription(currentPartner)}</p>
@@ -706,7 +762,7 @@ export function PartnerPage({
           <strong>{partnerInfoTitle}</strong>
           <div className="partner-contact-card__rows">
             {getPartnerCity(currentPartner) ? <span>📍 {getPartnerCity(currentPartner)}</span> : null}
-            {getPartnerAddress(currentPartner) ? <span>🗺️ {getPartnerAddress(currentPartner)}</span> : null}
+            {locationAddress ? <span>🗺️ {locationAddress}</span> : null}
             {phone ? <span>☎️ {phone}</span> : null}
           </div>
           {partnerExternalLinks.length ? (
@@ -745,6 +801,28 @@ export function PartnerPage({
 
         {message ? <p className="error-text">{message}</p> : null}
 
+        {partnerLocations.length > 1 ? (
+          <div className="info-panel partner-location-selector">
+            <strong>Выберите филиал</strong>
+            <div className="partner-location-selector__chips" role="tablist" aria-label="Филиалы партнёра">
+              {partnerLocations.map((location, index) => {
+                const isSelected = String(location.id ?? `fallback-${index}`) === String(selectedLocationId ?? "");
+                return (
+                  <button
+                    key={String(location.id ?? `fallback-${index}`)}
+                    className={`partner-location-chip${isSelected ? " partner-location-chip--active" : ""}`}
+                    type="button"
+                    onClick={() => setSelectedLocationId(location.id ?? null)}
+                  >
+                    <span>{getPartnerLocationLabel(location)}</span>
+                    {getPartnerLocationAddress(location) ? <small>{getPartnerLocationAddress(location)}</small> : null}
+                  </button>
+                );
+              })}
+            </div>
+          </div>
+        ) : null}
+
         <div className="section-heading">
           <h2>{servicesTitle}</h2>
         </div>
@@ -774,9 +852,9 @@ export function PartnerPage({
               </button>
             </div>
           </div>
-        ) : safeOffers.length ? (
+        ) : visibleOffers.length ? (
           <div className="offer-list">
-            {safeOffers.map((offer, index) => {
+            {visibleOffers.map((offer, index) => {
               const prices = getOfferPrices(offer);
               const offerKey = offer.id ?? index;
               const isVerifying = loadingOfferId === offer.id;
@@ -831,7 +909,14 @@ export function PartnerPage({
             })}
           </div>
         ) : offersStatus === "empty" || offersStatus === "idle" ? (
-          <EmptyState title={offersEmptyTitle} description={offersEmptyDescription} />
+          <EmptyState
+            title={offersEmptyTitle}
+            description={
+              selectedLocation
+                ? `Для филиала «${getPartnerLocationLabel(selectedLocation)}» пока нет активных предложений.`
+                : offersEmptyDescription
+            }
+          />
         ) : null}
       </article>
 

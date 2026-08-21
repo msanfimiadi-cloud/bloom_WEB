@@ -414,55 +414,10 @@ export function BloomMapPage({ partners, onBack, onOpenPartner }: BloomMapPagePr
         ) : null}
 
         {status === "ready" && selected ? (
-          <div
-            aria-live="polite"
-            style={{
-              position: "absolute",
-              left: 14,
-              right: 14,
-              top: 14,
-              zIndex: 4,
-              padding: "12px 14px",
-              border: "1px solid rgba(137,34,69,.12)",
-              borderRadius: 22,
-              background: "rgba(255,252,250,.92)",
-              boxShadow: "0 12px 30px rgba(77,43,52,.14)",
-              backdropFilter: "blur(14px)",
-            }}
-          >
-            <span
-              style={{
-                display: "block",
-                marginBottom: 4,
-                color: "#9d4764",
-                fontSize: 11,
-                fontWeight: 700,
-                letterSpacing: ".08em",
-                textTransform: "uppercase",
-              }}
-            >
-              Тут партнёр Bloom Club
-            </span>
-            <strong
-              style={{
-                display: "block",
-                color: "#4e2c35",
-                fontSize: 17,
-                lineHeight: 1.15,
-              }}
-            >
-              {getPartnerName(selected.partner)}
-            </strong>
-            <small
-              style={{
-                display: "block",
-                marginTop: 3,
-                color: "#7c6269",
-                fontSize: 12,
-              }}
-            >
-              {getPartnerCategories(selected.partner)[0] || "Привилегии рядом"}
-            </small>
+          <div className="bloom-map-selected-badge" aria-live="polite">
+            <span className="bloom-map-selected-badge__eyebrow">Тут партнёр Bloom Club</span>
+            <strong>{getPartnerName(selected.partner)}</strong>
+            <small>{getPartnerCategories(selected.partner)[0] || "Привилегии рядом"}</small>
           </div>
         ) : null}
       </div>
@@ -478,14 +433,17 @@ export function BloomMapPage({ partners, onBack, onOpenPartner }: BloomMapPagePr
           ) : (
             <div className="bloom-map-card__placeholder">✿</div>
           )}
+
           <div className="bloom-map-card__content">
             <div className="bloom-map-card__meta">
               <span>{getPartnerCategories(selected.partner)[0] || "Партнёр Bloom"}</span>
               {userPoint ? <span>{formatDistance(distanceInKilometers(userPoint, selected.point))}</span> : null}
             </div>
+
             <h2>{getPartnerName(selected.partner)}</h2>
             <p>{getPartnerPrivilege(selected.partner)}</p>
             <small>{getPartnerAddress(selected.partner)}</small>
+
             <div className="bloom-map-card__actions">
               <button className="button button--primary" type="button" onClick={() => onOpenPartner(selected.partner)}>
                 Открыть карточку

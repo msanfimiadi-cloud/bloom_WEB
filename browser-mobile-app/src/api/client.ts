@@ -1726,17 +1726,24 @@ export async function getPartners(options: { signal?: AbortSignal } = {}): Promi
   throw lastError;
 }
 
-export function getPartnerOffersPath(partnerId: string | number): string {
-  return TG_LOCAL_CATALOG_ENABLED
+export function getPartnerOffersPath(partnerId: string | number, locationId?: string | number | null): string {
+  const basePath = TG_LOCAL_CATALOG_ENABLED
     ? `/api/tg/partners/${partnerId}/offers`
     : `/clients/partners/${partnerId}/offers`;
+
+  if (locationId === undefined || locationId === null || locationId === "") {
+    return basePath;
+  }
+
+  return `${basePath}?location_id=${encodeURIComponent(String(locationId))}`;
 }
 
 export async function getPartnerOffers(
   partnerId: string | number,
+  locationId?: string | number | null,
 ): Promise<Offer[]> {
   const response = await request<unknown>(
-    getPartnerOffersPath(partnerId),
+    getPartnerOffersPath(partnerId, locationId),
     { retry: true },
     TG_LOCAL_CATALOG_ENABLED ? "tg" : "web",
   );
@@ -1866,10 +1873,12 @@ export function activateTrialSubscription(): Promise<Subscription> {
 export function verifyPartnerOffer(
   partnerId: string | number,
   offerId: string | number,
+  locationId?: string | number | null,
   orderAmount?: number,
 ): Promise<Verification> {
   const payload = {
     privilege_id: offerId,
+    ...(locationId === undefined || locationId === null || locationId === "" ? {} : { location_id: locationId }),
     ...(orderAmount === undefined ? {} : { order_amount: orderAmount }),
   };
 

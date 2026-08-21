@@ -30,7 +30,7 @@ from app.models.engagement import (
     PartnerBotAccess,
     PartnerCodeAttempt,
 )
-from app.models.partner import OfferPhoto, Partner, PartnerOffer, PartnerPhoto, PartnerQrLink
+from app.models.partner import OfferPhoto, Partner, PartnerLocation, PartnerOffer, PartnerPhoto, PartnerQrLink
 from app.models.payment import PaymentReceipt, PaymentRequest, PaymentRequestStatus, Subscription, SubscriptionStatus
 from app.models.acquiring import Payment, PaymentEvent, PaymentRefund, PaymentStatus, SubscriptionPlan
 from app.models.user import AdminUser, User, UserRole
@@ -78,6 +78,7 @@ __all__ = [
     "LeadClick",
     "LandingSettings",
     "Partner",
+    "PartnerLocation",
     "OfferPhoto",
     "PartnerOffer",
     "PartnerPhoto",

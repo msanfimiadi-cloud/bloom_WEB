@@ -2447,12 +2447,13 @@ def test_admin_partner_create_save_button_is_native_and_not_disabled() -> None:
 def test_admin_partner_category_only_save_still_posts_patch_payload() -> None:
     source = _frontend_main()
     edit_block = source.split('const submitPartnerEdit = async (form) => {', 1)[1].split('const decimalOrNull', 1)[0]
-    payload_block = source.split('const buildAdminPartnerPayload = (formData, selectedCategoryIds = null) => ({', 1)[1].split('const submitPartner = async', 1)[0]
+    payload_block = source.split('const buildAdminPartnerPayload = (formData, selectedCategoryIds = null) => {', 1)[1].split('const submitPartner = async', 1)[0]
 
     assert 'const selectedCategoryIds = captureAdminPartnerCategoryDraft(form);' in edit_block
     assert 'const formData = new FormData(form);' in edit_block
     assert 'patchJson(`/api/v1/admin/partners/${partnerId}`, buildAdminPartnerPayload(formData, selectedCategoryIds))' in edit_block
     assert 'category_ids: getAdminPartnerPayloadCategoryIds(formData, selectedCategoryIds)' in payload_block
+    assert 'locations,' in payload_block
     assert "formData.getAll('category_ids')" in source
 
 
@@ -2481,10 +2482,11 @@ def test_admin_partner_create_reset_and_category_edit_markers() -> None:
 
 def test_admin_partner_category_payload_uses_current_checkbox_state_and_refreshes_row() -> None:
     source = _frontend_main()
-    payload_block = source.split("const buildAdminPartnerPayload = (formData, selectedCategoryIds = null) => ({", 1)[1].split("const submitPartner = async", 1)[0]
+    payload_block = source.split("const buildAdminPartnerPayload = (formData, selectedCategoryIds = null) => {", 1)[1].split("const submitPartner = async", 1)[0]
     edit_block = source.split("const submitPartnerEdit = async (form) => {", 1)[1].split("const decimalOrNull", 1)[0]
 
     assert "category_ids: getAdminPartnerPayloadCategoryIds(formData, selectedCategoryIds)" in payload_block
+    assert "const locations = buildPartnerLocationsPayload(formData);" in payload_block
     assert "const selectedCategoryIds = captureAdminPartnerCategoryDraft(form);" in edit_block
     assert "const updatedPartner = await patchJson(`/api/v1/admin/partners/${partnerId}`, buildAdminPartnerPayload(formData, selectedCategoryIds));" in edit_block
     assert "adminState.partners = adminState.partners.map" in edit_block

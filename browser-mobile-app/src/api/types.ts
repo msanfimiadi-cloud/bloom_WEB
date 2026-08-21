@@ -167,6 +167,20 @@ export interface OfferPhoto {
   is_active?: boolean;
 }
 
+export interface PartnerLocation {
+  id?: ApiId | null;
+  partner_id?: ApiId;
+  name?: BackendText;
+  address?: BackendText;
+  phone?: BackendText;
+  map_url?: BackendText;
+  latitude?: number | string | null;
+  longitude?: number | string | null;
+  working_hours?: BackendText;
+  is_active?: boolean;
+  sort_order?: string | number;
+}
+
 export interface Partner {
   id: ApiId;
   partner_id?: ApiId;
@@ -180,6 +194,7 @@ export interface Partner {
   categories?: BackendText | BackendText[];
   city?: BackendText | City;
   address?: BackendText;
+  locations?: Array<PartnerLocation | Record<string, unknown>> | null;
   phone?: BackendText;
   website?: BackendText;
   website_url?: BackendText;
@@ -232,6 +247,8 @@ export interface Partner {
 export interface Offer {
   id?: ApiId;
   partner_id?: ApiId;
+  location_id?: ApiId | null;
+  location_name?: BackendText;
   title?: BackendText;
   description?: BackendText;
   benefit_text?: BackendText;
@@ -269,6 +286,9 @@ export interface Verification {
   partner_id?: ApiId;
   partner?: Partner | null;
   partner_name?: BackendText;
+  location_id?: ApiId | null;
+  location_name?: BackendText;
+  location_address?: BackendText;
   offer_id?: ApiId;
   offer?: Offer | null;
   offer_title?: BackendText;
