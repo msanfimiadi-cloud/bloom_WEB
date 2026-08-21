@@ -115,10 +115,6 @@ export function AppImage({
           setFailedSrc(safeSrc);
           onError?.();
         }}
-        onError={() => {
-          setFailedSrc(safeSrc);
-          onError?.();
-        }}
       />
     </span>
   );
