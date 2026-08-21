@@ -1,0 +1,98 @@
+.image-shell::before {
+  content: "";
+  position: absolute;
+  inset: 0;
+  background-image: var(--image-shell-bg);
+  background-position: center;
+  background-repeat: no-repeat;
+  background-size: cover;
+  filter: blur(18px) saturate(1.06);
+  transform: scale(1.08);
+  opacity: 0;
+  transition: opacity 180ms ease;
+  pointer-events: none;
+}
+
+.image-shell--contain.image-shell--loaded::before {
+  opacity: 0.92;
+}
+
+.partner-catalog-card__media {
+  position: relative;
+  display: block;
+  width: 148px;
+  min-height: 148px;
+}
+
+.partner-catalog-card__media .image-shell,
+.partner-catalog-card__media .image-shell img,
+.partner-catalog-card__media .home-partner-tile__placeholder {
+  width: 148px;
+  height: 148px;
+  min-height: 148px;
+  border-radius: 24px;
+}
+
+.partner-catalog-card__logo {
+  position: absolute;
+  left: 10px;
+  bottom: 10px;
+  display: grid;
+  place-items: center;
+  width: 54px;
+  height: 54px;
+  padding: 5px;
+  border-radius: 16px;
+  background: rgba(255, 252, 253, 0.96);
+  box-shadow: 0 10px 24px rgba(88, 44, 59, 0.14);
+}
+
+.partner-catalog-card__logo .image-shell,
+.partner-catalog-card__logo .image-shell img,
+.partner-catalog-card__logo .image-placeholder {
+  width: 100%;
+  height: 100%;
+  min-height: 0;
+  border-radius: 12px;
+}
+
+.partner-detail__brand-row {
+  display: flex;
+  align-items: center;
+  margin-bottom: 14px;
+}
+
+.partner-detail__brand-logo {
+  display: grid;
+  place-items: center;
+  width: 76px;
+  height: 76px;
+  padding: 7px;
+  border-radius: 24px;
+  background: rgba(255, 250, 252, 0.94);
+  box-shadow: 0 14px 30px rgba(88, 44, 59, 0.12);
+}
+
+.partner-detail__brand-logo .image-shell,
+.partner-detail__brand-logo .image-shell img,
+.partner-detail__brand-logo .image-placeholder {
+  width: 100%;
+  height: 100%;
+  min-height: 0;
+  border-radius: 18px;
+}
+
+@media (max-width: 390px) {
+  .partner-catalog-card__media {
+    width: 132px;
+    min-height: 144px;
+  }
+
+  .partner-catalog-card__media .image-shell,
+  .partner-catalog-card__media .image-shell img,
+  .partner-catalog-card__media .home-partner-tile__placeholder {
+    width: 132px;
+    height: 144px;
+    min-height: 144px;
+  }
+}
