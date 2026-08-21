@@ -1,3 +1,4 @@
+import "../partner-image-presentation.css";
 import type { Partner } from "../api/types";
 import { AppImage } from "./AppImage";
 import {
@@ -47,6 +48,12 @@ export function PartnerCatalogCard({ partner, onOpen, diagnosticContext }: Partn
             <AppImage src={logo} alt="" fit="contain" placeholder={name.slice(0, 1) || "Bloom"} />
           </span>
         ) : null}
+      </span>
+      <span className="home-partner-tile__body">
+        <strong>{name}</strong>
+        <small>{categories}</small>
+        {place ? <em>{place}</em> : null}
+        <span className="home-partner-tile__cta">Смотреть</span>
       </span>
       <span className="home-partner-tile__body">
         <strong>{name}</strong>

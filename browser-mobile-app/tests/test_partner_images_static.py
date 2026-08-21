@@ -5,6 +5,7 @@ PARTNER_DISPLAY = (ROOT / "src" / "utils" / "partnerDisplay.ts").read_text(encod
 CATALOG_PAGE = (ROOT / "src" / "pages" / "CatalogPage.tsx").read_text(encoding="utf-8")
 HOME_PAGE = (ROOT / "src" / "pages" / "HomePage.tsx").read_text(encoding="utf-8")
 PARTNER_PAGE = (ROOT / "src" / "pages" / "PartnerPage.tsx").read_text(encoding="utf-8")
+PARTNER_IMAGE_STYLES = (ROOT / "src" / "partner-image-presentation.css").read_text(encoding="utf-8")
 
 
 def test_partner_catalog_maps_backend_image_fields_correctly() -> None:
