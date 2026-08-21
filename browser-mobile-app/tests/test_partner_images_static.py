@@ -27,8 +27,36 @@ def test_relative_partner_image_urls_are_normalized_to_current_origin() -> None:
 def test_partner_image_render_uses_normalized_image_url() -> None:
     assert "getPartnerImage" in PARTNER_DISPLAY
     assert "getPartnerImages" in PARTNER_DISPLAY
+    assert "getPartnerCoverImage" in PARTNER_DISPLAY
+    assert "getPartnerLogoImage" in PARTNER_DISPLAY
     assert "getPartnerImages" in PARTNER_PAGE
     assert "failedImageUrls" in PARTNER_PAGE
+
+
+def test_catalog_card_prefers_cover_and_renders_logo_badge() -> None:
+    catalog_card = (ROOT / "src" / "components" / "PartnerCatalogCard.tsx").read_text(encoding="utf-8")
+    assert "getPartnerCoverImage" in catalog_card
+    assert "getPartnerLogoImage" in catalog_card
+    assert 'fit="smart"' in catalog_card
+    assert "partner-catalog-card__logo" in catalog_card
+
+
+def test_partner_page_keeps_logo_separate_from_gallery_and_uses_smart_fit() -> None:
+    assert "const coverImage = getPartnerCoverImage" in PARTNER_PAGE
+    assert "const logoImage = getPartnerLogoImage" in PARTNER_PAGE
+    assert 'fit="smart"' in PARTNER_PAGE
+    assert "partner-detail__brand-logo" in PARTNER_PAGE
+    assert "filter((image) => image !== logoImage)" in PARTNER_PAGE
+
+
+def test_app_image_supports_smart_fit_and_same_image_backdrop() -> None:
+    app_image = (ROOT / "src" / "components" / "AppImage.tsx").read_text(encoding="utf-8")
+    styles = (ROOT / "src" / "styles.css").read_text(encoding="utf-8")
+    assert '"cover" | "contain" | "smart"' in app_image
+    assert "cropRisk >= 1.38 ? \"contain\" : \"cover\"" in app_image
+    assert "--image-shell-bg" in app_image
+    assert ".image-shell::before" in styles
+    assert ".image-shell--contain.image-shell--loaded::before" in styles
 
 
 def test_app_bloomclub_relative_image_urls_are_not_rewritten_to_legacy_web_origin() -> None:
