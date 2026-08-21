@@ -37,7 +37,7 @@ def upgrade() -> None:
     op.add_column("partner_offers", sa.Column("location_id", sa.Integer(), nullable=True))
     op.create_index(op.f("ix_partner_offers_location_id"), "partner_offers", ["location_id"], unique=False)
     op.create_foreign_key(
-        "fk_partner_offers_location_id_partner_locations",
+        "fk_partner_offers_location",
         "partner_offers",
         "partner_locations",
         ["location_id"],
@@ -53,7 +53,7 @@ def upgrade() -> None:
         unique=False,
     )
     op.create_foreign_key(
-        "fk_privilege_verification_sessions_location_id_partner_locations",
+        "fk_privilege_sessions_location",
         "privilege_verification_sessions",
         "partner_locations",
         ["location_id"],
@@ -64,7 +64,7 @@ def upgrade() -> None:
 
 def downgrade() -> None:
     op.drop_constraint(
-        "fk_privilege_verification_sessions_location_id_partner_locations",
+        "fk_privilege_sessions_location",
         "privilege_verification_sessions",
         type_="foreignkey",
     )
@@ -72,7 +72,7 @@ def downgrade() -> None:
     op.drop_column("privilege_verification_sessions", "location_id")
 
     op.drop_constraint(
-        "fk_partner_offers_location_id_partner_locations",
+        "fk_partner_offers_location",
         "partner_offers",
         type_="foreignkey",
     )
