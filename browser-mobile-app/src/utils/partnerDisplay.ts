@@ -181,6 +181,38 @@ export function getPartnerImage(partner: Partner | null | undefined): string | u
   return getPartnerImages(partner)[0];
 }
 
+export function getPartnerCoverImage(partner: Partner | null | undefined): string | undefined {
+  if (!partner) {
+    return undefined;
+  }
+
+  const candidates = [
+    field(partner, "cover"),
+    partner.cover_url,
+    partner.photo_url,
+    partner.image_url,
+    partner.photos,
+    partner.gallery,
+    partner.images,
+    partner.media,
+    field(partner, "photo"),
+    field(partner, "image"),
+    partner.avatar_url,
+    partner.logo_url,
+  ];
+
+  return candidates.flatMap(collectMediaValues).map(normalizePartnerMediaUrlForDisplay).find((url): url is string => Boolean(url));
+}
+
+export function getPartnerLogoImage(partner: Partner | null | undefined): string | undefined {
+  if (!partner) {
+    return undefined;
+  }
+
+  const candidates = [partner.logo_url, field(partner, "logo"), partner.avatar_url];
+  return candidates.flatMap(collectMediaValues).map(normalizePartnerMediaUrlForDisplay).find((url): url is string => Boolean(url));
+}
+
 function toNumericId(value: unknown): number | null {
   if (typeof value === 'number' && Number.isInteger(value) && value > 0) {
     return value;

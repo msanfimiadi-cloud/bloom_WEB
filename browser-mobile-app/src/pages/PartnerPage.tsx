@@ -20,8 +20,10 @@ import {
   getPartnerAddress,
   getPartnerCategories,
   getPartnerCity,
+  getPartnerCoverImage,
   getPartnerDescription,
   getPartnerImages,
+  getPartnerLogoImage,
   getPartnerName,
   getPartnerPhone,
   normalizeTelHref,
@@ -128,7 +130,7 @@ function SmoothImage({
   className?: string;
   loading?: "eager" | "lazy";
   onError?: () => void;
-  fit?: "cover" | "contain";
+  fit?: "cover" | "contain" | "smart";
 }) {
   return (
     <AppImage
@@ -392,7 +394,17 @@ export function PartnerPage({
     };
   }, [galleryIndex, pendingAmountOffer, selectedVerification]);
 
-  const images = partner ? getPartnerImages(partner).filter((image) => !failedImageUrls.includes(image)) : [];
+  const coverImage = getPartnerCoverImage(partner ?? undefined);
+  const logoImage = getPartnerLogoImage(partner ?? undefined);
+  const images = partner
+    ? Array.from(
+        new Set(
+          [coverImage, ...getPartnerImages(partner).filter((image) => image !== logoImage)].filter(
+            (image): image is string => Boolean(image) && !failedImageUrls.includes(image ?? ""),
+          ),
+        ),
+      )
+    : [];
   const selectedGalleryImage = galleryIndex !== null ? images[galleryIndex] : null;
 
   useEffect(() => {
@@ -665,13 +677,13 @@ export function PartnerPage({
           {hasGallery ? (
             <div className="partner-gallery">
               <button className="partner-gallery__main" type="button" onClick={() => openGallery(0)} aria-label="Открыть фото партнёра">
-                <SmoothImage className="partner-detail__image" src={images[0]} alt={getPartnerName(currentPartner)} loading="eager" onError={() => handleImageError(images[0])} />
+                <SmoothImage className="partner-detail__image" src={images[0]} alt={getPartnerName(currentPartner)} loading="eager" fit="smart" onError={() => handleImageError(images[0])} />
               </button>
               {images.length > 1 ? (
                 <div className="partner-gallery__thumbs">
                   {images.slice(1, 5).map((image, index) => (
                     <button className="partner-gallery__thumb" type="button" onClick={() => openGallery(index + 1)} key={image} aria-label={`Открыть фото ${index + 2}`}>
-                      <SmoothImage src={image} alt="" onError={() => handleImageError(image)} />
+                      <SmoothImage src={image} alt="" fit="smart" onError={() => handleImageError(image)} />
                     </button>
                   ))}
                 </div>
@@ -684,6 +696,13 @@ export function PartnerPage({
             </div>
           )}
           <div className="partner-detail__info-card">
+            {logoImage ? (
+              <div className="partner-detail__brand-row">
+                <span className="partner-detail__brand-logo" aria-hidden="true">
+                  <AppImage src={logoImage} alt="" fit="contain" placeholder={getPartnerName(currentPartner).slice(0, 1) || "Bloom"} />
+                </span>
+              </div>
+            ) : null}
             <p className="eyebrow">{[getPartnerCity(currentPartner), getPartnerCategories(currentPartner).join(" • ")].filter(Boolean).join(" • ") || "Партнёр Bloom Club"}</p>
             <h1>{getPartnerName(currentPartner)}</h1>
             <p>{getPartnerDescription(currentPartner)}</p>

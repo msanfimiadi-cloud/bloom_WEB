@@ -4,7 +4,9 @@ import {
   getPartnerAddress,
   getPartnerCategories,
   getPartnerCity,
+  getPartnerCoverImage,
   getPartnerImage,
+  getPartnerLogoImage,
   getPartnerName,
   tracePartnerImageDiagnostic,
 } from "../utils/partnerDisplay";
@@ -16,7 +18,8 @@ interface PartnerCatalogCardProps {
 }
 
 export function PartnerCatalogCard({ partner, onOpen, diagnosticContext }: PartnerCatalogCardProps) {
-  const image = getPartnerImage(partner);
+  const image = getPartnerCoverImage(partner) ?? getPartnerImage(partner);
+  const logo = getPartnerLogoImage(partner);
   const name = getPartnerName(partner);
   const categories = getPartnerCategories(partner).join(" • ") || "Партнёр Bloom Club";
   const place = [getPartnerCity(partner), getPartnerAddress(partner)].filter(Boolean).join(" · ");
@@ -30,14 +33,21 @@ export function PartnerCatalogCard({ partner, onOpen, diagnosticContext }: Partn
       onClick={() => onOpen(partner)}
       aria-label={`Открыть партнёра ${name}`}
     >
-      <AppImage
-        src={image}
-        alt=""
-        fit="cover"
-        placeholder={name.slice(0, 1) || "Bloom"}
-        placeholderClassName="home-partner-tile__placeholder image-placeholder image-placeholder--brand"
-        onError={() => tracePartnerImageDiagnostic("image_load_error", partner, image)}
-      />
+      <span className="partner-catalog-card__media">
+        <AppImage
+          src={image}
+          alt=""
+          fit="smart"
+          placeholder={name.slice(0, 1) || "Bloom"}
+          placeholderClassName="home-partner-tile__placeholder image-placeholder image-placeholder--brand"
+          onError={() => tracePartnerImageDiagnostic("image_load_error", partner, image)}
+        />
+        {logo ? (
+          <span className="partner-catalog-card__logo" aria-hidden="true">
+            <AppImage src={logo} alt="" fit="contain" placeholder={name.slice(0, 1) || "Bloom"} />
+          </span>
+        ) : null}
+      </span>
       <span className="home-partner-tile__body">
         <strong>{name}</strong>
         <small>{categories}</small>
