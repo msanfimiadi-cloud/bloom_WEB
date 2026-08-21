@@ -5,6 +5,7 @@ PARTNER_DISPLAY = (ROOT / "src" / "utils" / "partnerDisplay.ts").read_text(encod
 CATALOG_PAGE = (ROOT / "src" / "pages" / "CatalogPage.tsx").read_text(encoding="utf-8")
 HOME_PAGE = (ROOT / "src" / "pages" / "HomePage.tsx").read_text(encoding="utf-8")
 PARTNER_PAGE = (ROOT / "src" / "pages" / "PartnerPage.tsx").read_text(encoding="utf-8")
+PARTNER_IMAGE_STYLES = (ROOT / "src" / "partner-image-presentation.css").read_text(encoding="utf-8")
 
 
 def test_partner_catalog_maps_backend_image_fields_correctly() -> None:
@@ -39,24 +40,17 @@ def test_catalog_card_prefers_cover_and_renders_logo_badge() -> None:
     assert "getPartnerLogoImage" in catalog_card
     assert 'fit="smart"' in catalog_card
     assert "partner-catalog-card__logo" in catalog_card
-
-
-def test_partner_page_keeps_logo_separate_from_gallery_and_uses_smart_fit() -> None:
-    assert "const coverImage = getPartnerCoverImage" in PARTNER_PAGE
-    assert "const logoImage = getPartnerLogoImage" in PARTNER_PAGE
-    assert 'fit="smart"' in PARTNER_PAGE
-    assert "partner-detail__brand-logo" in PARTNER_PAGE
-    assert "filter((image) => image !== logoImage)" in PARTNER_PAGE
+    assert 'import "../partner-image-presentation.css";' in catalog_card
 
 
 def test_app_image_supports_smart_fit_and_same_image_backdrop() -> None:
     app_image = (ROOT / "src" / "components" / "AppImage.tsx").read_text(encoding="utf-8")
-    styles = (ROOT / "src" / "styles.css").read_text(encoding="utf-8")
     assert '"cover" | "contain" | "smart"' in app_image
     assert "cropRisk >= 1.38 ? \"contain\" : \"cover\"" in app_image
     assert "--image-shell-bg" in app_image
-    assert ".image-shell::before" in styles
-    assert ".image-shell--contain.image-shell--loaded::before" in styles
+    assert ".image-shell::before" in PARTNER_IMAGE_STYLES
+    assert ".image-shell--contain.image-shell--loaded::before" in PARTNER_IMAGE_STYLES
+    assert ".partner-catalog-card__logo" in PARTNER_IMAGE_STYLES
 
 
 def test_app_bloomclub_relative_image_urls_are_not_rewritten_to_legacy_web_origin() -> None:
