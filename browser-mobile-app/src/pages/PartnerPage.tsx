@@ -441,18 +441,23 @@ export function PartnerPage({
     selectedLocation && toText(selectedLocation.phone)
       ? toText(selectedLocation.phone)
       : getPartnerPhone(currentPartner);
-  const locationMapUrl =
-    selectedLocation && toText(selectedLocation.map_url)
-      ? toText(selectedLocation.map_url)
-      : currentPartner.map_url;
   const locationLatitude = selectedLocation?.latitude ?? currentPartner.latitude ?? currentPartner.lat;
   const locationLongitude = selectedLocation?.longitude ?? currentPartner.longitude ?? currentPartner.lon;
-  const mapsUrl = buildPartnerMapsUrl({
-    mapUrl: locationMapUrl,
+  const partnerMapsUrl = buildPartnerMapsUrl({
+    mapUrl: currentPartner.map_url,
     latitude: locationLatitude,
     longitude: locationLongitude,
     address: locationAddress,
   });
+  const mapsUrl =
+    selectedLocation && toText(selectedLocation.map_url)
+      ? buildPartnerMapsUrl({
+          mapUrl: toText(selectedLocation.map_url),
+          latitude: locationLatitude,
+          longitude: locationLongitude,
+          address: locationAddress,
+        })
+      : partnerMapsUrl;
   const phone = locationPhone;
   const telHref = normalizeTelHref(phone);
   const partnerExternalLinks = getPartnerExternalLinks(currentPartner);
