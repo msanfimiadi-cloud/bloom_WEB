@@ -1,4 +1,4 @@
-import type { Offer, Partner, Verification } from '../api/types';
+import type { Offer, Partner, PartnerLocation, Verification } from '../api/types';
 import { parseMoney, roundMoney } from './format';
 import { pickText, toText } from './text';
 
@@ -365,6 +365,22 @@ export function getPartnerDescription(partner: Partner | null | undefined): stri
 
 export function getPartnerAddress(partner: Partner | null | undefined): string | undefined {
   return pickReadableValue(partner?.address);
+}
+
+export function getPartnerLocations(partner: Partner | null | undefined): PartnerLocation[] {
+  if (!partner || !Array.isArray(partner.locations)) {
+    return [];
+  }
+
+  return partner.locations.filter((location): location is PartnerLocation => Boolean(location) && typeof location === 'object');
+}
+
+export function getPartnerLocationLabel(location: PartnerLocation | null | undefined): string {
+  return pickReadableValue(location?.name, location?.address) || 'Адрес партнёра';
+}
+
+export function getPartnerLocationAddress(location: PartnerLocation | null | undefined): string | undefined {
+  return pickReadableValue(location?.address);
 }
 
 export function getPartnerPhone(partner: Partner | null | undefined): string | undefined {

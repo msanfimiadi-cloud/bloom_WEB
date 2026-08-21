@@ -17,6 +17,7 @@ class PartnerProfileRead(BaseModel):
     name: str
     description: str | None
     address: str | None
+    locations: list["PartnerLocationRead"] = Field(default_factory=list)
     phone: str | None
     website_url: str | None
     social_url: str | None
@@ -59,6 +60,8 @@ class PartnerProfileUpdate(BaseModel):
 class PartnerOfferRead(BaseModel):
     id: int
     partner_id: int
+    location_id: int | None = None
+    location_name: str | None = None
     title: str
     description: str | None
     benefit_text: str | None
@@ -90,6 +93,7 @@ class PartnerOfferRead(BaseModel):
 
 
 class PartnerOfferCreate(BaseModel):
+    location_id: int | None = None
     title: str
     description: str | None = None
     benefit_text: str | None = None
@@ -103,6 +107,7 @@ class PartnerOfferCreate(BaseModel):
 
 
 class PartnerOfferUpdate(BaseModel):
+    location_id: int | None = None
     title: str | None = None
     description: str | None = None
     benefit_text: str | None = None
@@ -169,12 +174,30 @@ class PartnerAnalyticsRead(BaseModel):
     confirmation_rate_percent: float
 
 
+class PartnerLocationRead(BaseModel):
+    id: int | None = None
+    name: str | None = None
+    address: str | None = None
+    phone: str | None = None
+    map_url: str | None = None
+    latitude: float | None = None
+    longitude: float | None = None
+    working_hours: str | None = None
+    is_active: bool = True
+    sort_order: int = 0
+
+    model_config = {"from_attributes": True}
+
+
 class PartnerVerificationRead(BaseModel):
     id: int
     client_id: int
     client_name: str | None
     partner_id: int
     partner_name: str | None
+    location_id: int | None = None
+    location_name: str | None = None
+    location_address: str | None = None
     offer_id: int | None
     offer_title: str | None
     code: str

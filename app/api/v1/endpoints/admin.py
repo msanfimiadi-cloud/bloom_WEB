@@ -33,7 +33,7 @@ from app.models.engagement import (
 )
 from app.models.lead import LeadClick
 from app.models.landing import LandingSettings
-from app.models.partner import Partner, PartnerOffer, PartnerPhoto, PartnerQrLink
+from app.models.partner import Partner, PartnerLocation, PartnerOffer, PartnerPhoto, PartnerQrLink
 from app.models.payment import PaymentRequest, PaymentRequestStatus, Subscription, SubscriptionStatus
 from app.models.user import AdminUser, User, UserRole
 from app.models.verification import PrivilegeVerificationSession
@@ -58,6 +58,7 @@ from app.schemas.admin import (
     CityUpdate,
     LeadStatsRead,
     PartnerCreate,
+    PartnerLocationRead,
     PartnerOfferCreate,
     PartnerOfferRead,
     PartnerOfferUpdate,
@@ -111,6 +112,14 @@ from app.services.giveaways import next_giveaway_draw_at
 from app.services.image_uploads import save_partner_image_upload, save_partner_offer_image_upload, save_partner_photo_image_upload, validate_image_kind
 from app.services.partner_analytics import build_partner_analytics
 from app.services.partner_access_codes import prepare_partner_access_code
+from app.services.partner_locations import (
+    ensure_partner_location,
+    location_or_partner_field,
+    mirror_primary_location_to_partner,
+    primary_partner_location,
+    resolved_partner_locations_payload,
+    sync_partner_locations,
+)
 from app.services.privilege_verifications import (
     apply_verification_status_filter,
     as_aware_utc,
@@ -1710,7 +1719,7 @@ def list_admin_partners(
         select(Partner, City.name.label("city_name"), User.email.label("owner_email"))
         .join(City, Partner.city_id == City.id)
         .outerjoin(User, Partner.owner_user_id == User.id)
-        .options(selectinload(Partner.categories))
+        .options(selectinload(Partner.categories), selectinload(Partner.locations))
         .order_by(Partner.sort_order.asc(), Partner.id.asc())
     )
 
@@ -1771,6 +1780,8 @@ def create_admin_partner(
     if category_ids is not None:
         partner.categories = _get_categories_by_ids_or_400(db, category_ids)
         partner.category_slug = partner.categories[0].slug if partner.categories else None
+    sync_partner_locations(db, partner, payload.locations and [item.model_dump() for item in payload.locations])
+    mirror_primary_location_to_partner(partner)
     db.commit()
     db.refresh(partner)
     return _get_partner_read_or_404(db, partner.id)
@@ -1826,6 +1837,7 @@ def update_admin_partner(
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Partner not found")
 
     update_data = payload.model_dump(exclude_unset=True)
+    locations_payload = update_data.pop("locations", None)
     access_code_supplied = "access_code" in update_data
     access_code = update_data.pop("access_code", None)
     if access_code_supplied:
@@ -1858,7 +1870,8 @@ def update_admin_partner(
     for field in ("latitude", "longitude"):
         if field in update_data:
             setattr(partner, field, update_data[field])
-
+    sync_partner_locations(db, partner, locations_payload)
+    mirror_primary_location_to_partner(partner)
     db.commit()
     db.refresh(partner)
     return _get_partner_read_or_404(db, partner.id)
@@ -2094,9 +2107,11 @@ def create_admin_partner_offer(
     _ = legacy_content_write
     partner = _ensure_partner_exists(db, partner_id)
     _validate_offer_amounts(payload.base_price, payload.discount_percent, payload.requires_order_amount)
+    location = ensure_partner_location(db, partner.id, payload.location_id)
 
     offer = PartnerOffer(
         partner_id=partner.id,
+        location_id=location.id if location is not None else None,
         title=_strip_offer_title(payload.title),
         base_price=payload.base_price,
         discount_percent=payload.discount_percent,
@@ -2158,6 +2173,9 @@ def update_admin_partner_offer(
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Offer not found")
 
     update_data = payload.model_dump(exclude_unset=True)
+    if "location_id" in update_data:
+        location = ensure_partner_location(db, offer.partner_id, update_data["location_id"])
+        offer.location_id = location.id if location is not None else None
     _validate_offer_amounts(
         update_data.get("base_price", offer.base_price),
         update_data.get("discount_percent", offer.discount_percent),
@@ -2565,6 +2583,8 @@ def _partner_offer_to_read(offer: PartnerOffer, partner_name: str | None) -> Par
         {
             "id": offer.id,
             "partner_id": offer.partner_id,
+            "location_id": offer.location_id,
+            "location_name": offer.location.name if offer.location is not None else None,
             "title": offer.title,
             "description": offer.description,
             "benefit_text": offer.benefit_text,
@@ -2585,7 +2605,7 @@ def _get_partner_read_or_404(db: Session, partner_id: int) -> PartnerRead:
         select(Partner, City.name.label("city_name"), User.email.label("owner_email"))
         .join(City, Partner.city_id == City.id)
         .outerjoin(User, Partner.owner_user_id == User.id)
-        .options(selectinload(Partner.categories))
+        .options(selectinload(Partner.categories), selectinload(Partner.locations))
         .where(Partner.id == partner_id)
     )
     row = db.execute(statement).one_or_none()
@@ -2619,6 +2639,7 @@ def _partner_to_read(partner: Partner, city_name: str | None, owner_email: str |
     first_slug = str(first_category_payload["slug"]) if first_category_payload is not None else None
     categories_payload = [_category_to_api_payload(category) for category in categories]
     normalized_categories_payload = [item for item in categories_payload if item is not None]
+    primary_location = primary_partner_location(partner)
     return PartnerRead.model_validate(
         {
             "id": partner.id,
@@ -2633,8 +2654,9 @@ def _partner_to_read(partner: Partner, city_name: str | None, owner_email: str |
             "category_slugs": [c.slug for c in categories],
             "name": partner.name,
             "description": partner.description,
-            "address": partner.address,
-            "phone": partner.phone,
+            "address": location_or_partner_field(primary_location, partner, "address"),
+            "locations": [PartnerLocationRead.model_validate(item) for item in resolved_partner_locations_payload(partner)],
+            "phone": location_or_partner_field(primary_location, partner, "phone"),
             "website_url": partner.website_url,
             "social_url": partner.social_url,
             "instagram_url": partner.instagram_url,
@@ -2642,10 +2664,10 @@ def _partner_to_read(partner: Partner, city_name: str | None, owner_email: str |
             "telegram_url": partner.telegram_url,
             "whatsapp_url": partner.whatsapp_url,
             "booking_url": partner.booking_url,
-            "map_url": partner.map_url,
-            "latitude": partner.latitude,
-            "longitude": partner.longitude,
-            "working_hours": partner.working_hours,
+            "map_url": location_or_partner_field(primary_location, partner, "map_url"),
+            "latitude": location_or_partner_field(primary_location, partner, "latitude"),
+            "longitude": location_or_partner_field(primary_location, partner, "longitude"),
+            "working_hours": location_or_partner_field(primary_location, partner, "working_hours"),
             "logo_url": partner.logo_url,
             "cover_url": partner.cover_url,
             "is_active": partner.is_active,

@@ -23,6 +23,9 @@ import {
   getPartnerCoverImage,
   getPartnerDescription,
   getPartnerImages,
+  getPartnerLocationAddress,
+  getPartnerLocationLabel,
+  getPartnerLocations,
   getPartnerLogoImage,
   getPartnerName,
   getPartnerPhone,
@@ -297,7 +300,7 @@ interface PartnerPageProps {
   profile: ClientProfile | null;
   subscription: Subscription | null;
   onBack: () => void;
-  onVerifyOffer: (partnerId: ApiId, offerId: ApiId, orderAmount?: number) => Promise<Verification>;
+  onVerifyOffer: (partnerId: ApiId, offerId: ApiId, locationId?: ApiId | null, orderAmount?: number) => Promise<Verification>;
   onOpenSubscription: () => void;
   onActivateTrial: () => Promise<Subscription>;
   onRetryOffers: () => void;
@@ -318,12 +321,15 @@ export function PartnerPage({
   onRetryOffers,
 }: PartnerPageProps) {
   const safeOffers = Array.isArray(offers) ? offers : [];
+  const partnerLocations = getPartnerLocations(partner);
+  const partnerLocationIdsKey = partnerLocations.map((location, index) => String(location.id ?? `fallback-${index}`)).join("|");
   const [selectedVerification, setSelectedVerification] = useState<Verification | null>(null);
   const [selectedOffer, setSelectedOffer] = useState<Offer | null>(null);
   const [pendingAmountOffer, setPendingAmountOffer] = useState<Offer | null>(null);
   const [orderAmountInput, setOrderAmountInput] = useState("");
   const [orderAmountError, setOrderAmountError] = useState("");
   const [loadingOfferId, setLoadingOfferId] = useState<ApiId | null>(null);
+  const [selectedLocationId, setSelectedLocationId] = useState<ApiId | null>(null);
   const [message, setMessage] = useState("");
   const [isActivatingTrial, setIsActivatingTrial] = useState(false);
   const [galleryIndex, setGalleryIndex] = useState<number | null>(null);
@@ -365,6 +371,11 @@ export function PartnerPage({
   useEffect(() => {
     setFailedImageUrls([]);
   }, [partner?.id]);
+
+  useEffect(() => {
+    const firstSelectableLocation = partnerLocations.find((location) => isNumericApiId(location.id)) ?? null;
+    setSelectedLocationId(firstSelectableLocation?.id ?? null);
+  }, [partner?.id, partnerLocationIdsKey]);
 
   useEffect(() => {
     if (
@@ -423,18 +434,39 @@ export function PartnerPage({
   }
 
   const currentPartner = partner;
+  const selectedLocation =
+    partnerLocations.find((location) => String(location.id ?? "") === String(selectedLocationId ?? "")) ?? null;
+  const locationAddress = selectedLocation ? getPartnerLocationAddress(selectedLocation) : getPartnerAddress(currentPartner);
+  const locationPhone =
+    selectedLocation && toText(selectedLocation.phone)
+      ? toText(selectedLocation.phone)
+      : getPartnerPhone(currentPartner);
+  const locationMapUrl =
+    selectedLocation && toText(selectedLocation.map_url)
+      ? toText(selectedLocation.map_url)
+      : currentPartner.map_url;
+  const locationLatitude = selectedLocation?.latitude ?? currentPartner.latitude ?? currentPartner.lat;
+  const locationLongitude = selectedLocation?.longitude ?? currentPartner.longitude ?? currentPartner.lon;
   const mapsUrl = buildPartnerMapsUrl({
-    mapUrl: currentPartner.map_url,
-    latitude: currentPartner.latitude ?? currentPartner.lat,
-    longitude: currentPartner.longitude ?? currentPartner.lon,
-    address: getPartnerAddress(currentPartner),
+    mapUrl: locationMapUrl,
+    latitude: locationLatitude,
+    longitude: locationLongitude,
+    address: locationAddress,
   });
-  const phone = getPartnerPhone(currentPartner);
+  const phone = locationPhone;
   const telHref = normalizeTelHref(phone);
   const partnerExternalLinks = getPartnerExternalLinks(currentPartner);
   const hasAccess = isSubscriptionActive(subscription);
   const trialAvailable = isTrialEligible(profile, subscription);
   const partnerIdForActions = resolveNumericPartnerId(currentPartner)?.numericPartnerId;
+  const visibleOffers = selectedLocation && isNumericApiId(selectedLocation.id)
+    ? safeOffers.filter((offer) => {
+        if (!isNumericApiId(offer.location_id)) {
+          return true;
+        }
+        return String(offer.location_id) === String(selectedLocation.id);
+      })
+    : safeOffers;
 
   function getVerificationErrorMessage(error: unknown): string {
     if (isTimeoutError(error)) {
@@ -468,7 +500,7 @@ export function PartnerPage({
     setLoadingOfferId(offer.id);
 
     try {
-      const verification = await onVerifyOffer(partnerIdForActions, offer.id, orderAmount);
+      const verification = await onVerifyOffer(partnerIdForActions, offer.id, selectedLocation?.id ?? null, orderAmount);
       setPendingAmountOffer(null);
       setOrderAmountInput("");
       setOrderAmountError("");
@@ -725,7 +757,7 @@ export function PartnerPage({
           <strong>{partnerInfoTitle}</strong>
           <div className="partner-contact-card__rows">
             {getPartnerCity(currentPartner) ? <span>📍 {getPartnerCity(currentPartner)}</span> : null}
-            {getPartnerAddress(currentPartner) ? <span>🗺️ {getPartnerAddress(currentPartner)}</span> : null}
+            {locationAddress ? <span>🗺️ {locationAddress}</span> : null}
             {phone ? <span>☎️ {phone}</span> : null}
           </div>
           {partnerExternalLinks.length ? (
@@ -764,6 +796,28 @@ export function PartnerPage({
 
         {message ? <p className="error-text">{message}</p> : null}
 
+        {partnerLocations.length > 1 ? (
+          <div className="info-panel partner-location-selector">
+            <strong>Выберите филиал</strong>
+            <div className="partner-location-selector__chips" role="tablist" aria-label="Филиалы партнёра">
+              {partnerLocations.map((location, index) => {
+                const isSelected = String(location.id ?? `fallback-${index}`) === String(selectedLocationId ?? "");
+                return (
+                  <button
+                    key={String(location.id ?? `fallback-${index}`)}
+                    className={`partner-location-chip${isSelected ? " partner-location-chip--active" : ""}`}
+                    type="button"
+                    onClick={() => setSelectedLocationId(location.id ?? null)}
+                  >
+                    <span>{getPartnerLocationLabel(location)}</span>
+                    {getPartnerLocationAddress(location) ? <small>{getPartnerLocationAddress(location)}</small> : null}
+                  </button>
+                );
+              })}
+            </div>
+          </div>
+        ) : null}
+
         <div className="section-heading">
           <h2>{servicesTitle}</h2>
         </div>
@@ -793,9 +847,9 @@ export function PartnerPage({
               </button>
             </div>
           </div>
-        ) : safeOffers.length ? (
+        ) : visibleOffers.length ? (
           <div className="offer-list">
-            {safeOffers.map((offer, index) => {
+            {visibleOffers.map((offer, index) => {
               const prices = getOfferPrices(offer);
               const offerKey = offer.id ?? index;
               const isVerifying = loadingOfferId === offer.id;
@@ -850,7 +904,14 @@ export function PartnerPage({
             })}
           </div>
         ) : offersStatus === "empty" || offersStatus === "idle" ? (
-          <EmptyState title={offersEmptyTitle} description={offersEmptyDescription} />
+          <EmptyState
+            title={offersEmptyTitle}
+            description={
+              selectedLocation
+                ? `Для филиала «${getPartnerLocationLabel(selectedLocation)}» пока нет активных предложений.`
+                : offersEmptyDescription
+            }
+          />
         ) : null}
       </article>
 

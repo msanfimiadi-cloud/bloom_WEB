@@ -6,7 +6,7 @@ from decimal import Decimal
 
 from fastapi import APIRouter, Depends, File, Form, HTTPException, UploadFile, status
 from sqlalchemy import func, select
-from sqlalchemy.orm import Session
+from sqlalchemy.orm import Session, selectinload
 
 from app.api.deps import require_partner
 from app.db.session import get_db
@@ -32,6 +32,7 @@ from app.schemas.partner import (
     OfferPhotoRead,
     OfferPhotoUpdate,
     PartnerOfferRead,
+    PartnerLocationRead,
     LeadStatsRead,
     PartnerOfferUpdate,
     PartnerPhotoRead,
@@ -50,6 +51,7 @@ from app.services.privilege_verifications import (
     normalize_expired_verifications,
     ttl_seconds,
 )
+from app.services.partner_locations import location_or_partner_field, primary_partner_location, resolved_partner_locations_payload
 from app.services.qr_links import qr_link_to_read
 
 router = APIRouter(prefix="/partners", tags=["partners"])
@@ -585,6 +587,9 @@ def _partner_verification_to_read(
             "client_name": client_name,
             "partner_id": session.partner_id,
             "partner_name": partner_name,
+            "location_id": session.location_id,
+            "location_name": session.location.name if session.location is not None else None,
+            "location_address": session.location.address if session.location is not None else None,
             "offer_id": session.offer_id,
             "offer_title": offer_title,
             "code": session.code,
@@ -609,11 +614,13 @@ def _get_partner_profile_read(db: Session, partner_id: int) -> PartnerProfileRea
     row = db.execute(
         select(Partner, City.name.label("city_name"))
         .join(City, Partner.city_id == City.id)
+        .options(selectinload(Partner.locations))
         .where(Partner.id == partner_id)
     ).one_or_none()
     if row is None:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail=PARTNER_NOT_FOUND_DETAIL)
     partner, city_name = row
+    primary_location = primary_partner_location(partner)
     return PartnerProfileRead.model_validate(
         {
             "id": partner.id,
@@ -623,8 +630,9 @@ def _get_partner_profile_read(db: Session, partner_id: int) -> PartnerProfileRea
             "category_slug": partner.category_slug,
             "name": partner.name,
             "description": partner.description,
-            "address": partner.address,
-            "phone": partner.phone,
+            "address": location_or_partner_field(primary_location, partner, "address"),
+            "locations": [PartnerLocationRead.model_validate(item) for item in resolved_partner_locations_payload(partner)],
+            "phone": location_or_partner_field(primary_location, partner, "phone"),
             "website_url": partner.website_url,
             "social_url": partner.social_url,
             "instagram_url": partner.instagram_url,
@@ -632,10 +640,10 @@ def _get_partner_profile_read(db: Session, partner_id: int) -> PartnerProfileRea
             "telegram_url": partner.telegram_url,
             "whatsapp_url": partner.whatsapp_url,
             "booking_url": partner.booking_url,
-            "map_url": partner.map_url,
-            "latitude": partner.latitude,
-            "longitude": partner.longitude,
-            "working_hours": partner.working_hours,
+            "map_url": location_or_partner_field(primary_location, partner, "map_url"),
+            "latitude": location_or_partner_field(primary_location, partner, "latitude"),
+            "longitude": location_or_partner_field(primary_location, partner, "longitude"),
+            "working_hours": location_or_partner_field(primary_location, partner, "working_hours"),
             "logo_url": partner.logo_url,
             "cover_url": partner.cover_url,
             "is_active": partner.is_active,
@@ -719,6 +727,8 @@ def _partner_offer_to_read(offer: PartnerOffer) -> PartnerOfferRead:
         {
             "id": offer.id,
             "partner_id": offer.partner_id,
+            "location_id": offer.location_id,
+            "location_name": offer.location.name if offer.location is not None else None,
             "title": offer.title,
             "description": offer.description,
             "benefit_text": offer.benefit_text,

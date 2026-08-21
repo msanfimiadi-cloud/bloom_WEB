@@ -128,6 +128,35 @@ class CategoryUpdate(BaseModel):
     sort_order: int | None = None
 
 
+class PartnerLocationRead(BaseModel):
+    id: int | None = None
+    partner_id: int | None = None
+    name: str | None = None
+    address: str | None = None
+    phone: str | None = None
+    map_url: str | None = None
+    latitude: float | None = None
+    longitude: float | None = None
+    working_hours: str | None = None
+    is_active: bool = True
+    sort_order: int = 0
+
+    model_config = {"from_attributes": True}
+
+
+class PartnerLocationWrite(BaseModel):
+    id: int | None = None
+    name: str | None = None
+    address: str | None = None
+    phone: str | None = None
+    map_url: str | None = None
+    latitude: float | None = Field(default=None, ge=-90, le=90)
+    longitude: float | None = Field(default=None, ge=-180, le=180)
+    working_hours: str | None = None
+    is_active: bool = True
+    sort_order: int = 0
+
+
 class PartnerRead(BaseModel):
     id: int
     city_id: int
@@ -142,6 +171,7 @@ class PartnerRead(BaseModel):
     name: str
     description: str | None
     address: str | None
+    locations: list[PartnerLocationRead] = Field(default_factory=list)
     phone: str | None
     website_url: str | None
     social_url: str | None
@@ -175,6 +205,7 @@ class PartnerCreate(BaseModel):
     name: str
     description: str | None = None
     address: str | None = None
+    locations: list[PartnerLocationWrite] | None = None
     phone: str | None = None
     website_url: str | None = None
     social_url: str | None = None
@@ -203,6 +234,7 @@ class PartnerUpdate(BaseModel):
     name: str | None = None
     description: str | None = None
     address: str | None = None
+    locations: list[PartnerLocationWrite] | None = None
     phone: str | None = None
     website_url: str | None = None
     social_url: str | None = None
@@ -225,6 +257,8 @@ class PartnerUpdate(BaseModel):
 class PartnerOfferRead(BaseModel):
     id: int
     partner_id: int
+    location_id: int | None = None
+    location_name: str | None = None
     title: str
     description: str | None
     benefit_text: str | None
@@ -241,6 +275,7 @@ class PartnerOfferRead(BaseModel):
 
 
 class PartnerOfferCreate(BaseModel):
+    location_id: int | None = None
     title: str
     description: str | None = None
     benefit_text: str | None = None
@@ -254,6 +289,7 @@ class PartnerOfferCreate(BaseModel):
 
 
 class PartnerOfferUpdate(BaseModel):
+    location_id: int | None = None
     title: str | None = None
     description: str | None = None
     benefit_text: str | None = None

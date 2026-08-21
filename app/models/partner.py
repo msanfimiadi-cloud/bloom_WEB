@@ -56,6 +56,12 @@ class Partner(Base):
 
     city: Mapped["City"] = relationship("City", back_populates="partners")
     owner_user: Mapped["User | None"] = relationship("User", back_populates="owned_partners")
+    locations: Mapped[list["PartnerLocation"]] = relationship(
+        "PartnerLocation",
+        back_populates="partner",
+        cascade="all, delete-orphan",
+        order_by="PartnerLocation.sort_order.asc(), PartnerLocation.id.asc()",
+    )
     offers: Mapped[list["PartnerOffer"]] = relationship("PartnerOffer", back_populates="partner")
     photos: Mapped[list["PartnerPhoto"]] = relationship("PartnerPhoto", back_populates="partner")
     qr_links: Mapped[list["PartnerQrLink"]] = relationship("PartnerQrLink", back_populates="partner")
@@ -69,6 +75,34 @@ class Partner(Base):
         "Category",
         secondary=partner_categories,
         back_populates="partners",
+    )
+
+
+class PartnerLocation(Base):
+    __tablename__ = "partner_locations"
+
+    id: Mapped[int] = mapped_column(Integer, primary_key=True)
+    partner_id: Mapped[int] = mapped_column(ForeignKey("partners.id"), nullable=False, index=True)
+    name: Mapped[str | None] = mapped_column(String(255), nullable=True)
+    address: Mapped[str] = mapped_column(String(255), nullable=False)
+    phone: Mapped[str | None] = mapped_column(String(64), nullable=True)
+    map_url: Mapped[str | None] = mapped_column(String(512), nullable=True)
+    latitude: Mapped[Decimal | None] = mapped_column(Numeric(9, 6), nullable=True)
+    longitude: Mapped[Decimal | None] = mapped_column(Numeric(9, 6), nullable=True)
+    working_hours: Mapped[str | None] = mapped_column(String(255), nullable=True)
+    is_active: Mapped[bool] = mapped_column(Boolean, nullable=False, default=True)
+    sort_order: Mapped[int] = mapped_column(Integer, nullable=False, default=0)
+    created_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True),
+        nullable=False,
+        server_default=func.now(),
+    )
+
+    partner: Mapped["Partner"] = relationship("Partner", back_populates="locations")
+    offers: Mapped[list["PartnerOffer"]] = relationship("PartnerOffer", back_populates="location")
+    verification_sessions: Mapped[list["PrivilegeVerificationSession"]] = relationship(
+        "PrivilegeVerificationSession",
+        back_populates="location",
     )
 
 
@@ -95,6 +129,7 @@ class PartnerOffer(Base):
 
     id: Mapped[int] = mapped_column(Integer, primary_key=True)
     partner_id: Mapped[int] = mapped_column(ForeignKey("partners.id"), nullable=False, index=True)
+    location_id: Mapped[int | None] = mapped_column(ForeignKey("partner_locations.id", ondelete="SET NULL"), nullable=True, index=True)
     title: Mapped[str] = mapped_column(String(255), nullable=False)
     description: Mapped[str | None] = mapped_column(Text, nullable=True)
     benefit_text: Mapped[str | None] = mapped_column(String(255), nullable=True)
@@ -113,6 +148,7 @@ class PartnerOffer(Base):
     )
 
     partner: Mapped["Partner"] = relationship("Partner", back_populates="offers")
+    location: Mapped["PartnerLocation | None"] = relationship("PartnerLocation", back_populates="offers")
     photos: Mapped[list["OfferPhoto"]] = relationship("OfferPhoto", back_populates="offer")
     verification_sessions: Mapped[list["PrivilegeVerificationSession"]] = relationship(
         "PrivilegeVerificationSession",
