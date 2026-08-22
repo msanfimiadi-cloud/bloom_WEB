@@ -81,3 +81,12 @@ def test_bloom_map_marks_customer_location_separately_from_partner_markers() -> 
     assert "Вы здесь" in page
     assert ".bloom-map-user-location__dot" in styles
     assert "@keyframes bloom-map-user-location-pulse" in styles
+
+
+def test_bloom_map_keeps_partner_markers_visible_when_locating_customer() -> None:
+    page = (ROOT / "browser-mobile-app/src/pages/BloomMapPage.tsx").read_text(encoding="utf-8")
+
+    assert "const bounds = map.geoObjects?.getBounds?.();" in page
+    assert "if (bounds && visiblePartners.length > 0)" in page
+    assert "zoomMargin: 48" in page
+    assert "mapInstanceRef.current?.setCenter?.([point.latitude, point.longitude]" not in page
