@@ -55,3 +55,29 @@ def test_yandex_runtime_failures_stay_inside_the_map_screen() -> None:
     assert "coverage fetch failed" in helpers
     assert "BLOOM_MAP_RUNTIME_ERROR_EVENT" in page
     assert 'setStatus("error")' in page
+
+
+def test_bloom_map_partner_markers_use_existing_bloom_favicon() -> None:
+    page = (ROOT / "browser-mobile-app/src/pages/BloomMapPage.tsx").read_text(encoding="utf-8")
+    styles = (ROOT / "browser-mobile-app/src/styles.css").read_text(encoding="utf-8")
+
+    assert 'const BLOOM_PARTNER_ICON_URL = "/docs/icons/favicon-32.png"' in page
+    assert "createBloomPartnerMarkerLayout(ymaps, isSelected)" in page
+    assert "templateLayoutFactory.createClass" in page
+    assert "bloom-map-marker__brand" in page
+    assert ".bloom-map-marker__brand img" in styles
+    assert (ROOT / "browser-mobile-app/public/docs/icons/favicon-32.png").is_file()
+
+
+def test_bloom_map_marks_customer_location_separately_from_partner_markers() -> None:
+    page = (ROOT / "browser-mobile-app/src/pages/BloomMapPage.tsx").read_text(encoding="utf-8")
+    styles = (ROOT / "browser-mobile-app/src/styles.css").read_text(encoding="utf-8")
+
+    assert "userLocationMarkerRef" in page
+    assert "createBloomUserLocationLayout(ymaps)" in page
+    assert "[userPoint.latitude, userPoint.longitude]" in page
+    assert "map.geoObjects?.add?.(marker)" in page
+    assert "map.geoObjects?.remove?.(marker)" in page
+    assert "Вы здесь" in page
+    assert ".bloom-map-user-location__dot" in styles
+    assert "@keyframes bloom-map-user-location-pulse" in styles
