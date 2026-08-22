@@ -431,3 +431,63 @@ def test_partner_cannot_reset_own_statistics(analytics_client: TestClient) -> No
     )
 
     assert response.status_code in {401, 403}
+
+
+def test_admin_statistics_counts_partner_views_offers_and_contact_clicks(analytics_client: TestClient) -> None:
+    client_headers = _auth_headers(_client_token(analytics_client))
+    for payload in (
+        {"event_type": "partner_view", "partner_id": 1},
+        {"event_type": "partner_view", "partner_id": 1},
+        {"event_type": "offer_view", "partner_id": 1, "offer_id": 1},
+        {"event_type": "offer_select", "partner_id": 1, "offer_id": 1},
+        {"event_type": "contact_click", "partner_id": 1, "target": "Запись онлайн"},
+    ):
+        response = analytics_client.post("/api/v1/clients/analytics/events", json=payload, headers=client_headers)
+        assert response.status_code == 201, response.text
+
+    response = analytics_client.get(
+        "/api/v1/admin/statistics?period=month", headers=_auth_headers(_admin_token(analytics_client))
+    )
+    assert response.status_code == 200, response.text
+    data = response.json()
+    assert data["summary"]["partner_views"] == 2
+    assert data["summary"]["unique_partner_viewers"] == 1
+    assert data["summary"]["offer_views"] == 1
+    assert data["summary"]["offer_selections"] == 1
+    assert data["summary"]["contact_clicks"] == 1
+    partner = next(item for item in data["partners"] if item["partner_id"] == 1)
+    assert partner["views"] == 2
+    assert partner["codes_issued"] == 5
+    assert partner["contact_click_breakdown"] == {"Запись онлайн": 1}
+    assert data["offers"][0]["offer_title"] == "Permanent offer"
+    assert data["offers"][0]["selections"] == 1
+    assert len(data["recent_events"]) == 5
+
+
+def test_admin_statistics_supports_partner_filter_and_rejects_inverted_dates(analytics_client: TestClient) -> None:
+    headers = _auth_headers(_admin_token(analytics_client))
+    filtered = analytics_client.get("/api/v1/admin/statistics?partner_id=2", headers=headers)
+    assert filtered.status_code == 200, filtered.text
+    assert [item["partner_id"] for item in filtered.json()["partners"]] == [2]
+
+    invalid = analytics_client.get(
+        "/api/v1/admin/statistics?period=custom&date_from=2026-09-02&date_to=2026-09-01",
+        headers=headers,
+    )
+    assert invalid.status_code == 422
+
+
+def test_admin_statistics_is_not_available_to_partners(analytics_client: TestClient) -> None:
+    response = analytics_client.get(
+        "/api/v1/admin/statistics", headers=_auth_headers(_partner_token(analytics_client))
+    )
+    assert response.status_code in {401, 403}
+
+
+def test_client_analytics_validates_offer_belongs_to_partner(analytics_client: TestClient) -> None:
+    response = analytics_client.post(
+        "/api/v1/clients/analytics/events",
+        json={"event_type": "offer_select", "partner_id": 2, "offer_id": 1},
+        headers=_auth_headers(_client_token(analytics_client)),
+    )
+    assert response.status_code == 404

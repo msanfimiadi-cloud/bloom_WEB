@@ -106,6 +106,7 @@ from app.schemas.landing import (
 from app.schemas.partner import PartnerAnalyticsRead
 from app.schemas.payment import AdminPaymentRequestRead, PaymentRequestApprove, PaymentRequestReject
 from app.services.activity_feed import build_admin_activity_feed
+from app.services.admin_statistics import build_admin_statistics
 from app.services.admin_user_delete_service import delete_user_with_relations
 from app.services.landing_settings import build_admin_landing_settings_read, get_or_create_landing_settings, normalize_giveaway_items
 from app.services.giveaways import next_giveaway_draw_at
@@ -137,6 +138,32 @@ from app.services.qr_links import (
 )
 
 router = APIRouter(prefix="/admin", tags=["admin"])
+
+
+@router.get("/statistics")
+def read_admin_statistics(
+    period: str = Query(default="month", pattern="^(today|yesterday|week|month|custom)$"),
+    date_from: date | None = Query(default=None),
+    date_to: date | None = Query(default=None),
+    partner_id: int | None = Query(default=None, gt=0),
+    city_id: int | None = Query(default=None, gt=0),
+    category_slug: str | None = Query(default=None, max_length=120),
+    admin: AdminUser = Depends(require_admin),
+    db: Session = Depends(get_db),
+) -> dict:
+    _ = admin
+    try:
+        return build_admin_statistics(
+            db,
+            period=period,
+            date_from=date_from,
+            date_to=date_to,
+            partner_id=partner_id,
+            city_id=city_id,
+            category_slug=category_slug,
+        )
+    except ValueError as exc:
+        raise HTTPException(status_code=status.HTTP_422_UNPROCESSABLE_ENTITY, detail=str(exc)) from exc
 
 
 def _partner_access_read(access: PartnerBotAccess) -> PartnerBotAccessRead:

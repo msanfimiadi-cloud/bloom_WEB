@@ -1218,6 +1218,19 @@ function requestClientApiPost<T>(path: string, body: unknown): Promise<T> {
   );
 }
 
+export async function trackClientAnalyticsEvent(event: {
+  event_type: "partner_view" | "offer_view" | "offer_select" | "contact_click";
+  partner_id: number;
+  offer_id?: number;
+  target?: string;
+}): Promise<void> {
+  try {
+    await requestClientApiPost<{ recorded: boolean }>("/clients/analytics/events", event);
+  } catch {
+    // Analytics must never interfere with the customer experience.
+  }
+}
+
 export function getProfile(): Promise<ClientProfile> {
   return requestClientApiGet<ClientProfile>("/clients/me");
 }

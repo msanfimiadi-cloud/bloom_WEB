@@ -5463,6 +5463,46 @@ body.is-dashboard {
   gap: 14px;
 }
 
+.admin-statistics-page {
+  gap: 24px;
+}
+
+.admin-statistics-filters {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(155px, 1fr));
+  align-items: end;
+  gap: 14px;
+}
+
+.admin-statistics-filters label {
+  display: grid;
+  gap: 7px;
+}
+
+.admin-statistics-filters input,
+.admin-statistics-filters select {
+  width: 100%;
+}
+
+.admin-statistics-hint {
+  display: block;
+  margin-top: 8px;
+  color: var(--color-muted);
+  line-height: 1.45;
+}
+
+.admin-statistics-section {
+  display: grid;
+  gap: 12px;
+  min-width: 0;
+}
+
+.admin-statistics-columns {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(min(320px, 100%), 1fr));
+  gap: 22px;
+}
+
 .analytics-panel__heading {
   display: flex;
   align-items: flex-start;

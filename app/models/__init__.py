@@ -1,4 +1,5 @@
 from app.models.category import Category
+from app.models.analytics import ClientAnalyticsEvent
 from app.models.city import City
 from app.models.client import AccountLinkingChallenge, BrowserLoginCode, BrowserLoginToken, ClientIdentityLink, ClientPasswordSetupToken, ClientProfile, ClientReferral, GiveawayEntry, ReferralSubscriptionReward, VkLinkCode
 from app.models.content import (
@@ -44,6 +45,7 @@ __all__ = [
     "BrowserLoginCode",
     "BrowserLoginToken",
     "ClientProfile",
+    "ClientAnalyticsEvent",
     "ClientIdentityLink",
     "ClientPasswordSetupToken",
     "ClientReferral",
