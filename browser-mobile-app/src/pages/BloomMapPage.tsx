@@ -52,7 +52,31 @@ type YandexMapsV2 = {
     removeAll?: () => void;
     getBounds?: () => unknown;
   };
+  templateLayoutFactory: {
+    createClass: (template: string) => unknown;
+  };
 };
+
+const BLOOM_PARTNER_ICON_URL = "/docs/icons/favicon-32.png";
+
+function createBloomPartnerMarkerLayout(ymaps: YandexMapsV2, selected: boolean): unknown {
+  const selectedClassName = selected ? " bloom-map-marker--selected" : "";
+  return ymaps.templateLayoutFactory.createClass(
+    `<div class="bloom-map-marker bloom-map-marker--partner${selectedClassName}" aria-label="Партнёр Bloom Club">` +
+      `<span class="bloom-map-marker__brand"><img src="${BLOOM_PARTNER_ICON_URL}" alt="" /></span>` +
+    `</div>`,
+  );
+}
+
+function createBloomUserLocationLayout(ymaps: YandexMapsV2): unknown {
+  return ymaps.templateLayoutFactory.createClass(
+    `<div class="bloom-map-user-location" aria-label="Ваше местоположение">` +
+      `<span class="bloom-map-user-location__pulse"></span>` +
+      `<span class="bloom-map-user-location__dot"></span>` +
+      `<span class="bloom-map-user-location__label">Вы здесь</span>` +
+    `</div>`,
+  );
+}
 
 function getInjectedRuntimeKey(): string {
   const runtime = (window as Window & { __BLOOM_TG_CONFIG__?: { yandexMapsApiKey?: string } }).__BLOOM_TG_CONFIG__;
@@ -125,6 +149,7 @@ export function BloomMapPage({ partners, onBack, onOpenPartner }: BloomMapPagePr
   const mapInstanceRef = useRef<any>(null);
   const ymapsRef = useRef<YandexMapsV2 | null>(null);
   const markersCollectionRef = useRef<any>(null);
+  const userLocationMarkerRef = useRef<any>(null);
   const hasAppliedInitialViewportRef = useRef(false);
   const lastViewportCategoryRef = useRef<string | null>(null);
 
@@ -184,6 +209,7 @@ export function BloomMapPage({ partners, onBack, onOpenPartner }: BloomMapPagePr
       mapInstanceRef.current?.destroy?.();
       mapInstanceRef.current = null;
       markersCollectionRef.current = null;
+      userLocationMarkerRef.current = null;
       ymapsRef.current = null;
       container.replaceChildren();
       setStatus("error");
@@ -247,6 +273,7 @@ export function BloomMapPage({ partners, onBack, onOpenPartner }: BloomMapPagePr
       mapInstanceRef.current?.destroy?.();
       mapInstanceRef.current = null;
       markersCollectionRef.current = null;
+      userLocationMarkerRef.current = null;
       ymapsRef.current = null;
       container.replaceChildren();
     };
@@ -277,8 +304,9 @@ export function BloomMapPage({ partners, onBack, onOpenPartner }: BloomMapPagePr
         [point.latitude, point.longitude],
         {},
         {
-          preset: isSelected ? "islands#violetIcon" : "islands#redIcon",
-          iconColor: isSelected ? "#8f2648" : "#b84d72",
+          iconLayout: createBloomPartnerMarkerLayout(ymaps, isSelected),
+          iconShape: { type: "Circle", coordinates: [0, -22], radius: 24 },
+          zIndex: isSelected ? 800 : 500,
           hasBalloon: false,
           hideIconOnBalloonOpen: false,
           openEmptyHint: false,
@@ -326,6 +354,39 @@ export function BloomMapPage({ partners, onBack, onOpenPartner }: BloomMapPagePr
     }
   }, [selectedCategory, selectedPartnerId, status, visiblePartners]);
 
+  useEffect(() => {
+    if (status !== "ready" || !userPoint) return;
+
+    const ymaps = ymapsRef.current;
+    const map = mapInstanceRef.current;
+    if (!ymaps || !map) return;
+
+    if (userLocationMarkerRef.current) {
+      map.geoObjects?.remove?.(userLocationMarkerRef.current);
+    }
+
+    const marker = new ymaps.Placemark(
+      [userPoint.latitude, userPoint.longitude],
+      { hintContent: "Ваше местоположение" },
+      {
+        iconLayout: createBloomUserLocationLayout(ymaps),
+        iconShape: { type: "Circle", coordinates: [0, 0], radius: 22 },
+        zIndex: 1000,
+        hasBalloon: false,
+      },
+    );
+
+    map.geoObjects?.add?.(marker);
+    userLocationMarkerRef.current = marker;
+
+    return () => {
+      map.geoObjects?.remove?.(marker);
+      if (userLocationMarkerRef.current === marker) {
+        userLocationMarkerRef.current = null;
+      }
+    };
+  }, [status, userPoint]);
+
   const locateUser = () => {
     if (!navigator.geolocation) {
       setLocationMessage("Геолокация недоступна на этом устройстве.");
@@ -337,7 +398,7 @@ export function BloomMapPage({ partners, onBack, onOpenPartner }: BloomMapPagePr
       ({ coords }) => {
         const point = { latitude: coords.latitude, longitude: coords.longitude };
         setUserPoint(point);
-        setLocationMessage("Расстояние до партнёров рассчитано.");
+        setLocationMessage("Ваше местоположение отмечено на карте. Расстояние до партнёров рассчитано.");
         mapInstanceRef.current?.setCenter?.([point.latitude, point.longitude], 13, { duration: 300 });
       },
       () => setLocationMessage("Не удалось получить геопозицию. Проверьте разрешение браузера."),

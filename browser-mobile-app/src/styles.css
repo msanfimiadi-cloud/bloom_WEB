@@ -7930,3 +7930,92 @@ small,
   font-size: 0.79rem;
   line-height: 1.42;
 }
+
+/* Use the existing Bloom favicon for partner pins and clearly mark the visitor. */
+.bloom-map-marker--partner {
+  position: absolute;
+  top: 0;
+  left: 0;
+  width: 42px;
+  height: 48px;
+  border: 2px solid rgba(255, 255, 255, 0.94);
+  border-radius: 52% 52% 52% 13px;
+  background: linear-gradient(145deg, #c6577c, #8f2648);
+  transform: translate(-50%, -90%) rotate(-45deg);
+}
+
+.bloom-map-marker--selected {
+  background: linear-gradient(145deg, #a83e66, #75203d);
+  box-shadow: 0 10px 25px rgba(93, 27, 51, 0.44);
+}
+
+.bloom-map-marker--partner .bloom-map-marker__brand {
+  display: grid;
+  width: 27px;
+  height: 27px;
+  place-items: center;
+  overflow: hidden;
+  border-radius: 50%;
+  background: #fff8fa;
+  transform: rotate(45deg);
+}
+
+.bloom-map-marker__brand img {
+  display: block;
+  width: 25px;
+  height: 25px;
+  object-fit: contain;
+}
+
+.bloom-map-user-location {
+  position: absolute;
+  top: 0;
+  left: 0;
+  width: 20px;
+  height: 20px;
+  transform: translate(-50%, -50%);
+}
+
+.bloom-map-user-location__pulse,
+.bloom-map-user-location__dot {
+  position: absolute;
+  inset: 0;
+  border-radius: 50%;
+}
+
+.bloom-map-user-location__pulse {
+  background: rgba(59, 123, 232, 0.24);
+  animation: bloom-map-user-location-pulse 1.9s ease-out infinite;
+}
+
+.bloom-map-user-location__dot {
+  border: 3px solid #fff;
+  background: #3b7be8;
+  box-shadow: 0 3px 12px rgba(36, 88, 184, 0.38);
+}
+
+.bloom-map-user-location__label {
+  position: absolute;
+  top: 25px;
+  left: 50%;
+  padding: 4px 8px;
+  border-radius: 10px;
+  background: rgba(255, 255, 255, 0.96);
+  color: #315ead;
+  font-size: 11px;
+  font-weight: 750;
+  white-space: nowrap;
+  box-shadow: 0 4px 14px rgba(56, 67, 96, 0.15);
+  transform: translateX(-50%);
+}
+
+@keyframes bloom-map-user-location-pulse {
+  0% { opacity: 0.75; transform: scale(1); }
+  100% { opacity: 0; transform: scale(2.25); }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .bloom-map-user-location__pulse {
+    animation: none;
+  }
+}
