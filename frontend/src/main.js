@@ -1102,10 +1102,17 @@ const getOfferPricingView = (offer = {}) => {
     }
   }
 
+  if (Number.isFinite(basePrice)) basePrice = Math.round(basePrice);
+  if (Number.isFinite(memberPrice)) memberPrice = Math.round(memberPrice);
+
   const hasBasePrice = Number.isFinite(basePrice);
   const hasMemberPrice = Number.isFinite(memberPrice);
   const calculatedSavingAmount = hasBasePrice && hasMemberPrice ? basePrice - memberPrice : null;
-  const savingAmount = Number.isFinite(directSavingAmount) ? directSavingAmount : calculatedSavingAmount;
+  const savingAmount = Number.isFinite(calculatedSavingAmount)
+    ? calculatedSavingAmount
+    : Number.isFinite(directSavingAmount)
+      ? Math.round(directSavingAmount)
+      : null;
   const hasSaving = Number.isFinite(savingAmount) && savingAmount > 0;
 
   return {
@@ -3698,9 +3705,9 @@ const renderPartnerOfferForm = () => {
         <p class="helper-text form-message compact-copy">Например, 5 — клиент введёт сумму заказа, а приложение рассчитает итог и экономию.</p>
       </div>
       <div class="partner-offer-form-numeric-row" data-fixed-offer-pricing ${offer?.requires_order_amount ? 'hidden' : ''}>
-        <label>Обычная цена<input class="partner-input-compact" name="base_price" type="number" step="0.01" inputmode="decimal" value="${escapeHtml(offer?.base_price || '')}" ${offer?.requires_order_amount ? 'disabled' : ''} /></label>
-        <label>Цена участницы<input class="partner-input-compact" name="member_price" type="number" step="0.01" inputmode="decimal" value="${escapeHtml(getOfferPricingView(offer || {}).memberPrice || '')}" ${offer?.requires_order_amount ? 'disabled' : ''} /></label>
-        <label>Экономия<input class="partner-input-compact" name="saving_amount" type="number" step="0.01" inputmode="decimal" value="${escapeHtml(getOfferPricingView(offer || {}).savingAmount || '')}" readonly ${offer?.requires_order_amount ? 'disabled' : ''} /></label>
+        <label>Обычная цена<input class="partner-input-compact" name="base_price" type="number" step="1" inputmode="numeric" value="${escapeHtml(getOfferPricingView(offer || {}).basePrice ?? '')}" ${offer?.requires_order_amount ? 'disabled' : ''} /></label>
+        <label>Цена участницы<input class="partner-input-compact" name="member_price" type="number" step="1" inputmode="numeric" value="${escapeHtml(getOfferPricingView(offer || {}).memberPrice ?? '')}" ${offer?.requires_order_amount ? 'disabled' : ''} /></label>
+        <label>Экономия<input class="partner-input-compact" name="saving_amount" type="number" step="1" inputmode="numeric" value="${escapeHtml(getOfferPricingView(offer || {}).savingAmount ?? '')}" readonly ${offer?.requires_order_amount ? 'disabled' : ''} /></label>
       </div>
       ${renderOfferImageUploader(offer, 'partner')}
       <details class="partner-profile-advanced">
@@ -5664,9 +5671,9 @@ const renderOfferEditForm = () => {
         <p class="helper-text form-message compact-copy">Обязательное поле. По этому проценту приложение рассчитает итог и экономию.</p>
       </div>
       <div data-fixed-offer-pricing ${offer.requires_order_amount ? 'hidden' : ''}>
-        <label>Обычная цена<input name="base_price" type="number" step="0.01" value="${escapeHtml(offer.base_price || '')}" ${offer.requires_order_amount ? 'disabled' : ''} /></label>
-        <label>Цена участницы<input name="member_price" type="number" step="0.01" value="${escapeHtml(getOfferPricingView(offer).memberPrice || '')}" ${offer.requires_order_amount ? 'disabled' : ''} /></label>
-        <label>Экономия<input name="saving_amount" type="number" step="0.01" value="${escapeHtml(getOfferPricingView(offer).savingAmount || '')}" readonly ${offer.requires_order_amount ? 'disabled' : ''} /></label>
+        <label>Обычная цена<input name="base_price" type="number" step="1" value="${escapeHtml(getOfferPricingView(offer).basePrice ?? '')}" ${offer.requires_order_amount ? 'disabled' : ''} /></label>
+        <label>Цена участницы<input name="member_price" type="number" step="1" value="${escapeHtml(getOfferPricingView(offer).memberPrice ?? '')}" ${offer.requires_order_amount ? 'disabled' : ''} /></label>
+        <label>Экономия<input name="saving_amount" type="number" step="1" value="${escapeHtml(getOfferPricingView(offer).savingAmount ?? '')}" readonly ${offer.requires_order_amount ? 'disabled' : ''} /></label>
       </div>
       ${renderOfferImageUploader(offer, 'admin')}
       <details class="partner-profile-advanced">
@@ -5699,9 +5706,9 @@ const renderOfferCreateForm = () => `
       <p class="helper-text form-message compact-copy">Обязательное поле. По этому проценту приложение рассчитает итог и экономию.</p>
     </div>
     <div data-fixed-offer-pricing>
-      <label>Обычная цена<input name="base_price" type="number" step="0.01" /></label>
-      <label>Цена участницы<input name="member_price" type="number" step="0.01" /></label>
-      <label>Экономия<input name="saving_amount" type="number" step="0.01" readonly /></label>
+      <label>Обычная цена<input name="base_price" type="number" step="1" /></label>
+      <label>Цена участницы<input name="member_price" type="number" step="1" /></label>
+      <label>Экономия<input name="saving_amount" type="number" step="1" readonly /></label>
       <p class="helper-text form-message compact-copy">Экономия рассчитывается автоматически из обычной цены и цены участницы.</p>
     </div>
     ${renderOfferImageUploader(null, 'admin')}
