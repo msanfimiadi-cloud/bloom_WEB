@@ -2625,3 +2625,21 @@ def test_admin_giveaway_social_settings_have_dedicated_save_action() -> None:
     assert "Настройки подписок сохранены." in source
     assert "event.submitter?.dataset?.adminGiveawaySubmit" in source
     assert ".admin-giveaway-social-actions" in styles
+
+def test_legacy_partner_offer_prices_are_rounded_to_whole_rubles() -> None:
+    source = _frontend_main()
+
+    assert "if (Number.isFinite(basePrice)) basePrice = Math.round(basePrice);" in source
+    assert "if (Number.isFinite(memberPrice)) memberPrice = Math.round(memberPrice);" in source
+    assert "? Math.round(directSavingAmount)" in source
+    assert "const savingAmount = Number.isFinite(calculatedSavingAmount)" in source
+
+
+def test_partner_offer_forms_use_whole_ruble_amounts() -> None:
+    source = _frontend_main()
+
+    assert 'name="base_price" type="number" step="1"' in source
+    assert 'name="member_price" type="number" step="1"' in source
+    assert 'name="saving_amount" type="number" step="1"' in source
+    assert "getOfferPricingView(offer).basePrice ?? ''" in source
+    assert "getOfferPricingView(offer || {}).basePrice ?? ''" in source
