@@ -108,3 +108,19 @@ def test_flower_garden_explains_actions_and_giveaway_rewards() -> None:
     assert "Пользуйтесь привилегиями партнёров" in flower
     assert "первую десятку рейтинга" in flower
     assert "дополнительные номера для розыгрыша" in flower
+
+
+def test_privilege_codes_become_expired_when_their_expiration_date_passes() -> None:
+    privileges = read("pages/PrivilegesPage.tsx")
+
+    assert "verification.expires_at || verification.valid_until" in privileges
+    assert "Date.parse(expiresAt)" in privileges
+    assert "expirationTime <= currentTime" in privileges
+    assert "verificationFilter(verification, currentTime)" in privileges
+    assert "statusLabel(verification, currentTime)" in privileges
+    assert "window.setInterval(() => setCurrentTime(Date.now()), 30_000)" in privileges
+
+    filter_start = privileges.index("function verificationFilter(")
+    filter_end = privileges.index("export function PrivilegesPage", filter_start)
+    filter_source = privileges[filter_start:filter_end]
+    assert filter_source.index("return 'used'") < filter_source.index("expirationTime <= currentTime")
