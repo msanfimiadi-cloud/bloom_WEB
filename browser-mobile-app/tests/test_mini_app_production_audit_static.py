@@ -69,7 +69,8 @@ def test_banners_and_giveaways_are_active_sorted_with_images_and_empty_states() 
     assert "homeBlocks.filter" in HOME
     assert 'block.type === "giveaway"' in HOME
     assert "Приз:" in HOME
-    assert "home-empty-state" in HOME
+    assert "home-catalog-promo" in HOME
+    assert "Открыть каталог партнёров" in HOME
     assert "extractHomeBlocksFromResponse" in CONTENT_API
     assert "return Array.isArray(candidate) ? normalize(candidate) : []" in CONTENT_API
 

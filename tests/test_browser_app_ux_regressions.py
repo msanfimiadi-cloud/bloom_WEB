@@ -79,3 +79,32 @@ def test_flower_month_progress_counts_down_after_the_current_day() -> None:
     assert "До конца месяца осталось" in flower
     assert "Сегодня последний день месяца" in flower
     assert "state.days_grown} из {state.days_in_month}" not in flower
+
+
+def test_partner_catalog_card_renders_partner_information_only_once() -> None:
+    card = read("components/PartnerCatalogCard.tsx")
+    styles = read("styles.css")
+
+    assert card.count('className="home-partner-tile__body"') == 1
+    final_card_rule = styles.rsplit(".partner-catalog-card {", 1)[1].split("}", 1)[0]
+    assert "height: auto" in final_card_rule
+    assert "min-height: 172px" in final_card_rule
+
+
+def test_home_promotes_catalog_without_duplicating_partner_cards() -> None:
+    home = read("pages/HomePage.tsx")
+
+    assert "Открыть каталог партнёров" in home
+    assert "PartnerCatalogCard" not in home
+    assert "visiblePartners.map" not in home
+    assert "safePartners.slice(0, 8).map" not in home
+
+
+def test_flower_garden_explains_actions_and_giveaway_rewards() -> None:
+    flower = read("components/FlowerGame.tsx")
+
+    assert "Как работает Сад Bloom" in flower
+    assert "Заходите каждый день" in flower
+    assert "Пользуйтесь привилегиями партнёров" in flower
+    assert "первую десятку рейтинга" in flower
+    assert "дополнительные номера для розыгрыша" in flower
