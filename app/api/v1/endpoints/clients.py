@@ -19,6 +19,7 @@ from app.core.config import settings
 from app.core.security import create_access_token
 from app.db.session import get_db
 from app.models.city import City
+from app.models.analytics import ClientAnalyticsEvent
 from app.models.category import Category
 from app.models.client import AccountLinkingChallenge, BrowserLoginCode, ClientIdentityLink, ClientProfile, ClientReferral, GiveawayEntry, ReferralSubscriptionReward, VkLinkCode, VkLinkCodeStatus
 from app.models.giveaway import Giveaway, GiveawayNumber
@@ -67,6 +68,7 @@ from app.schemas.payment import (
     PaymentRequestMarkPaid,
     PaymentRequestRead,
 )
+from app.schemas.statistics import ClientAnalyticsEventCreate
 from app.schemas.vk import VkLinkCodeRead
 from app.services.activity_feed import build_client_activity_feed
 from app.services.browser_login_codes import BrowserLoginCodeService
@@ -118,6 +120,36 @@ PAID_SOURCE = "paid"
 LINKING_CHALLENGE_TTL_SECONDS = 600
 LINKING_MAX_ATTEMPTS = 5
 CATEGORY_DISPLAY_BY_SLUG = {item["slug"]: item["title"] for item in get_women_club_categories()}
+
+
+@router.post("/analytics/events", status_code=status.HTTP_201_CREATED)
+def create_client_analytics_event(
+    payload: ClientAnalyticsEventCreate,
+    current_user: User = Depends(require_client),
+    db: Session = Depends(get_db),
+) -> dict[str, bool]:
+    partner = db.get(Partner, payload.partner_id)
+    if partner is None or not partner.is_active:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail=PARTNER_NOT_FOUND_DETAIL)
+    if payload.offer_id is not None:
+        offer = db.get(PartnerOffer, payload.offer_id)
+        if offer is None or offer.partner_id != partner.id:
+            raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail=OFFER_NOT_FOUND_DETAIL)
+    if payload.event_type in {"offer_view", "offer_select"} and payload.offer_id is None:
+        raise HTTPException(status_code=status.HTTP_422_UNPROCESSABLE_ENTITY, detail="offer_id_required")
+
+    profile = _get_or_create_client_profile(db, current_user.id)
+    db.add(
+        ClientAnalyticsEvent(
+            client_id=profile.id,
+            partner_id=partner.id,
+            offer_id=payload.offer_id,
+            event_type=payload.event_type,
+            target=(payload.target or "").strip() or None,
+        )
+    )
+    db.commit()
+    return {"recorded": True}
 
 
 @router.get("/me/flower", response_model=FlowerStateRead)

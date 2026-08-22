@@ -1,6 +1,6 @@
 import { useEffect, useRef, useState } from "react";
 import { createPortal } from "react-dom";
-import { isApiError, isTimeoutError } from "../api/client";
+import { isApiError, isTimeoutError, trackClientAnalyticsEvent } from "../api/client";
 import type { ApiId, ClientProfile, Offer, OfferPhoto, Partner, PartnerPhoto, Subscription, Verification } from "../api/types";
 import type { PartnerOffersDiagnostic } from "../App";
 import { AppImage } from "../components/AppImage";
@@ -338,6 +338,7 @@ export function PartnerPage({
   const [copyMessage, setCopyMessage] = useState("");
   const [failedImageUrls, setFailedImageUrls] = useState<string[]>([]);
   const copyMessageTimeoutRef = useRef<number | null>(null);
+  const trackedOfferKeysRef = useRef<Set<string>>(new Set());
 
   const backLabel = useContentText("partner.back_to_catalog", "← В каталог");
   const partnerInfoTitle = useContentText("partner.info.title", "О партнёре");
@@ -371,6 +372,27 @@ export function PartnerPage({
   useEffect(() => {
     setFailedImageUrls([]);
   }, [partner?.id]);
+
+  useEffect(() => {
+    if (!partner) return;
+    const partnerId = resolveNumericPartnerId(partner)?.numericPartnerId;
+    if (partnerId !== undefined) {
+      void trackClientAnalyticsEvent({ event_type: "partner_view", partner_id: Number(partnerId) });
+    }
+  }, [partner?.id]);
+
+  useEffect(() => {
+    if (!partner || offersStatus !== "success") return;
+    const partnerId = resolveNumericPartnerId(partner)?.numericPartnerId;
+    if (partnerId === undefined) return;
+    for (const offer of safeOffers) {
+      if (!isNumericApiId(offer.id)) continue;
+      const key = `${partnerId}:${offer.id}`;
+      if (trackedOfferKeysRef.current.has(key)) continue;
+      trackedOfferKeysRef.current.add(key);
+      void trackClientAnalyticsEvent({ event_type: "offer_view", partner_id: Number(partnerId), offer_id: Number(offer.id) });
+    }
+  }, [partner, offersStatus, safeOffers]);
 
   useEffect(() => {
     const firstSelectableLocation = partnerLocations.find((location) => isNumericApiId(location.id)) ?? null;
@@ -473,6 +495,11 @@ export function PartnerPage({
       })
     : safeOffers;
 
+  function trackPartnerContact(target: string) {
+    if (partnerIdForActions === undefined) return;
+    void trackClientAnalyticsEvent({ event_type: "contact_click", partner_id: Number(partnerIdForActions), target });
+  }
+
   function getVerificationErrorMessage(error: unknown): string {
     if (isTimeoutError(error)) {
       return "Не удалось загрузить данные. Проверьте соединение и повторите попытку.";
@@ -540,6 +567,8 @@ export function PartnerPage({
       setMessage("Не удалось получить код привилегии для этого предложения. Попробуйте позже.");
       return;
     }
+
+    void trackClientAnalyticsEvent({ event_type: "offer_select", partner_id: Number(partnerIdForActions), offer_id: Number(offer.id) });
 
     if (getVariableOrderDiscountPercent(offer) !== null) {
       setMessage("");
@@ -745,12 +774,12 @@ export function PartnerPage({
             <p>{getPartnerDescription(currentPartner)}</p>
             <div className="partner-detail__actions">
               {telHref ? (
-                <a className="button button--primary" href={telHref}>
+                <a className="button button--primary" href={telHref} onClick={() => trackPartnerContact("Телефон")}>
                   Позвонить
                 </a>
               ) : null}
               {mapsUrl ? (
-                <a className="button button--ghost" href={mapsUrl} target="_blank" rel="noreferrer">
+                <a className="button button--ghost" href={mapsUrl} target="_blank" rel="noreferrer" onClick={() => trackPartnerContact("Карта")}>
                   На карте
                 </a>
               ) : null}
@@ -772,6 +801,7 @@ export function PartnerPage({
                   href={href}
                   target="_blank"
                   rel="noopener noreferrer"
+                  onClick={() => trackPartnerContact(label)}
                   aria-label={`Открыть ${label} партнёра`}
                   key={href}
                 >

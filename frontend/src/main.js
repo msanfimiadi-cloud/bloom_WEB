@@ -459,6 +459,7 @@ const adminTabs = [
   { id: 'giveaways', label: 'Розыгрыши', group: 'Продвижение' },
   { id: 'extraNumbers', label: 'Дополнительные номерки', group: 'Продвижение' },
   { id: 'flower', label: 'Сад Bloom', group: 'Продвижение' },
+  { id: 'statistics', label: 'Статистика', group: 'Данные' },
   { id: 'users', label: 'Пользователи', group: 'Данные' },
   { id: 'activity', label: 'Журнал событий', group: 'Данные' },
   { id: 'cities', label: 'Города', group: 'Настройки' },
@@ -540,6 +541,10 @@ const adminState = {
     paymentRequests: '',
   },
   activityItems: [],
+  statistics: null,
+  statisticsLoading: false,
+  statisticsError: '',
+  statisticsFilters: { period: 'month', dateFrom: '', dateTo: '', partnerId: '', cityId: '', categorySlug: '' },
   activityLoading: false,
   activityError: '',
   activityEventType: '',
@@ -3991,6 +3996,26 @@ const loadAdminActivity = async () => {
   }
 };
 
+const loadAdminStatistics = async () => {
+  adminState.statisticsLoading = true;
+  adminState.statisticsError = '';
+  try {
+    const filters = adminState.statisticsFilters;
+    const params = new URLSearchParams({ period: filters.period });
+    if (filters.period === 'custom' && filters.dateFrom) params.set('date_from', filters.dateFrom);
+    if (filters.period === 'custom' && filters.dateTo) params.set('date_to', filters.dateTo);
+    if (filters.partnerId) params.set('partner_id', filters.partnerId);
+    if (filters.cityId) params.set('city_id', filters.cityId);
+    if (filters.categorySlug) params.set('category_slug', filters.categorySlug);
+    adminState.statistics = await apiFetch(`/api/v1/admin/statistics?${params.toString()}`);
+  } catch (error) {
+    if (!getToken()) throw error;
+    adminState.statisticsError = error.message || 'Не удалось загрузить статистику.';
+  } finally {
+    adminState.statisticsLoading = false;
+  }
+};
+
 const loadOffers = async () => {
   if (!adminState.selectedPartnerIdForOffers) {
     adminState.offers = [];
@@ -4082,6 +4107,8 @@ const renderAdminTabContent = () => {
       return renderPartnerAccessTab();
     case 'activity':
       return renderAdminActivityTab();
+    case 'statistics':
+      return renderAdminStatisticsTab();
     case 'giveaways':
       return renderGiveawaysTab();
     case 'extraNumbers':
@@ -4649,6 +4676,73 @@ const renderAdminActivityTab = () => `
   </form>
   ${renderActivityFeed(adminState.activityItems, { loading: adminState.activityLoading, error: adminState.activityError })}
 `;
+
+const renderStatisticsCard = (label, value, hint = '') => `
+  <article class="analytics-card">
+    <strong class="analytics-value">${escapeHtml(value)}</strong>
+    <span class="analytics-label">${escapeHtml(label)}</span>
+    ${hint ? `<small class="admin-statistics-hint">${escapeHtml(hint)}</small>` : ''}
+  </article>
+`;
+
+const renderAdminStatisticsTab = () => {
+  const filters = adminState.statisticsFilters;
+  const data = adminState.statistics;
+  const summary = data?.summary || {};
+  const option = (value, label, selected) => `<option value="${escapeHtml(value)}" ${String(value) === String(selected) ? 'selected' : ''}>${escapeHtml(label)}</option>`;
+  const partners = (data?.partners || []).map((item) => [
+    `<strong>${escapeHtml(item.partner_name)}</strong><br><small>${escapeHtml(item.city_name || '—')}</small>`,
+    String(item.views), String(item.unique_viewers), `${item.offer_views} / ${item.offer_selections}`,
+    item.contact_clicks ? `<details><summary>${item.contact_clicks}</summary>${Object.entries(item.contact_click_breakdown || {}).map(([label, count]) => `<div>${escapeHtml(label)}: ${count}</div>`).join('')}</details>` : '0',
+    String(item.codes_issued), String(item.codes_used), `${item.view_to_code_percent}%`,
+    item.last_viewed_at ? escapeHtml(formatDateTime(item.last_viewed_at)) : '—',
+  ]);
+  const offers = (data?.offers || []).map((item) => [
+    `<strong>${escapeHtml(item.offer_title)}</strong>`, escapeHtml(item.partner_name), String(item.views),
+    String(item.selections), String(item.codes_issued), String(item.codes_used), `${item.selection_percent}%`,
+  ]);
+  const categories = (data?.popular_categories || []).map((item) => [item.category_name, item.views]);
+  const hours = (data?.popular_hours || []).filter((item) => item.views > 0).map((item) => [
+    `${String(item.hour).padStart(2, '0')}:00–${String(item.hour).padStart(2, '0')}:59`, item.views,
+  ]);
+  const events = (data?.recent_events || []).map((item) => [
+    formatDateTime(item.created_at), item.client_name || 'Участница клуба', item.event_label,
+    item.partner_name, item.offer_title || item.target || '—',
+  ]);
+  return `
+    <section class="admin-statistics-page stack">
+      <div class="admin-section-heading admin-page-heading"><p class="section-eyebrow section-kicker">Bloom Club Analytics</p><h4>Статистика</h4><p>Как участницы находят партнёров, выбирают услуги и используют привилегии.</p></div>
+      <form class="admin-statistics-filters" data-admin-statistics-filter>
+        <label>Период<select name="period">${[['today','Сегодня'],['yesterday','Вчера'],['week','7 дней'],['month','30 дней'],['custom','Свои даты']].map(([value,label]) => option(value,label,filters.period)).join('')}</select></label>
+        <label>Дата с<input type="date" name="date_from" value="${escapeHtml(filters.dateFrom)}"></label>
+        <label>Дата по<input type="date" name="date_to" value="${escapeHtml(filters.dateTo)}"></label>
+        <label>Партнёр<select name="partner_id">${option('','Все партнёры',filters.partnerId)}${adminState.partners.map((item) => option(item.id,item.name,filters.partnerId)).join('')}</select></label>
+        <label>Город<select name="city_id">${option('','Все города',filters.cityId)}${adminState.cities.map((item) => option(item.id,item.name,filters.cityId)).join('')}</select></label>
+        <label>Категория<select name="category_slug">${option('','Все категории',filters.categorySlug)}${adminState.categories.map((item) => option(item.slug,item.name,filters.categorySlug)).join('')}</select></label>
+        <button type="submit">Показать статистику</button>
+      </form>
+      ${adminState.statisticsError ? `<p class="analytics-empty">${escapeHtml(adminState.statisticsError)}</p>` : ''}
+      ${adminState.statisticsLoading && !data ? '<p class="analytics-empty">Загружаем статистику…</p>' : ''}
+      ${data ? `
+        <p class="analytics-hint">Период: ${escapeHtml(data.period.date_from)} — ${escapeHtml(data.period.date_to)} · время Новосибирска. Просмотры и переходы накапливаются после подключения статистики; история кодов и подписок доступна сразу.</p>
+        <div class="analytics-grid admin-statistics-summary">
+          ${renderStatisticsCard('Всего участниц', summary.total_users)}
+          ${renderStatisticsCard('Новых участниц', summary.new_users)}
+          ${renderStatisticsCard('Активных подписок', summary.active_subscriptions, `Пробных: ${summary.active_trial_subscriptions} · платных: ${summary.active_paid_subscriptions}`)}
+          ${renderStatisticsCard('Пробная → платная', `${summary.trial_to_paid_percent}%`, `${summary.trial_to_paid_users} из ${summary.trial_users}`)}
+          ${renderStatisticsCard('Просмотров партнёров', summary.partner_views, `Уникальных участниц: ${summary.unique_partner_viewers}`)}
+          ${renderStatisticsCard('Выбрано услуг', summary.offer_selections, `Просмотров услуг: ${summary.offer_views}`)}
+          ${renderStatisticsCard('Переходов по контактам', summary.contact_clicks)}
+          ${renderStatisticsCard('Выдано кодов', summary.codes_issued, `Использовано: ${summary.codes_used}`)}
+        </div>
+        <section class="admin-statistics-section"><h4>Карточки партнёров</h4><p class="analytics-hint">Услуги: просмотры / выбор. Конверсия: выданные коды относительно просмотров карточки.</p>${renderTable(['Партнёр','Просмотры','Уникальные','Услуги','Контакты','Коды','Использовано','Конверсия','Последний просмотр'],partners,true,'admin-table--compact','Нет партнёров для выбранных фильтров.')}</section>
+        <section class="admin-statistics-section"><h4>Популярные услуги</h4>${renderTable(['Услуга','Партнёр','Просмотры','Выбрали','Коды','Использовано','Выбор'],offers,true,'admin-table--compact','Услуги пока не добавлены.')}</section>
+        <div class="admin-statistics-columns"><section class="admin-statistics-section"><h4>Популярные категории</h4>${renderTable(['Категория','Просмотры'],categories,false,'admin-table--compact','Просмотров пока нет.')}</section><section class="admin-statistics-section"><h4>Активные часы</h4>${renderTable(['Время Новосибирска','Просмотры'],hours,false,'admin-table--compact','Просмотров пока нет.')}</section></div>
+        <section class="admin-statistics-section"><h4>Последние действия участниц</h4>${renderTable(['Дата и время','Участница','Действие','Партнёр','Услуга / переход'],events,false,'admin-table--compact','Действия появятся после первых посещений.')}</section>
+      ` : ''}
+    </section>
+  `;
+};
 
 
 const getAdminLandingSettings = () => ({
@@ -6136,6 +6230,10 @@ const loadActiveTabData = async () => {
       adminState.activityError = '';
       renderAdminLayout();
       await loadAdminActivity();
+    } else if (adminState.activeTab === 'statistics') {
+      adminState.statisticsLoading = true;
+      renderAdminLayout();
+      await Promise.all([ensureAdminDictionaries(), loadAdminStatistics()]);
     } else if (adminState.activeTab === 'bloomMap') {
       await loadAdminBloomMapSettings();
     }
@@ -9044,6 +9142,22 @@ root.addEventListener('submit', (event) => {
   const submittedForm = event.target.closest('form');
   if (submittedForm && !validateRequiredCustomSelects(submittedForm)) {
     event.preventDefault();
+    return;
+  }
+
+  const statisticsFilter = event.target.closest('[data-admin-statistics-filter]');
+  if (statisticsFilter) {
+    event.preventDefault();
+    const values = new FormData(statisticsFilter);
+    adminState.statisticsFilters = {
+      period: String(values.get('period') || 'month'),
+      dateFrom: String(values.get('date_from') || ''),
+      dateTo: String(values.get('date_to') || ''),
+      partnerId: String(values.get('partner_id') || ''),
+      cityId: String(values.get('city_id') || ''),
+      categorySlug: String(values.get('category_slug') || ''),
+    };
+    void loadActiveTabData();
     return;
   }
 
