@@ -7244,9 +7244,10 @@ small,
 
 .welcome-auth-screen__card {
   width: min(100%, 510px);
+  max-height: none;
+  overflow: visible;
   margin: auto;
   text-align: center;
-  -webkit-overflow-scrolling: touch;
 }
 
 .welcome-auth-screen__brand,
@@ -7331,6 +7332,36 @@ small,
   margin: 2px 0;
   padding: 0;
   list-style: none;
+}
+
+.login-giveaway__prizes-toggle {
+  width: 100%;
+  min-height: 42px;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  padding: 9px 11px;
+  border: 1px solid rgba(132, 70, 92, 0.14);
+  border-radius: 12px;
+  background: rgba(255, 255, 255, 0.58);
+  color: #633a4b;
+  font: inherit;
+  font-size: 0.78rem;
+  font-weight: 800;
+  text-align: left;
+  cursor: pointer;
+}
+
+.login-giveaway__prizes-chevron {
+  flex: 0 0 auto;
+  font-size: 1.05rem;
+  line-height: 1;
+  transition: transform 160ms ease;
+}
+
+.login-giveaway__prizes-toggle[aria-expanded="true"] .login-giveaway__prizes-chevron {
+  transform: rotate(180deg);
 }
 
 .login-giveaway__prizes li {
