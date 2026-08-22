@@ -5,7 +5,7 @@ import { useContentText } from '../content/ContentContext';
 import { formatDate, formatMoney } from '../utils/format';
 import { getOfferPrices, getOfferTitle, getPartnerName, getVerificationCode } from '../utils/partnerDisplay';
 import { toText } from '../utils/text';
-import { useMemo, useState } from 'react';
+import { useEffect, useMemo, useState } from 'react';
 
 interface PrivilegesPageProps {
   verifications?: Verification[] | null;
@@ -26,14 +26,14 @@ function mergeDefinedPriceSource(verification: Verification): Offer | Verificati
   return merged as Offer | Verification;
 }
 
-function statusLabel(status: unknown): string {
-  const normalized = toText(status).toLowerCase();
+function statusLabel(verification: Verification, currentTime: number): string {
+  const effectiveStatus = verificationFilter(verification, currentTime);
 
-  if (normalized === 'confirmed' || normalized === 'used') {
+  if (effectiveStatus === 'used') {
     return 'Использована';
   }
 
-  if (normalized === 'expired') {
+  if (effectiveStatus === 'expired') {
     return 'Истекла';
   }
 
@@ -42,23 +42,35 @@ function statusLabel(status: unknown): string {
 
 type VerificationFilter = 'active' | 'used' | 'expired';
 
-function verificationFilter(status: unknown): VerificationFilter {
-  const normalized = toText(status).toLowerCase();
-  if (normalized === 'expired') return 'expired';
+function verificationFilter(verification: Verification, currentTime: number): VerificationFilter {
+  const normalized = toText(verification.status).toLowerCase();
   if (normalized === 'confirmed' || normalized === 'used') return 'used';
+  if (normalized === 'expired') return 'expired';
+
+  const expiresAt = toText(verification.expires_at || verification.valid_until);
+  const expirationTime = expiresAt ? Date.parse(expiresAt) : Number.NaN;
+  if (Number.isFinite(expirationTime) && expirationTime <= currentTime) return 'expired';
+
   return 'active';
 }
 
 export function PrivilegesPage({ verifications, emptyTitle, emptyDescription }: PrivilegesPageProps) {
   const safeVerifications = Array.isArray(verifications) ? verifications : [];
   const [activeFilter, setActiveFilter] = useState<VerificationFilter>('active');
+  const [currentTime, setCurrentTime] = useState(() => Date.now());
+
+  useEffect(() => {
+    const timer = window.setInterval(() => setCurrentTime(Date.now()), 30_000);
+    return () => window.clearInterval(timer);
+  }, []);
+
   const counts = useMemo(() => safeVerifications.reduce<Record<VerificationFilter, number>>((result, verification) => {
-    result[verificationFilter(verification.status)] += 1;
+    result[verificationFilter(verification, currentTime)] += 1;
     return result;
-  }, { active: 0, used: 0, expired: 0 }), [safeVerifications]);
+  }, { active: 0, used: 0, expired: 0 }), [currentTime, safeVerifications]);
   const visibleVerifications = useMemo(
-    () => safeVerifications.filter((verification) => verificationFilter(verification.status) === activeFilter),
-    [activeFilter, safeVerifications],
+    () => safeVerifications.filter((verification) => verificationFilter(verification, currentTime) === activeFilter),
+    [activeFilter, currentTime, safeVerifications],
   );
   const defaultEmptyTitle = useContentText('privileges.empty.title', 'Здесь появятся ваши коды привилегий');
   const defaultEmptyDescription = useContentText('privileges.empty.description', 'Выберите партнёра и получите код на нужную услугу.');
@@ -112,7 +124,7 @@ export function PrivilegesPage({ verifications, emptyTitle, emptyDescription }: 
                 <div>
                   <strong>{partnerName}</strong>
                   <p>{offerTitle}</p>
-                  <p>Статус: {statusLabel(verification.status)}</p>
+                  <p>Статус: {statusLabel(verification, currentTime)}</p>
                   <small>Действует до: {formatDate(verification.expires_at || verification.valid_until)}</small>
                   <div className="price-grid price-grid--compact">
                     {prices.basePrice !== undefined ? <span><small>Обычная цена</small>{formatMoney(prices.basePrice)}</span> : null}
