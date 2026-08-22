@@ -379,13 +379,24 @@ export function BloomMapPage({ partners, onBack, onOpenPartner }: BloomMapPagePr
     map.geoObjects?.add?.(marker);
     userLocationMarkerRef.current = marker;
 
+    const bounds = map.geoObjects?.getBounds?.();
+    if (bounds && visiblePartners.length > 0) {
+      map.setBounds?.(bounds, {
+        checkZoomRange: true,
+        duration: 300,
+        zoomMargin: 48,
+      });
+    } else {
+      map.setCenter?.([userPoint.latitude, userPoint.longitude], 13, { duration: 300 });
+    }
+
     return () => {
       map.geoObjects?.remove?.(marker);
       if (userLocationMarkerRef.current === marker) {
         userLocationMarkerRef.current = null;
       }
     };
-  }, [status, userPoint]);
+  }, [status, userPoint, visiblePartners.length]);
 
   const locateUser = () => {
     if (!navigator.geolocation) {
@@ -399,7 +410,6 @@ export function BloomMapPage({ partners, onBack, onOpenPartner }: BloomMapPagePr
         const point = { latitude: coords.latitude, longitude: coords.longitude };
         setUserPoint(point);
         setLocationMessage("Ваше местоположение отмечено на карте. Расстояние до партнёров рассчитано.");
-        mapInstanceRef.current?.setCenter?.([point.latitude, point.longitude], 13, { duration: 300 });
       },
       () => setLocationMessage("Не удалось получить геопозицию. Проверьте разрешение браузера."),
       { enableHighAccuracy: false, timeout: 8000, maximumAge: 120000 },
