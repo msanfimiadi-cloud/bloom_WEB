@@ -55,12 +55,6 @@ export function PartnerCatalogCard({ partner, onOpen, diagnosticContext }: Partn
         {place ? <em>{place}</em> : null}
         <span className="home-partner-tile__cta">Смотреть</span>
       </span>
-      <span className="home-partner-tile__body">
-        <strong>{name}</strong>
-        <small>{categories}</small>
-        {place ? <em>{place}</em> : null}
-        <span className="home-partner-tile__cta">Смотреть</span>
-      </span>
     </button>
   );
 }

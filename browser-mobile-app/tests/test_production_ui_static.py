@@ -63,7 +63,8 @@ def test_home_screen_restores_lifestyle_sections_without_debug_content() -> None
     assert "club-category-grid" in home_page
     assert "renderLegacyHome" in home_page
     assert "renderReferralBanner" in home_page
-    assert "home-empty-state" in home_page
+    assert "home-catalog-promo" in home_page
+    assert "Открыть каталог партнёров" in home_page
     assert "JSON.stringify" not in home_page
     assert "Тест1" not in home_page
 

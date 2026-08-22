@@ -160,6 +160,16 @@ export function FlowerGame() {
         </button>
       </div>
 
+      <div className="flower-game__guide" aria-label="Как работает Сад Bloom">
+        <strong>Выращивайте цветок и получайте больше шансов в розыгрыше</strong>
+        <ol>
+          <li>Заходите каждый день и нажимайте «Добавить лепесток дня».</li>
+          <li>Пользуйтесь привилегиями партнёров и выполняйте задания, чтобы получать дополнительные лепестки.</li>
+          <li>Попадите в первую десятку рейтинга месяца — получите дополнительные номера для розыгрыша.</li>
+        </ol>
+        <p>За серии ежедневных посещений начисляются бонусные лепестки.</p>
+      </div>
+
       <div className={`flower-visual flower-visual--stage-${stage}${isStageChanging ? " is-stage-changing" : ""}`} style={{ "--stage-progress": stageProgress } as CSSProperties} aria-label={`Стадия: ${STAGE_NAMES[stage]}`}>
         <span className="flower-visual__glow" aria-hidden="true" />
         {isPetalJoining ? <span className="flower-joining-petal" aria-hidden="true" /> : null}

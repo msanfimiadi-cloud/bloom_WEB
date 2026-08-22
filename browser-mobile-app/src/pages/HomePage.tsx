@@ -1,13 +1,11 @@
 import { useMemo, useState } from "react";
 import { checkSocialSubscription, getGiveawayState, isApiError, isTimeoutError } from "../api/client";
 import { AppImage } from "../components/AppImage";
-import { PartnerCatalogCard } from "../components/PartnerCatalogCard";
 import type { City, ClientProfile, GiveawayState, Partner, ReferralSummary, Subscription } from "../api/types";
 import { getSubscriptionEnd, isSubscriptionActive, isTrialEligible } from "../utils/subscription";
 import { formatDate } from "../utils/format";
 import { useContent, useContentText } from "../content/ContentContext";
 import type { HomeBlock } from "../content/clientContentApi";
-import { getPartnerName } from "../utils/partnerDisplay";
 import { toText } from "../utils/text";
 import { sanitizeCmsHtml } from "../utils/sanitizeCmsHtml";
 import { resolveHomeCtaAction } from "../utils/homeCta";
@@ -51,9 +49,6 @@ export function HomePage({
   profile,
   subscription,
   cities,
-  partners,
-  isPartnersLoading = false,
-  hasPartnersLoaded = false,
   onOpenCatalog,
   onOpenSubscription,
   onActivateTrial,
@@ -63,7 +58,6 @@ export function HomePage({
   onGiveawayStateChange,
 }: HomePageProps) {
   const safeCities = Array.isArray(cities) ? cities : [];
-  const safePartners = Array.isArray(partners) ? partners : [];
   const [isActivatingTrial, setIsActivatingTrial] = useState(false);
   const [localTrialMessage, setLocalTrialMessage] = useState<string | null>(null);
   const { homeBlocks } = useContent();
@@ -101,7 +95,6 @@ export function HomePage({
     "home.partners.description",
     "Открывайте каталог и выбирайте привилегии у партнёров Bloom Club.",
   );
-  const visiblePartners = safePartners.slice(0, 6);
 
   async function copyReferralCode() {
     if (!referralCode) {
@@ -197,33 +190,13 @@ export function HomePage({
 
     if (block.type === "partners_carousel") {
       return (
-        <div className="info-panel" key={key}>
-          <strong>{block.title}</strong>
-          {block.body ? <p>{block.body}</p> : null}
-          <div className="home-partners-carousel" aria-label="Партнёры клуба">
-            {isPartnersLoading || !hasPartnersLoaded ? (
-              <div className="home-empty-state">
-                <strong>Загружаем партнёров</strong>
-                <p>Каталог Bloom Club уже обновляется.</p>
-              </div>
-            ) : safePartners.length ? safePartners.slice(0, 8).map((partner) => (
-              <button
-                className="home-partner-card"
-                type="button"
-                onClick={onOpenCatalog}
-                key={String(partner.id ?? getPartnerName(partner))}
-              >
-                <span>{getPartnerName(partner)}</span>
-                <small>{toText(partner.category) || "Партнёр Bloom Club"}</small>
-              </button>
-            )) : (
-              <div className="home-empty-state">
-                <strong>Партнёров пока нет</strong>
-                <p>Каталог Bloom Club наполняется.</p>
-              </div>
-            )}
-          </div>
-          {renderCta(block)}
+        <div className="info-panel home-catalog-promo" key={key}>
+          <p className="eyebrow">Каталог привилегий</p>
+          <strong>{block.title || partnersTitle}</strong>
+          <p>{block.body || partnersDescription}</p>
+          <button className="button button--primary" type="button" onClick={onOpenCatalog}>
+            {block.cta_text || "Открыть каталог партнёров"}
+          </button>
         </div>
       );
     }
@@ -431,38 +404,10 @@ export function HomePage({
               <h2 id="home-partners-title">{partnersTitle}</h2>
               <p>{partnersDescription}</p>
             </div>
-            <button className="link-button" type="button" onClick={onOpenCatalog}>
-              Все
-            </button>
           </div>
-
-          {visiblePartners.length ? (
-            <div className="home-partners-grid">
-              {visiblePartners.map((partner) => (
-                <PartnerCatalogCard
-                  partner={partner}
-                  onOpen={onOpenCatalog}
-                  diagnosticContext="home"
-                  key={String(partner.id ?? getPartnerName(partner))}
-                />
-              ))}
-            </div>
-          ) : isPartnersLoading || !hasPartnersLoaded ? (
-            <div className="home-empty-state">
-              <span aria-hidden="true">♡</span>
-              <strong>Загружаем партнёров</strong>
-              <p>Каталог Bloom Club уже обновляется и скоро появится на главном экране.</p>
-            </div>
-          ) : (
-            <div className="home-empty-state">
-              <span aria-hidden="true">♡</span>
-              <strong>Скоро добавим партнёров</strong>
-              <p>Команда Bloom Club готовит новые места для красоты, отдыха и заботы о себе. Загляните в каталог чуть позже.</p>
-              <button className="button button--primary" type="button" onClick={onOpenCatalog}>
-                Открыть каталог
-              </button>
-            </div>
-          )}
+          <button className="button button--primary home-catalog-promo__button" type="button" onClick={onOpenCatalog}>
+            Открыть каталог партнёров
+          </button>
         </section>
       </>
     );
